@@ -2,12 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
-const electronModules = ["electron", "electron/**", "**/electron", "**/electron/**"];
 const electronPackage = ["electron", "electron/**"];
-const collectorFolder = "(?i)^(\\./)?(\\.\\./)+collector(/|$)";
-const electronFolder = "(?i)^(\\./)?(\\.\\./)+electron(/|$)";
-// A `..` after a src/ segment, e.g. ../src/shared/../ui; must precede the negated src group.
-const collectorEscape = "(^|/)src/(.*/)?\\.\\.(/|$)";
 const browserLibs = [
   "react",
   "react/**",
@@ -20,22 +15,18 @@ const browserLibs = [
   "zustand/react",
   "zustand/react/**",
   "zustand/traditional",
+  "zustand/shallow",
+  "zustand/shallow/**",
   "three-stdlib",
   "three-stdlib/**",
 ];
 
-const collectorMessage =
-  "src/ runs in the browser; Node-only code lives in collector/. Share data through src/shared types.";
 const electronMessage =
   "src/ runs in the browser; Electron main and preload code lives in electron/.";
 const collectorElectronMessage =
   "collector/ must load in plain Node (vp run dev) as well as Electron; keep Electron APIs in electron/.";
 const browserMessage =
   "collector/ and src/shared/ must load in plain Node; React and Three code belongs in src/ui, src/world or src/sim.";
-const relativeMessage =
-  "src/shared/ is a flat leaf module: no `..` imports. Import siblings with `./`; move shared types into src/shared/.";
-const srcFromCollectorMessage =
-  "collector/ may import src/ only through src/shared; other src/ code belongs to the browser.";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -46,8 +37,14 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
-    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+    jsPlugins: [
+      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
+      "./lint/module-fences.js",
+    ],
+    rules: {
+      "vite-plus/prefer-vite-plus-imports": "error",
+      "module-fences/no-cross-zone": "error",
+    },
     plugins: ["typescript", "unicorn", "oxc", "import", "react"],
     options: { typeAware: true, typeCheck: true },
     // A later override for the same rule replaces earlier options, so each override lists all its patterns.
@@ -59,11 +56,7 @@ export default defineConfig({
           "no-restricted-imports": [
             "error",
             {
-              patterns: [
-                { regex: collectorFolder, message: collectorMessage },
-                { regex: electronFolder, message: electronMessage },
-                { group: electronPackage, message: electronMessage },
-              ],
+              patterns: [{ group: electronPackage, message: electronMessage }],
             },
           ],
         },
@@ -76,11 +69,8 @@ export default defineConfig({
             "error",
             {
               patterns: [
-                { regex: collectorFolder, message: collectorMessage },
-                { regex: electronFolder, message: electronMessage },
                 { group: electronPackage, message: electronMessage },
                 { group: browserLibs, message: browserMessage },
-                { regex: "(^|/)\\.\\.(/|$)", message: relativeMessage },
               ],
             },
           ],
@@ -94,13 +84,8 @@ export default defineConfig({
             "error",
             {
               patterns: [
-                { regex: collectorEscape, message: srcFromCollectorMessage },
                 { group: browserLibs, message: browserMessage },
-                { group: electronModules, message: collectorElectronMessage },
-                {
-                  group: ["**/src", "**/src/**", "!**/src/shared", "!**/src/shared/**"],
-                  message: srcFromCollectorMessage,
-                },
+                { group: electronPackage, message: collectorElectronMessage },
               ],
             },
           ],
