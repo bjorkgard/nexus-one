@@ -107,6 +107,8 @@ const noCrossZone = defineRule({
     }
 
     function checkTarget(target, node) {
+      // The root package.json is JSON only, so every zone may read it.
+      if (target === "package.json") return;
       if (!zone.allowed.some((folder) => inside(target, folder))) {
         context.report({ node, messageId: zone.messageId });
       }

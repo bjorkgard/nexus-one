@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { RuleTester } from "vite-plus/lint/plugins-dev";
+import config from "../vite.config.ts";
 import plugin from "./module-fences.js";
 
 RuleTester.afterAll = afterAll;
@@ -55,6 +56,10 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'import x from "./y";'),
     good(fromUi, 'import x from "../../src/data/z";'),
     good(fromUi, 'import x from "react";'),
+    // root package.json is JSON only, allowed from every zone
+    good(fromUi, 'import pkg from "../../package.json";'),
+    good(fromShared, 'import pkg from "../../package.json";'),
+    good(fromCollector, 'import pkg from "../package.json";'),
     good(fromUi, 'import fs from "node:fs";'),
     good(fromUi, "export const a = 1;"),
     good(fromUi, "const a = 1; export { a };"),
@@ -118,6 +123,8 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     bad(fromUi, 'new URL("../../collector/x.ts", import.meta.url);', SRC),
     // bypass 2: laundering through a root file
     bad(fromUi, 'import x from "../../launder";', SRC),
+    bad(fromUi, 'import x from "../../vite.config";', SRC),
+    bad(fromUi, 'import x from "../../package.json.bak";', SRC),
     // bypass 3: glob prefix above the zone
     bad(fromUi, 'const m = import.meta.glob("../../*/x.ts");', SRC),
     bad(fromUi, 'const m = import.meta.glob("../../{collector,x}/*.ts");', SRC),
@@ -189,7 +196,24 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
 // Runs the real linter with this repo's config. Fixtures live as .txt under lint/fixtures/
 // (out of `vp check` scope); each is copied into a zone path for the run and removed after.
 describe("module-fences wiring", () => {
-  const copies = [at("src/ui/__wiring_bad.ts"), at("src/ui/__wiring_clean.ts")];
+  const configRows = [
+    ["shared-react.txt", "src/shared/__wiring_react.ts", "eslint(no-restricted-imports)"],
+    [
+      "collector-electron.txt",
+      "collector/__wiring_electron.ts",
+      "eslint(no-restricted-imports)",
+      "collector/ must load in plain Node",
+    ],
+    ["ui-node-fs.txt", "src/ui/__wiring_node_fs.ts", "import(no-nodejs-modules)"],
+    ["collector-require.txt", "collector/__wiring_require.ts", "import(no-commonjs)"],
+    ["shared-jsx.txt", "src/shared/__wiring_jsx.tsx", "react(jsx-filename-extension)"],
+    ["ui-triple-slash.txt", "src/ui/__wiring_triple.ts", "typescript(triple-slash-reference)"],
+  ];
+  const copies = [
+    at("src/ui/__wiring_bad.ts"),
+    at("src/ui/__wiring_clean.ts"),
+    ...configRows.map(([, zonePath]) => at(zonePath)),
+  ];
   beforeAll(() => cleanup(...copies));
   const lint = (fixture, zonePath) => {
     const target = at(zonePath);
@@ -218,4 +242,48 @@ describe("module-fences wiring", () => {
     expect(output).not.toContain("module-fences");
     expect(status).toBe(0);
   }, 60_000);
+
+  // Value: protects=vite.config.ts fence overrides stay wired to their zones; fails_when=a rule, its zone glob or its message is removed or misrouted; why_new=RuleTester covers only the module-fences plugin; seam=none; no_claim=rule behaviour beyond one violating fixture per rule
+  it.each(configRows)(
+    "reports %s -> %s",
+    (fixture, zonePath, ruleId, message) => {
+      const { status, output } = lint(fixture, zonePath);
+      expect(output).toContain(ruleId);
+      if (message) expect(output).toContain(message);
+      expect(status).not.toBe(0);
+    },
+    60_000,
+  );
+});
+
+// Copied from string-argv 0.3.2, as inlined in node_modules/vite-plus/dist/staged/bin.js
+// (parseArgsStringToArgv). lint-staged 17 splits function-returned commands with it, with no shell.
+function parseArgsStringToArgv(value) {
+  const myRegexp = /([^\s'"]([^\s'"]*(['"])([^\3]*?)\3)+[^\s'"]*)|[^\s'"]+|(['"])([^\5]*?)\5/gi;
+  const result = [];
+  let match;
+  do {
+    match = myRegexp.exec(value);
+    if (match !== null)
+      result.push([match[1], match[6], match[0]].find((a) => typeof a === "string"));
+  } while (match !== null);
+  return result;
+}
+
+// Value: protects=pre-commit runs the full check when the config or fence plugin is staged, and quotes paths safely; fails_when=the staged function stops escalating or stops escaping quotes; why_new=staged function had no test; seam=none; no_claim=lint-staged invocation itself
+describe("staged function", () => {
+  const staged = config.staged["*"];
+  it("runs the full check when vite.config.ts is staged", () => {
+    expect(staged([at("src/a.ts"), at("vite.config.ts")])).toBe("vp check");
+  });
+  it("runs the full check when lint/module-fences.js is staged", () => {
+    expect(staged([at("lint/module-fences.js")])).toBe("vp check");
+  });
+  it("double-quotes each path so lint-staged's string-argv gives back the original paths", () => {
+    const paths = [at("src/a.ts"), at("src/with space.ts"), at("src/it's.ts")];
+    expect(parseArgsStringToArgv(staged(paths))).toEqual(["vp", "check", "--fix", ...paths]);
+  });
+  it("falls back to the full check for a path with a double quote", () => {
+    expect(staged([at("src/a.ts"), at('src/say"hi.ts')])).toBe("vp check");
+  });
 });

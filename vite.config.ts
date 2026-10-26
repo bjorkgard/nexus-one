@@ -40,8 +40,10 @@ export default defineConfig({
       const fullCheck = files.some((file) =>
         ["/vite.config.ts", "/lint/module-fences.js"].some((suffix) => file.endsWith(suffix)),
       );
-      if (fullCheck) return "vp check";
-      return `vp check --fix ${files.map((file) => `'${file.replaceAll("'", "'\\''")}'`).join(" ")}`;
+      // No shell runs this: lint-staged splits it with string-argv, which has no escapes inside
+      // quotes. Double-quote each path; a path holding `"` cannot be quoted, so check everything.
+      if (fullCheck || files.some((file) => file.includes('"'))) return "vp check";
+      return `vp check --fix ${files.map((file) => `"${file}"`).join(" ")}`;
     },
   },
   fmt: {},
