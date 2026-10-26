@@ -5,6 +5,8 @@ import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
 // Allow-list: a file in a zone may import only inside its allowed folders; static specifiers only.
 // Resolved: relative (`.`) and root-absolute (`/`) specifiers, with any `?query` or `#hash` removed.
+// A root-absolute path whose first segment is not an entry in the repo root is a Vite publicDir
+// (`public/`) asset URL and is allowed; the folder need not exist.
 // Bare and `node:` specifiers belong to no-restricted-imports and import/no-nodejs-modules.
 
 // Follows symlinks; for a missing file, resolves the deepest existing parent and appends the rest.
@@ -83,6 +85,7 @@ const noCrossZone = defineRule({
       nonStatic:
         "Non-static import in a fenced zone; use a string literal so the module fence can check it.",
       glob: "import.meta.glob in a fenced zone must use relative or root-absolute patterns and no `base` option.",
+      globOptions: "glob options must be a literal object without `base`.",
       createRequire: "createRequire is banned in collector/; it would bypass the module fence.",
     },
   },
@@ -95,7 +98,11 @@ const noCrossZone = defineRule({
     // Resolves a relative or root-absolute path; null for anything else.
     function resolveFrom(specifier) {
       if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier));
-      if (specifier.startsWith("/")) return toRepoPath(path.join(repoRoot, specifier));
+      if (specifier.startsWith("/")) {
+        const target = toRepoPath(path.join(repoRoot, specifier));
+        const [first] = target.split("/");
+        return target === "" || fs.existsSync(path.join(repoRoot, first)) ? target : null;
+      }
       return null;
     }
 
@@ -124,7 +131,9 @@ const noCrossZone = defineRule({
         context.report({ node, messageId: "nonStatic" });
         return;
       }
-      const pattern = (raw.startsWith("!") ? raw.slice(1) : raw).replace(/#[\s\S]*$/, "");
+      // A `!` exclude cannot add files, so it needs no zone check.
+      if (raw.startsWith("!")) return;
+      const pattern = raw.replace(/#[\s\S]*$/, "");
       if (!/^(\.\.?\/|\/)/.test(pattern)) {
         context.report({ node, messageId: "glob" });
         return;
@@ -142,14 +151,16 @@ const noCrossZone = defineRule({
     function checkGlobOptions(node) {
       if (!node) return;
       if (node.type !== "ObjectExpression") {
-        context.report({ node, messageId: "glob" });
+        context.report({ node, messageId: "globOptions" });
         return;
       }
       for (const property of node.properties) {
         const key = property.type === "Property" ? property.key : null;
         const name =
           key && (key.type === "Identifier" && !property.computed ? key.name : stringValue(key));
-        if (key === null || name === null || name === "base") {
+        if (key === null || name === null) {
+          context.report({ node: property, messageId: "globOptions" });
+        } else if (name === "base") {
           context.report({ node: property, messageId: "glob" });
         }
       }

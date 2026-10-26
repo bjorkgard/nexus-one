@@ -31,6 +31,7 @@ const NON_STATIC =
   "Non-static import in a fenced zone; use a string literal so the module fence can check it.";
 const GLOB =
   "import.meta.glob in a fenced zone must use relative or root-absolute patterns and no `base` option.";
+const GLOB_OPTIONS = "glob options must be a literal object without `base`.";
 const CREATE_REQUIRE = "createRequire is banned in collector/; it would bypass the module fence.";
 
 const bad = (filename, code, message) => ({ filename, code, errors: [{ message }] });
@@ -38,11 +39,14 @@ const good = (filename, code) => ({ filename, code });
 
 // A symlink inside src/ that points at collector/: the realpath check must see through it.
 const linkPath = at("src/ui/__fence_link__");
+const cleanup = (...paths) => {
+  for (const p of paths) fs.rmSync(p, { force: true, recursive: true });
+};
 beforeAll(() => {
-  fs.rmSync(linkPath, { force: true });
+  cleanup(linkPath);
   fs.symlinkSync("../../collector", linkPath, "dir");
 });
-afterAll(() => fs.rmSync(linkPath, { force: true }));
+afterAll(() => cleanup(linkPath));
 
 tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
   valid: [
@@ -63,6 +67,12 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'const m = import.meta.glob("/src/ui/*.ts");'),
     good(fromUi, 'const m = import.meta.glob(["./a/*.ts", "!./b/**"]);'),
     good(fromUi, 'import x from "/src/data/z";'),
+    // `!` excludes cannot add files; root-absolute `/x` is served from public/
+    good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!**/bar.ts"]);'),
+    good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!../../collector/**"]);'),
+    good(fromUi, 'import logo from "/logo.svg";'),
+    good(fromUi, 'import x from "/assets/x.png";'),
+    good(fromUi, 'import x from "/assets/x.png?url";'),
     good(at("src/data/a.ts"), 'import x from "./collector";'),
     // src/shared
     good(at("src/shared/sub/a.ts"), 'import x from "../x";'),
@@ -114,13 +124,14 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     bad(fromUi, 'const m = import.meta.glob("../../**/*.ts");', SRC),
     bad(fromUi, 'const m = import.meta.glob("../../collector/*.ts");', SRC),
     bad(fromUi, 'const m = import.meta.glob(["../../collector/a.ts"]);', SRC),
-    bad(fromUi, 'const m = import.meta.glob(["./ok.ts", "!../../collector/**"]);', SRC),
     bad(fromUi, 'const m = import.meta.glob("./**/../../../collector/*.ts");', GLOB),
     // bypass 4: glob base option, root-absolute glob
     bad(fromUi, 'const m = import.meta.glob("./*.ts", { base: "../../collector" });', GLOB),
     bad(fromUi, 'const m = import.meta.glob("./*.ts", { "base": "../../collector" });', GLOB),
-    bad(fromUi, 'const m = import.meta.glob("./*.ts", { ...opts });', GLOB),
-    bad(fromUi, 'const m = import.meta.glob("./*.ts", opts);', GLOB),
+    bad(fromUi, 'const m = import.meta.glob("./*.ts", { ...opts });', GLOB_OPTIONS),
+    bad(fromUi, 'const m = import.meta.glob("./*.ts", opts);', GLOB_OPTIONS),
+    bad(fromUi, 'const m = import.meta.glob("!./*.ts", { base: "../../collector" });', GLOB),
+    bad(fromUi, 'import x from "/public/../collector/x";', SRC),
     bad(fromUi, 'const m = import.meta.glob("/collector/*.ts");', SRC),
     bad(fromUi, 'const m = import.meta.glob("/*.ts");', SRC),
     bad(fromUi, 'const m = import.meta.glob("*.ts");', GLOB),
@@ -178,17 +189,23 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
 // Runs the real linter with this repo's config. Fixtures live as .txt under lint/fixtures/
 // (out of `vp check` scope); each is copied into a zone path for the run and removed after.
 describe("module-fences wiring", () => {
-  const copies = [];
+  const copies = [at("src/ui/__wiring_bad.ts"), at("src/ui/__wiring_clean.ts")];
+  beforeAll(() => cleanup(...copies));
   const lint = (fixture, zonePath) => {
     const target = at(zonePath);
     fs.copyFileSync(path.join(repoRoot, "lint/fixtures", fixture), target);
-    copies.push(target);
-    const result = spawnSync("npx", ["vp", "lint", target], { cwd: repoRoot, encoding: "utf8" });
+    const result = spawnSync(path.join(repoRoot, "node_modules/.bin/vp"), ["lint", target], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 55_000,
+    });
+    // A null status means the run timed out or never started.
+    if (result.status === null) {
+      throw new Error(`vp lint did not finish: ${result.error ?? ""}${result.stderr}`);
+    }
     return { status: result.status, output: `${result.stdout}${result.stderr}` };
   };
-  afterAll(() => {
-    for (const copy of copies) fs.rmSync(copy, { force: true });
-  });
+  afterAll(() => cleanup(...copies));
 
   it("reports module-fences(no-cross-zone) for a cross-zone import", () => {
     const { status, output } = lint("cross-zone.txt", "src/ui/__wiring_bad.ts");

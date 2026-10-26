@@ -32,9 +32,17 @@ const browserMessage =
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   staged: {
-    "*": "vp check --fix",
-    // Function form: lint-staged would otherwise append the path and check only this file.
-    "vite.config.ts": () => "vp check",
+    // One entry, so the tasks never run concurrently. Function form: lint-staged would otherwise
+    // append the paths and check only those files. Staging the config or the fence plugin changes
+    // what every file is checked against, so those run the full check.
+    "*": (files) => {
+      // Paths are absolute; a same-named nested file only costs an unneeded full check.
+      const fullCheck = files.some((file) =>
+        ["/vite.config.ts", "/lint/module-fences.js"].some((suffix) => file.endsWith(suffix)),
+      );
+      if (fullCheck) return "vp check";
+      return `vp check --fix ${files.map((file) => `'${file.replaceAll("'", "'\\''")}'`).join(" ")}`;
+    },
   },
   fmt: {},
   lint: {
