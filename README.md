@@ -26,8 +26,8 @@ Open the local URL printed in the terminal. Changes to source files update the a
 
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
-- `vp test` — Run tests. No test files are included yet, so this currently exits with code 1.
-- `vp run build` — Run the TypeScript compiler checks and create a production build in `dist/`.
+- `vp test` — Run the test suite.
+- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`.
 - `vp run preview` — Serve the production build locally after building.
 
 Use `vp run <name>` for scripts defined in `package.json`. Built-in commands such as `vp check` and `vp test` run directly.
@@ -38,6 +38,15 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/main.tsx` — Application entry; mounts React into `#app`.
 - `src/App.tsx` — Root component with the 3D canvas and its error boundary.
 - `src/style.css` — Tailwind import and base layout styles.
+- `src/world/` — Geometry.
+- `src/sim/` — Simulation and animation state.
+- `src/ui/` — Dashboard.
+- `src/data/` — Client store and data sources.
+- `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`).
+- `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
+- `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
+- Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` only itself and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.
+- `lint/` — Local Oxlint plugin with the module-fence rule.
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
@@ -57,6 +66,8 @@ vp check
 vp test
 vp run build
 ```
+
+`vp test` runs `lint/module-fences.test.js`, the RuleTester suite for the module-fence rule.
 
 The pre-commit hook runs `vp staged`, which applies `vp check --fix` to staged files. Review any automatic fixes before pushing.
 

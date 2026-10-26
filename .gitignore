@@ -33,3 +33,9 @@ dist-ssr
 
 # Local task buckets (see CLAUDE.md)
 .claude/scratch/
+
+# Scratch files written by lint/module-fences.test.js
+/src/ui/__fence_link__
+/src/ui/__wiring_*
+/src/shared/__wiring_*
+/collector/__wiring_*

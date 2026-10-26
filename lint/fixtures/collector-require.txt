@@ -1,0 +1,3 @@
+const x = require("x");
+
+export const a = x;

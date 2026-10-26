@@ -1,11 +1,12 @@
 {
   "name": "nexus-one",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "tsc && vp build",
+    "build": "vp check && tsc && vp build",
+    "test": "vp test",
     "preview": "vp preview",
     "prepare": "vp config"
   },

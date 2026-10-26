@@ -1,0 +1,3 @@
+import { x } from "../../collector/x";
+
+export const a = x;
