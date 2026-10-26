@@ -70,9 +70,9 @@
 
 **What:** Extend task 1.3's bundle check (it already greps `dist/` for `__nexus`) to also assert that `dist/` contains no `collector/` source and no Node built-in import.
 
-**Why:** `import.meta.glob("../../collector/**")` in `src/` is not seen by any lint rule (probe-proven in the task 1.2 /ship review), so the fence can be bypassed while `vp check` stays green.
+**Why:** `import.meta.glob` and `new URL(..., import.meta.url)` with relative literals are now linted by `lint/module-fences.js`, but dynamic or computed paths, bare and alias specifiers are not. The bundle check stays as a backstop.
 
-**Context:** Decided in the task 1.2 /ship review (D7). Pick marker strings that only collector code contains, and a list of `node:` / built-in specifiers; fail the check on any match.
+**Context:** Decided in the task 1.2 /ship review (D7, reopened in the rerun). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. Pick marker strings that only collector code contains, and a list of `node:` / built-in specifiers; fail the check on any match.
 
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2

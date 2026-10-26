@@ -15,6 +15,7 @@ const browserLibs = [
   "zustand/react",
   "zustand/react/**",
   "zustand/traditional",
+  "zustand/traditional/**",
   "zustand/shallow",
   "zustand/shallow/**",
   "three-stdlib",

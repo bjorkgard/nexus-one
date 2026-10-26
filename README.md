@@ -44,7 +44,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/data/` — Client store and data sources.
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`).
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
-- `electron/` — Electron main and preload.
+- `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
 - Module fences: `src/` cannot import Node built-ins, `collector/`, or `electron/`. Lint (`vp check`) enforces them; relative imports are checked on the resolved path by `lint/module-fences.js`.
 - `lint/` — Local Oxlint plugin with the module-fence rule.
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
@@ -66,6 +66,8 @@ vp check
 vp test
 vp run build
 ```
+
+`vp test` runs `lint/module-fences.test.js`, the RuleTester suite for the module-fence rule.
 
 The pre-commit hook runs `vp staged`, which applies `vp check --fix` to staged files. Review any automatic fixes before pushing.
 
