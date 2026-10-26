@@ -42,6 +42,11 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `tsconfig.json` — TypeScript compiler configuration.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
 - `TODOS.md` — Deferred work.
+- `CHANGELOG.md` — Release notes.
+- `AGENTS.md` — Vite+ toolchain instructions for coding agents.
+- `CLAUDE.md` — Project rules for Claude Code, including where plan reviews are stored.
+- `docs/PLAN.md` — Phased build plan.
+- `docs/plans/` — Per-task plan and review files.
 
 ## Development checks
 
