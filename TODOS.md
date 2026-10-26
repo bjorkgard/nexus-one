@@ -65,3 +65,27 @@
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** Task 1.2 (fences); do it in task 1.3, before task 1.6
+
+### Check the production bundle for collector/ and Node code
+
+**What:** Extend task 1.3's bundle check (it already greps `dist/` for `__nexus`) to also assert that `dist/` contains no `collector/` source and no Node built-in import.
+
+**Why:** `import.meta.glob("../../collector/**")` in `src/` is not seen by any lint rule (probe-proven in the task 1.2 /ship review), so the fence can be bypassed while `vp check` stays green.
+
+**Context:** Decided in the task 1.2 /ship review (D7). Pick marker strings that only collector code contains, and a list of `node:` / built-in specifiers; fail the check on any match.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.3
+
+### Lock down the collector WebSocket beyond loopback
+
+**What:** In task 4.4, have the collector WebSocket server validate `Origin` against an allowlist and require a per-launch random token handed out by Electron main or the dev server.
+
+**Why:** Any web page in the user's browser can open `ws://127.0.0.1` (cross-site WebSocket hijacking) and read transcripts; binding to loopback alone does not stop it.
+
+**Context:** Decided in the task 1.2 /ship review (D9). Test with a foreign `Origin` and with a missing token; both must be rejected.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 4.4

@@ -2,8 +2,10 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
-const collectorModules = ["**/collector", "**/collector/**"];
 const electronModules = ["electron", "electron/**", "**/electron", "**/electron/**"];
+const electronPackage = ["electron", "electron/**"];
+const collectorFolder = "(?i)^(\\./)?(\\.\\./)+collector(/|$)";
+const electronFolder = "(?i)^(\\./)?(\\.\\./)+electron(/|$)";
 const browserLibs = [
   "react",
   "react/**",
@@ -12,6 +14,12 @@ const browserLibs = [
   "three",
   "three/**",
   "@react-three/**",
+  "zustand",
+  "zustand/react",
+  "zustand/react/**",
+  "zustand/traditional",
+  "three-stdlib",
+  "three-stdlib/**",
 ];
 
 const collectorMessage =
@@ -23,7 +31,7 @@ const collectorElectronMessage =
 const browserMessage =
   "collector/ and src/shared/ must load in plain Node; React and Three code belongs in src/ui, src/world or src/sim.";
 const relativeMessage =
-  "src/shared/ is a leaf module; it must not import from other src/ folders. Move the shared type into src/shared.";
+  "src/shared/ is a flat leaf module: no `..` imports. Import siblings with `./`; move shared types into src/shared/.";
 const srcFromCollectorMessage =
   "collector/ may import src/ only through src/shared; other src/ code belongs to the browser.";
 
@@ -31,6 +39,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   staged: {
     "*": "vp check --fix",
+    "vite.config.ts": "vp check",
   },
   fmt: {},
   lint: {
@@ -47,8 +56,9 @@ export default defineConfig({
             "error",
             {
               patterns: [
-                { group: collectorModules, message: collectorMessage },
-                { group: electronModules, message: electronMessage },
+                { regex: collectorFolder, message: collectorMessage },
+                { regex: electronFolder, message: electronMessage },
+                { group: electronPackage, message: electronMessage },
               ],
             },
           ],
@@ -57,14 +67,16 @@ export default defineConfig({
       {
         files: ["src/shared/**"],
         rules: {
+          "import/no-commonjs": "error",
           "no-restricted-imports": [
             "error",
             {
               patterns: [
-                { group: collectorModules, message: collectorMessage },
-                { group: electronModules, message: electronMessage },
+                { regex: collectorFolder, message: collectorMessage },
+                { regex: electronFolder, message: electronMessage },
+                { group: electronPackage, message: electronMessage },
                 { group: browserLibs, message: browserMessage },
-                { regex: "^\\.\\./", message: relativeMessage },
+                { regex: "(^|/)\\.\\.(/|$)", message: relativeMessage },
               ],
             },
           ],
@@ -73,18 +85,24 @@ export default defineConfig({
       {
         files: ["collector/**"],
         rules: {
+          "import/no-commonjs": "error",
           "no-restricted-imports": [
             "error",
             {
               patterns: [
+                { regex: "[^./]/\\.\\.(/|$)", message: srcFromCollectorMessage },
                 { group: browserLibs, message: browserMessage },
                 { group: electronModules, message: collectorElectronMessage },
-                { group: ["**/src/**", "!**/src/shared/**"], message: srcFromCollectorMessage },
+                {
+                  group: ["**/src", "**/src/**", "!**/src/shared", "!**/src/shared/**"],
+                  message: srcFromCollectorMessage,
+                },
               ],
             },
           ],
         },
       },
+      // The .no-jsx sentinel extension makes every JSX-bearing file an error, keeping collector/ and src/shared/ JSX-free.
       {
         files: ["collector/**", "src/shared/**"],
         rules: { "react/jsx-filename-extension": ["error", { extensions: [".no-jsx"] }] },
