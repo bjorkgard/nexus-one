@@ -6,6 +6,8 @@ const electronModules = ["electron", "electron/**", "**/electron", "**/electron/
 const electronPackage = ["electron", "electron/**"];
 const collectorFolder = "(?i)^(\\./)?(\\.\\./)+collector(/|$)";
 const electronFolder = "(?i)^(\\./)?(\\.\\./)+electron(/|$)";
+// A `..` after a src/ segment, e.g. ../src/shared/../ui; must precede the negated src group.
+const collectorEscape = "(^|/)src/(.*/)?\\.\\.(/|$)";
 const browserLibs = [
   "react",
   "react/**",
@@ -39,7 +41,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   staged: {
     "*": "vp check --fix",
-    "vite.config.ts": "vp check",
+    // Function form: lint-staged would otherwise append the path and check only this file.
+    "vite.config.ts": () => "vp check",
   },
   fmt: {},
   lint: {
@@ -47,6 +50,7 @@ export default defineConfig({
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     plugins: ["typescript", "unicorn", "oxc", "import", "react"],
     options: { typeAware: true, typeCheck: true },
+    // A later override for the same rule replaces earlier options, so each override lists all its patterns.
     overrides: [
       {
         files: ["src/**"],
@@ -90,7 +94,7 @@ export default defineConfig({
             "error",
             {
               patterns: [
-                { regex: "[^./]/\\.\\.(/|$)", message: srcFromCollectorMessage },
+                { regex: collectorEscape, message: srcFromCollectorMessage },
                 { group: browserLibs, message: browserMessage },
                 { group: electronModules, message: collectorElectronMessage },
                 {
