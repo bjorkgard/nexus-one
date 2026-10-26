@@ -26,9 +26,14 @@ export class CanvasErrorBoundary extends Component<
 
   render() {
     if (this.state.error) {
+      const { message } = this.state.error;
+      const title = /webgl/i.test(message) ? "WebGL is unavailable" : "The 3D view failed to load";
       return (
-        <div className="flex h-full items-center justify-center p-4 text-center text-red-400">
-          WebGL is unavailable: {this.state.error.message}
+        <div
+          role="alert"
+          className="flex h-full items-center justify-center p-4 text-center text-red-400"
+        >
+          {title}: {message}
         </div>
       );
     }
@@ -38,7 +43,7 @@ export class CanvasErrorBoundary extends Component<
 
 export function App() {
   return (
-    <div className="relative h-full w-full bg-neutral-950">
+    <div className="relative h-full w-full">
       <CanvasErrorBoundary>
         <Canvas
           fallback={
