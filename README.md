@@ -26,8 +26,8 @@ Open the local URL printed in the terminal. Changes to source files update the a
 
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
-- `vp test` — Run tests: `lint/module-fences.test.js`, the suite for the module-fence rule.
-- `vp run build` — Run the TypeScript compiler checks and create a production build in `dist/`.
+- `vp test` — Run the test suite.
+- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`.
 - `vp run preview` — Serve the production build locally after building.
 
 Use `vp run <name>` for scripts defined in `package.json`. Built-in commands such as `vp check` and `vp test` run directly.
