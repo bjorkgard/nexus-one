@@ -18,6 +18,8 @@ const collectorMessage =
   "src/ runs in the browser; Node-only code lives in collector/. Share data through src/shared types.";
 const electronMessage =
   "src/ runs in the browser; Electron main and preload code lives in electron/.";
+const collectorElectronMessage =
+  "collector/ must load in plain Node (vp run dev) as well as Electron; keep Electron APIs in electron/.";
 const browserMessage =
   "collector/ and src/shared/ must load in plain Node; React and Three code belongs in src/ui, src/world or src/sim.";
 const relativeMessage =
@@ -76,7 +78,7 @@ export default defineConfig({
             {
               patterns: [
                 { group: browserLibs, message: browserMessage },
-                { group: electronModules, message: electronMessage },
+                { group: electronModules, message: collectorElectronMessage },
                 { group: ["**/src/**", "!**/src/shared/**"], message: srcFromCollectorMessage },
               ],
             },
