@@ -30,3 +30,6 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Local task buckets (see CLAUDE.md)
+.claude/scratch/

@@ -1,6 +1,6 @@
 # Nexus One
 
-A TypeScript web starter built with [Vite+](https://viteplus.dev/). The current app includes a starter page, static assets, and an interactive counter.
+The Nexus One shell: a React + React Three Fiber + Tailwind app built with [Vite+](https://viteplus.dev/).
 
 ## Getting started
 
@@ -35,14 +35,18 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 ## Project structure
 
 - `index.html` — HTML entry point.
-- `src/main.ts` — Starter page markup and application initialization.
-- `src/counter.ts` — Interactive counter behavior.
-- `src/style.css` — Application styles, responsive layouts, and light/dark themes.
-- `src/assets/` — Assets imported by the application.
-- `public/` — Static files served directly.
-- `vite.config.ts` — Vite+ configuration, formatting, linting, type checking, and staged-file checks.
+- `src/main.tsx` — Application entry; mounts React into `#app`.
+- `src/App.tsx` — Root component with the 3D canvas and its error boundary.
+- `src/style.css` — Tailwind import and base layout styles.
+- `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
+- `TODOS.md` — Deferred work.
+- `CHANGELOG.md` — Release notes.
+- `AGENTS.md` — Vite+ toolchain instructions for coding agents.
+- `CLAUDE.md` — Project rules for Claude Code, including where plan reviews are stored.
+- `docs/PLAN.md` — Phased build plan.
+- `docs/plans/` — Per-task plan and review files.
 
 ## Development checks
 
