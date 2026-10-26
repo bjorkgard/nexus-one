@@ -26,7 +26,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
-- `vp test` — Run tests. No test files are included yet, so this currently exits with code 1.
+- `vp test` — Run tests: `lint/module-fences.test.js`, the suite for the module-fence rule.
 - `vp run build` — Run the TypeScript compiler checks and create a production build in `dist/`.
 - `vp run preview` — Serve the production build locally after building.
 
@@ -45,7 +45,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`).
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
-- Module fences: `src/` cannot import Node built-ins, `collector/`, or `electron/`. Lint (`vp check`) enforces them; relative imports are checked on the resolved path by `lint/module-fences.js`.
+- Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` only itself and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.
 - `lint/` — Local Oxlint plugin with the module-fence rule.
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration.

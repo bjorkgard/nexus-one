@@ -3,8 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
-// Scope: only relative specifiers (starting with `.`) are resolved. Bare, alias and root-absolute
-// specifiers are not: no aliases exist, and `/x` fails TS2307.
+// Allow-list: a file in a zone may import only inside its allowed folders; static specifiers only.
+// Resolved: relative (`.`) and root-absolute (`/`) specifiers, with any `?query` or `#hash` removed.
+// Bare and `node:` specifiers belong to no-restricted-imports and import/no-nodejs-modules.
 
 // Follows symlinks; for a missing file, resolves the deepest existing parent and appends the rest.
 function realPath(absolute) {
@@ -33,22 +34,13 @@ function inside(target, folder) {
   return target === folder || target.startsWith(`${folder}/`);
 }
 
-function escapesRepo(target) {
-  return target === ".." || target.startsWith("../") || path.isAbsolute(target);
-}
-
-function violation(importer, target) {
-  if (escapesRepo(target)) {
-    return "This import escapes the repo; keep imports inside the project.";
-  }
-  if (inside(importer, "src/shared") && !inside(target, "src/shared")) {
-    return "src/shared/ is a leaf module: it may import only other src/shared/ files. Move shared types into src/shared/.";
-  }
-  if (inside(importer, "src") && (inside(target, "collector") || inside(target, "electron"))) {
-    return "src/ runs in the browser; Node-only code lives in collector/ and Electron main and preload code in electron/. Share data through src/shared types.";
-  }
-  if (inside(importer, "collector") && inside(target, "src") && !inside(target, "src/shared")) {
-    return "collector/ may import src/ only through src/shared; other src/ code belongs to the browser.";
+// Allowed target folders per importer zone; files in no zone (electron/, lint/, root) are unchecked.
+function zoneOf(importer) {
+  if (inside(importer, "src/shared"))
+    return { allowed: ["src/shared"], messageId: "outsideShared" };
+  if (inside(importer, "src")) return { allowed: ["src"], messageId: "outsideSrc" };
+  if (inside(importer, "collector")) {
+    return { allowed: ["collector", "src/shared"], messageId: "outsideCollector", collector: true };
   }
   return null;
 }
@@ -72,36 +64,108 @@ function isImportMeta(node, property) {
 }
 
 // Static directory part of a glob: up to the last `/` before the first glob character.
+// Every `?` counts as a wildcard in a glob (never as a query), so the prefix stops there.
 function globPrefix(pattern) {
-  const unnegated = pattern.startsWith("!") ? pattern.slice(1) : pattern;
-  const firstMagic = unnegated.search(/[*{[?]/);
-  if (firstMagic === -1) return unnegated;
-  return unnegated.slice(0, Math.max(unnegated.lastIndexOf("/", firstMagic), 0));
+  const firstMagic = pattern.search(/[*{[?(]/);
+  if (firstMagic === -1) return { prefix: pattern, rest: "" };
+  const cut = Math.max(pattern.lastIndexOf("/", firstMagic), 0);
+  return { prefix: pattern.slice(0, cut), rest: pattern.slice(cut) };
 }
 
 const noCrossZone = defineRule({
-  meta: { messages: { fence: "{{ message }}" } },
+  meta: {
+    messages: {
+      outsideShared: "src/shared/ is a leaf module: it may import only other src/shared/ files.",
+      outsideSrc:
+        "src/ may import only other src/ files; Node-only code belongs in collector/ and Electron code in electron/.",
+      outsideCollector:
+        "collector/ may import only collector/ and src/shared/ files; other src/ code belongs to the browser.",
+      nonStatic:
+        "Non-static import in a fenced zone; use a string literal so the module fence can check it.",
+      glob: "import.meta.glob in a fenced zone must use relative or root-absolute patterns and no `base` option.",
+      createRequire: "createRequire is banned in collector/; it would bypass the module fence.",
+    },
+  },
   create(context) {
     const importer = toRepoPath(context.filename);
+    const zone = zoneOf(importer);
+    if (!zone) return {};
+    const dir = path.dirname(context.filename);
 
-    function checkSpecifier(specifier, sourceNode) {
-      if (specifier === null || !specifier.startsWith(".")) return;
-      const target = toRepoPath(path.resolve(path.dirname(context.filename), specifier));
-      const message = violation(importer, target);
-      if (message) context.report({ node: sourceNode, messageId: "fence", data: { message } });
+    // Resolves a relative or root-absolute path; null for anything else.
+    function resolveFrom(specifier) {
+      if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier));
+      if (specifier.startsWith("/")) return toRepoPath(path.join(repoRoot, specifier));
+      return null;
     }
 
-    function check(sourceNode) {
-      checkSpecifier(stringValue(sourceNode), sourceNode);
+    function checkTarget(target, node) {
+      if (!zone.allowed.some((folder) => inside(target, folder))) {
+        context.report({ node, messageId: zone.messageId });
+      }
+    }
+
+    function checkSpecifier(specifier, node) {
+      const target = resolveFrom(specifier.replace(/[?#][\s\S]*$/, ""));
+      if (target !== null) checkTarget(target, node);
+    }
+
+    // For import(), require() and new URL(): the specifier must be a static string.
+    function check(node) {
+      if (!node) return;
+      const specifier = stringValue(node);
+      if (specifier === null) context.report({ node, messageId: "nonStatic" });
+      else checkSpecifier(specifier, node);
+    }
+
+    function checkGlobPattern(node) {
+      const raw = stringValue(node);
+      if (raw === null) {
+        context.report({ node, messageId: "nonStatic" });
+        return;
+      }
+      const pattern = (raw.startsWith("!") ? raw.slice(1) : raw).replace(/#[\s\S]*$/, "");
+      if (!/^(\.\.?\/|\/)/.test(pattern)) {
+        context.report({ node, messageId: "glob" });
+        return;
+      }
+      const { prefix, rest } = globPrefix(pattern);
+      // `..` after a wildcard could climb out of the checked prefix.
+      if (/(^|[/{,])\.\.([/},]|$)/.test(rest)) {
+        context.report({ node, messageId: "glob" });
+        return;
+      }
+      const target = resolveFrom(prefix === "" ? "/" : prefix);
+      if (target !== null) checkTarget(target, node);
+    }
+
+    function checkGlobOptions(node) {
+      if (!node) return;
+      if (node.type !== "ObjectExpression") {
+        context.report({ node, messageId: "glob" });
+        return;
+      }
+      for (const property of node.properties) {
+        const key = property.type === "Property" ? property.key : null;
+        const name =
+          key && (key.type === "Identifier" && !property.computed ? key.name : stringValue(key));
+        if (key === null || name === null || name === "base") {
+          context.report({ node: property, messageId: "glob" });
+        }
+      }
     }
 
     function checkGlob(node) {
-      if (!node) return;
-      const patterns = node.type === "ArrayExpression" ? node.elements : [node];
-      for (const element of patterns) {
-        const pattern = stringValue(element);
-        if (pattern !== null) checkSpecifier(globPrefix(pattern), element);
+      const [patterns, options] = node.arguments;
+      if (!patterns) return;
+      if (patterns.type === "ArrayExpression") {
+        for (const element of patterns.elements) {
+          if (element) checkGlobPattern(element);
+        }
+      } else {
+        checkGlobPattern(patterns);
       }
+      checkGlobOptions(options);
     }
 
     return {
@@ -114,11 +178,25 @@ const noCrossZone = defineRule({
         const argument = node.source ?? node.argument;
         check(argument && argument.type === "TSLiteralType" ? argument.literal : argument);
       },
+      ImportSpecifier(node) {
+        const imported = node.imported;
+        if (zone.collector && (imported.name ?? imported.value) === "createRequire") {
+          context.report({ node, messageId: "createRequire" });
+        }
+      },
       CallExpression(node) {
-        if (node.callee.type === "Identifier" && node.callee.name === "require") {
+        const callee = node.callee;
+        if (callee.type === "Identifier" && callee.name === "require") {
           check(node.arguments[0]);
-        } else if (isImportMeta(node.callee, "glob")) {
-          checkGlob(node.arguments[0]);
+        } else if (isImportMeta(callee, "glob")) {
+          checkGlob(node);
+        } else if (
+          zone.collector &&
+          callee.type === "MemberExpression" &&
+          (callee.computed ? stringValue(callee.property) : callee.property.name) ===
+            "createRequire"
+        ) {
+          context.report({ node, messageId: "createRequire" });
         }
       },
       NewExpression(node) {

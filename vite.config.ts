@@ -54,6 +54,7 @@ export default defineConfig({
         files: ["src/**"],
         rules: {
           "import/no-nodejs-modules": "error",
+          "typescript/triple-slash-reference": "error",
           "no-restricted-imports": [
             "error",
             {
@@ -66,6 +67,7 @@ export default defineConfig({
         files: ["src/shared/**"],
         rules: {
           "import/no-commonjs": "error",
+          "typescript/triple-slash-reference": "error",
           "no-restricted-imports": [
             "error",
             {
@@ -81,6 +83,7 @@ export default defineConfig({
         files: ["collector/**"],
         rules: {
           "import/no-commonjs": "error",
+          "typescript/triple-slash-reference": "error",
           "no-restricted-imports": [
             "error",
             {
