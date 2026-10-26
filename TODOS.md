@@ -30,23 +30,23 @@
 
 ## Tooling
 
-### Automated test for the module-boundary lint fences
+### Add the last two config-fence wiring rows
 
-**What:** In task 1.3, add a Vitest test that lints one fixture file per fence (src → collector, src → electron, src → Node built-in, src/shared → React, collector → React/Three, collector → src/ui) with the real `vite.config.ts` and asserts each named rule fires.
+**What:** Add two rows to the `configRows` table in `lint/module-fences.test.js`: `collector/` importing `react` (expect `eslint(no-restricted-imports)` with the browser-libraries message) and `src/` importing `electron` (expect `eslint(no-restricted-imports)` with the src message).
 
-**Why:** Task 1.2 proves the fences once, by hand. A later override for the same rule silently replaces the earlier one (task 1.2 probe P11), so a config edit can disable a fence while `vp check` still passes. There is no CI.
+**Why:** Task 1.2 shipped the fence test suite (`vp test`, 120 cases) with every other config fence pinned. These two groups are only covered by manual probes, so an override edit that drops them would pass `vp test`. A later override for the same rule silently replaces the earlier one.
 
-**Context:** Decided in the task 1.2 CEO review (D4, `docs/plans/1.2-module-boundaries.md`). Fixtures must sit outside the paths `vp check` scans, or be linted from a temp copy, so the normal check stays green. Assert rule names (`eslint(no-restricted-imports)`, `import(no-nodejs-modules)`), not just a non-zero exit: Node and `electron` imports also fail through missing types (probes P4, P7).
+**Context:** Found by the task 1.2 /ship red team (run 3, pass 2). Follow the existing rows: one `.txt` fixture under `lint/fixtures/`, copied to a `__wiring_*` path that `.gitignore` already covers.
 
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2
-**Depends on:** Task 1.2 (fences), task 1.3 (Vitest via `vp test`)
+**Depends on:** None
 
 ### Separate type environments for collector/ and electron/
 
 **What:** Before task 1.7, give `collector/` and `electron/` their own tsconfig (Node types, no DOM lib) and include them in the build's type-check.
 
-**Why:** `vp check` type-checks those folders with `src` defaults (DOM lib, no Node types), so `window` would pass there and `process` would fail. The `build` script's `tsc` reads `tsconfig.json` (`include: ["src"]`) and skips them entirely (task 1.2 probe P8).
+**Why:** `vp check` type-checks those folders with `src` defaults (DOM lib, no Node types), so `window` would pass there and `process` would fail. The `build` script's `tsc` reads `tsconfig.json` (`include: ["src"]`) and skips them entirely (task 1.2 probe P8). `src/shared/` has the same problem in reverse: it must load in plain Node, yet `window` and `document` type-check there (task 1.2 /ship red team); give it a lib without DOM or add `no-restricted-globals` for browser globals.
 
 **Context:** Found in the task 1.2 CEO review (D6). Start with a `tsconfig.node.json` (`types: ["node"]`, `lib: ["ES2023"]`) and project references, add `@types/node`, then confirm `vp check` uses it for those paths. Once `@types/node` is installed, Node imports in `src/` fail only through the `import/no-nodejs-modules` lint rule; that is intended.
 
@@ -68,15 +68,45 @@
 
 ### Check the production bundle for collector/ and Node code
 
-**What:** Extend task 1.3's bundle check (it already greps `dist/` for `__nexus`) to also assert that `dist/` contains no `collector/` source and no Node built-in import.
+**What:** Extend task 1.3's bundle check (it already greps `dist/` for `__nexus`) to assert that the browser bundle contains no `collector/` code and no Node built-in import, and add a matching check that a collector build (once one exists) contains no React or Three.
 
-**Why:** `import.meta.glob` and `new URL(..., import.meta.url)` with relative literals are now linted by `lint/module-fences.js`, but dynamic or computed paths, bare and alias specifiers are not. The bundle check stays as a backstop.
+**Why:** The task 1.2 lint fences (`lint/module-fences.js` plus `vite.config.ts` bans) are an honest-mistake guard, not a guarantee. These known bypasses need deliberate effort and are accepted there; only a bundle check catches them:
 
-**Context:** Decided in the task 1.2 /ship review (D7, reopened in the rerun). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. Pick marker strings that only collector code contains, and a list of `node:` / built-in specifiers; fail the check on any match.
+- `file://` specifiers, or any specifier hidden with `// @ts-expect-error`
+- React-importing transitive packages not in `browserLibs` (for example `its-fine`, `suspend-react`, `scheduler`)
+- inline `oxlint-disable` comments for the fence rules
+- Node-only npm packages imported from `src/` (for example `vite-plus`, `typescript`)
+- files in gitignored folders under `src/` (`vp check` skips them, Vite bundles them)
+- bare-relative or percent-encoded `new URL("sub/../..", import.meta.url)` strings
+- `createRequire` reached through destructuring or `process.getBuiltinModule`
+- `import x = require(...)` (today also blocked by TS1294), extglob `..`, alias specifiers (none configured yet), HTML/CSS entry points
+
+**Context:** Decided in the task 1.2 /ship review (D6, run 2). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. Pick marker strings that only collector code contains, and a list of `node:` / built-in specifiers; fail the check on any match.
 
 **Effort:** S (human) / S (CC+gstack)
-**Priority:** P2
+**Priority:** P1
 **Depends on:** Task 1.3
+
+### Harden the module-fence rule and staged hook
+
+**What:** Close the remaining edge cases found in the task 1.2 /ship reviews:
+
+- pre-commit type-checks only staged files, so a renamed export can break unchanged importers; also run the full check when `tsconfig.json` or `package.json` is staged
+- root-absolute specifiers depend on what is on disk (`/dist/x` changes after a build); check against a fixed list of source folders instead
+- resolve relative specifiers from the importer's real path when the importer is a symlink
+- fail loudly if the rule sees a file outside the repo root (today it silently checks nothing)
+- cover `import.meta.resolve(...)` like `new URL(..., import.meta.url)`
+- confirm `no-restricted-imports` group semantics for nested names and type-only imports
+- on case-sensitive file systems, test root entries before lower-casing
+- leftover `__wiring_*` scratch files can fail a full pre-commit check
+
+**Why:** None affects ordinary code today, but each can give a wrong lint result in a specific setup.
+
+**Context:** Deferred by the owner in the task 1.2 /ship run 3 (D3, D4). Each item has a reproduction in `docs/plans/1.2-module-boundaries.md` or the bucket findings; add a RuleTester or wiring case with each fix.
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** None
 
 ### Lock down the collector WebSocket beyond loopback
 
