@@ -38,6 +38,14 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/main.tsx` — Application entry; mounts React into `#app`.
 - `src/App.tsx` — Root component with the 3D canvas and its error boundary.
 - `src/style.css` — Tailwind import and base layout styles.
+- `src/world/` — Geometry.
+- `src/sim/` — Simulation and animation state.
+- `src/ui/` — Dashboard.
+- `src/data/` — Client store and data sources.
+- `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders.
+- `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`.
+- `electron/` — Electron main and preload.
+- Module fences: `src/` cannot import Node built-ins, `collector/`, or `electron/`. Lint (`vp check`) enforces them.
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
