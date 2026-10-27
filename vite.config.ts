@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
+import { buildGuards } from "./lint/build-guards.js";
 import { configDefaults } from "vite-plus/test/config";
 
 const electronPackage = ["electron", "electron/**"];
@@ -31,7 +32,7 @@ const browserMessage =
   "collector/ and src/shared/ must load in plain Node; React and Three code belongs in src/ui, src/world or src/sim.";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), buildGuards()],
   staged: {
     // One entry, so the tasks never run concurrently. Function form: lint-staged would otherwise
     // append the paths and check only those files. Staging the config or the fence plugin changes
