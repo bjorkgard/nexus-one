@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
+import { configDefaults } from "vite-plus/test/config";
 
 const electronPackage = ["electron", "electron/**"];
 const browserLibs = [
@@ -47,6 +48,7 @@ export default defineConfig({
     },
   },
   fmt: {},
+  test: { exclude: [...configDefaults.exclude, "e2e/**"] },
   lint: {
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
