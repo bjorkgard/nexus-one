@@ -39,3 +39,7 @@ dist-ssr
 /src/ui/__wiring_*
 /src/shared/__wiring_*
 /collector/__wiring_*
+
+# Playwright output
+/test-results/
+/playwright-report/
