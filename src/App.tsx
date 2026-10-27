@@ -1,6 +1,8 @@
 import { Canvas } from "@react-three/fiber";
-import { Component } from "react";
+import { Component, Suspense, lazy } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+
+const NexusBridge = import.meta.env.DEV ? lazy(() => import("./debug/Bridge")) : null;
 
 interface CanvasErrorBoundaryProps {
   children: ReactNode;
@@ -49,7 +51,13 @@ export function App() {
           fallback={
             <div className="p-4 text-neutral-300">This browser does not support canvas.</div>
           }
-        />
+        >
+          {NexusBridge && (
+            <Suspense fallback={null}>
+              <NexusBridge />
+            </Suspense>
+          )}
+        </Canvas>
       </CanvasErrorBoundary>
       <div className="pointer-events-none absolute top-4 left-4 text-lg font-semibold text-white">
         Nexus One
