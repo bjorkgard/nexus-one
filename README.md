@@ -31,6 +31,11 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
 - `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in or `__nexus` reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
+- `vp run pack` — Build the UI and the Electron main process, then package an unsigned macOS app into `release/mac-arm64/Nexus One.app` (about 1 minute).
+- `vp run start` — Build, then launch the Electron app from source.
+- `vp run test:packaged` — Run after `vp run pack`: launch the packaged app with Playwright and check that it renders.
+
+The packaged build is unsigned (8.5 owns signing), so the first launch of a downloaded copy may need right-click → Open. To see main-process and `[renderer]` logs, run the binary from a terminal: `"release/mac-arm64/Nexus One.app/Contents/MacOS/Nexus One"`.
 
 Use `vp run <name>` for scripts defined in `package.json`. Built-in commands such as `vp check` and `vp test` run directly.
 
@@ -54,15 +59,17 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.
   - `apply-once.ts` — `applyOnce`, the dedup entry: bounded recent-id ring plus reducer.
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
-- `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
-- Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` only itself and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.
+- `electron/` — Electron main process. `main.ts` is start-up and the window; `resolve.ts` is the `app://` file policy. Imports only `electron/` and `src/shared/`; no browser libraries (React, Three, zustand, three-stdlib); no `createRequire` or CommonJS.
+- `package.json` `dependencies` is empty on purpose: it means "loaded by Electron main at run time". Everything else is bundled (Vite for the renderer, `vp pack` for main) and goes in `devDependencies`.
+- Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` and `electron/` only themselves and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.
 - Inside `src/`, only `src/shared/` may import `zod`; the rest of `src/` imports schemas and types from `src/shared/schema.ts` (`vp check` enforces this).
 - `lint/` — Local Oxlint plugin with the module-fence rule, and the build-guard plugin (`lint/build-guards.js`).
 - `e2e/` — Playwright specs and the typed `__nexus` helper.
 - `test/` — Node-backed tests, such as the build guards.
 - `playwright.config.ts` — Playwright configuration.
+- `playwright.electron.config.ts` — Playwright configuration for the packaged app (`vp run test:packaged`).
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
-- `tsconfig.json` — TypeScript compiler configuration.
+- `tsconfig.json` — TypeScript compiler configuration. `electron/`, `collector/` and `src/shared/` each add a `tsconfig.json` that drops the DOM library, so browser globals such as `window` fail type checking there.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
 - `TODOS.md` — Deferred work.
 - `CHANGELOG.md` — Release notes.
@@ -106,11 +113,14 @@ npx playwright test
 vp run build
 ```
 
-`vp test` runs the `src/` unit tests, the `lint/` fence tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule) and the `test/` build-guard tests.
+If you changed `electron/` or packaging, also run `vp run pack` and `vp run test:packaged`.
+
+`vp test` runs the `src/` and `electron/` unit tests, the `lint/` fence tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule) and the `test/` build-guard tests.
 
 ## Test locations
 
 - Browser-safe unit tests live next to the code in `src/`.
+- Main-process unit tests live next to the code in `electron/` (for example `resolve.test.ts`, which covers the `app://` file policy).
 - Tests that need Node live in `test/`, because the `src/` fence bans Node built-ins, tests included.
 - Browser tests live in `e2e/`.
 
@@ -124,4 +134,4 @@ vp run build
 
 The pre-commit hook runs `vp staged`, which applies `vp check --fix` to staged files. Review any automatic fixes before pushing.
 
-Keep credentials out of version control. `.env` and `.env.*` files are ignored, except `.env.example`, which should contain placeholders only. Dependencies (`node_modules/`) and build output (`dist/`) are also ignored.
+Keep credentials out of version control. `.env` and `.env.*` files are ignored, except `.env.example`, which should contain placeholders only. Dependencies (`node_modules/`) and build output (`dist/`, `dist-electron/` and `release/`) are also ignored.

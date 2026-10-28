@@ -39,8 +39,13 @@ dist-ssr
 /src/ui/__wiring_*
 /src/shared/__wiring_*
 /collector/__wiring_*
+/electron/__wiring_*
 /src/data/mock__wiring_*
 
 # Playwright output
 /test-results/
 /playwright-report/
+
+# Packaging output
+/release/
+/dist-electron/

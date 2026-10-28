@@ -21,6 +21,7 @@ const tester = new RuleTester({
 const fromUi = at("src/ui/a.ts");
 const fromShared = at("src/shared/a.ts");
 const fromCollector = at("collector/a.ts");
+const fromElectron = at("electron/a.ts");
 
 // Must match the messages in module-fences.js.
 const SHARED = "src/shared/ is a leaf module: it may import only other src/shared/ files.";
@@ -28,12 +29,16 @@ const SRC =
   "src/ may import only other src/ files; Node-only code belongs in collector/ and Electron code in electron/.";
 const COLLECTOR =
   "collector/ may import only collector/ and src/shared/ files; other src/ code belongs to the browser.";
+const ELECTRON =
+  "electron/ may import only electron/ and src/shared/; renderer code stays in src/.";
 const NON_STATIC =
   "Non-static import in a fenced zone; use a string literal so the module fence can check it.";
 const GLOB =
   "import.meta.glob in a fenced zone must use relative or root-absolute patterns and no `base` option.";
 const GLOB_OPTIONS = "glob options must be a literal object without `base`.";
 const CREATE_REQUIRE = "createRequire is banned in collector/; it would bypass the module fence.";
+const ELECTRON_CREATE_REQUIRE =
+  "createRequire is banned in electron/; it would bypass the module fence.";
 
 const bad = (filename, code, message) => ({ filename, code, errors: [{ message }] });
 const good = (filename, code) => ({ filename, code });
@@ -89,9 +94,11 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromCollector, 'import fs from "node:fs";'),
     good(fromCollector, 'import { createHash } from "node:crypto";'),
     // outside zones: unchecked
-    good(at("electron/a.ts"), 'import x from "../collector/x";'),
-    good(at("electron/a.ts"), 'import x from "../src/ui/x";'),
-    good(at("electron/a.ts"), "import(name);"),
+    // electron
+    good(fromElectron, 'import x from "./y";'),
+    good(fromElectron, 'import x from "../src/shared/x";'),
+    good(fromElectron, 'import pkg from "../package.json";'),
+    good(fromElectron, 'import { app } from "electron";'),
     good(at("vite.config.ts"), 'import x from "./collector/x";'),
     good(at("vite.config.ts"), 'import x from "./src/ui/x";'),
     good(at("lint/a.js"), 'import x from "../src/ui/x";'),
@@ -188,6 +195,22 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
       'import * as m from "node:module"; export const r = m.createRequire(import.meta.url);',
       CREATE_REQUIRE,
     ),
+    // allow-list: electron may import electron and src/shared
+    bad(fromElectron, 'import x from "../src/ui/x";', ELECTRON),
+    bad(fromElectron, 'import x from "../collector/x";', ELECTRON),
+    bad(fromElectron, 'import x from "../src/shared/../ui/x";', ELECTRON),
+    bad(fromElectron, "import(name);", NON_STATIC),
+    // createRequire in electron
+    bad(
+      fromElectron,
+      'import { createRequire } from "node:module"; export const r = createRequire(import.meta.url);',
+      ELECTRON_CREATE_REQUIRE,
+    ),
+    bad(
+      fromElectron,
+      'import * as m from "node:module"; export const r = m.createRequire(import.meta.url);',
+      ELECTRON_CREATE_REQUIRE,
+    ),
     // symlink inside src/ pointing at collector/
     bad(fromUi, 'import x from "./__fence_link__/x";', SRC),
   ],
@@ -203,6 +226,19 @@ describe("module-fences wiring", () => {
       "collector/__wiring_electron.ts",
       "eslint(no-restricted-imports)",
       "collector/ must load in plain Node",
+    ],
+    [
+      "electron-react.txt",
+      "electron/__wiring_react.ts",
+      "eslint(no-restricted-imports)",
+      "electron/ runs in the main process",
+    ],
+    ["electron-require.txt", "electron/__wiring_require.ts", "import(no-commonjs)"],
+    [
+      "electron-ui.txt",
+      "electron/__wiring_ui.ts",
+      "module-fences(no-cross-zone)",
+      "electron/ may import only electron/ and src/shared/",
     ],
     ["ui-node-fs.txt", "src/ui/__wiring_node_fs.ts", "import(no-nodejs-modules)"],
     ["collector-require.txt", "collector/__wiring_require.ts", "import(no-commonjs)"],

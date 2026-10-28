@@ -28,6 +28,8 @@ const electronMessage =
   "src/ runs in the browser; Electron main and preload code lives in electron/.";
 const collectorElectronMessage =
   "collector/ must load in plain Node (vp run dev) as well as Electron; keep Electron APIs in electron/.";
+const electronBrowserMessage =
+  "electron/ runs in the main process; React and Three code belongs in src/ui, src/world or src/sim.";
 const browserMessage =
   "collector/ and src/shared/ must load in plain Node; React and Three code belongs in src/ui, src/world or src/sim.";
 
@@ -49,6 +51,15 @@ export default defineConfig({
     },
   },
   fmt: {},
+  pack: {
+    entry: "electron/main.ts",
+    outDir: "dist-electron",
+    deps: { neverBundle: ["electron"] },
+    format: "esm",
+    platform: "node",
+    // platform "node" otherwise forces .mjs; package.json "main" names main.js.
+    fixedExtension: false,
+  },
   test: { exclude: [...configDefaults.exclude, "e2e/**"] },
   lint: {
     jsPlugins: [
@@ -112,6 +123,16 @@ export default defineConfig({
                 { group: electronPackage, message: collectorElectronMessage },
               ],
             },
+          ],
+        },
+      },
+      {
+        files: ["electron/**"],
+        rules: {
+          "import/no-commonjs": "error",
+          "no-restricted-imports": [
+            "error",
+            { patterns: [{ group: browserLibs, message: electronBrowserMessage }] },
           ],
         },
       },

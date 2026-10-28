@@ -82,7 +82,7 @@ Goal: a typed React + R3F + Tailwind app with tests, a data contract, a mock dat
 
 ### 1.7 Packaging spike: blank Electron app
 
-- **Action:** Set Vite `base: './'`. Add `electron/main.ts` that loads `dist/index.html`, and an electron-builder config with a macOS `dir` target. Add script `vp run pack`.
+- **Action:** Add `electron/main.ts`, which serves `dist/` over a privileged `app://nexus` scheme via `protocol.handle` and loads `app://nexus/index.html`, and an electron-builder config with a macOS `dir` target. Add script `vp run pack`.
 - **Test:** Stop all dev servers, run `vp run build && vp run pack`, double-click `release/mac-arm64/Nexus One.app`.
 - **Done when:** the app window opens and shows the canvas and label; `lsof -nP -iTCP -sTCP:LISTEN | grep -i vite` returns nothing.
 
@@ -257,6 +257,7 @@ Goal: a readable futuristic campus, fully procedural, inside the performance bud
 - **Action:** `collector/adapters/claude.ts`: watch `~/.claude/projects/**/*.jsonl` (including subagent transcripts), read incrementally by byte offset, map lines to schema events (session, subagent spawn via Task tool, tool calls and results, tokens from usage, messages). The format is undocumented: version the adapter, count unknown lines, never crash on them. Fixtures from sanitized real transcripts.
 - **Test:** Unit: fixtures give the expected event list; appending a line to a watched file emits an event within 1 s; a corrupt line increments `unknownLines` only.
 - **Done when:** tests pass on fixtures from at least 3 real sessions, one with subagents.
+- **Note:** `collector/tsconfig.json` (no DOM) exists since 1.7 but `collector/` holds no source yet; when the first file lands, confirm the no-DOM check with a temporary `window` probe that `vp check` rejects.
 
 <a id="t4-2"></a>
 
