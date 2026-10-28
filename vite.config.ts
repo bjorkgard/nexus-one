@@ -115,6 +115,46 @@ export default defineConfig({
           ],
         },
       },
+      // The mock must replay identically for a seed, so wall-clock and unseeded randomness are banned in it.
+      {
+        files: ["src/data/mock.ts", "src/data/mock.test.ts", "src/data/mock__wiring_*.ts"],
+        rules: {
+          "no-restricted-globals": [
+            "error",
+            {
+              name: "Date",
+              message:
+                "The mock must stay deterministic; use the sim-time `ts` instead of Date (wall-clock time).",
+            },
+            {
+              name: "crypto",
+              message:
+                "The mock must stay deterministic; crypto draws OS randomness, derive ids and values from the seeded PRNG.",
+            },
+          ],
+          "no-restricted-properties": [
+            "error",
+            {
+              object: "Math",
+              property: "random",
+              message:
+                "The mock must stay deterministic; use the seeded PRNG instead of Math.random.",
+            },
+            {
+              object: "performance",
+              property: "now",
+              message:
+                "The mock must stay deterministic; performance.now reads wall-clock time, use the sim-time `ts`.",
+            },
+            {
+              object: "performance",
+              property: "timeOrigin",
+              message:
+                "The mock must stay deterministic; performance.timeOrigin reads wall-clock time, use the sim-time `ts`.",
+            },
+          ],
+        },
+      },
       // The .no-jsx sentinel extension makes every JSX-bearing file an error, keeping collector/ and src/shared/ JSX-free.
       {
         files: ["collector/**", "src/shared/**"],

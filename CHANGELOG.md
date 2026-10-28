@@ -5,6 +5,19 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-28
+
+### Added
+
+- `createMockStream(options?)` in `src/data/mock.ts` produces a seeded, repeatable stream of events to build and test against before live data exists. The same seed always gives the same events, and events are produced one at a time, so a 100-agent, one-hour run never sits in memory.
+- The default stream is a fixed scenario of 1 project, 3 sessions (Claude and Codex) and 8 subagents, with all 13 event types. It always includes one agent that goes quiet for 6 minutes and then recovers, one that waits 6 minutes for the user, one that repeats the same call 5 times, one with 3 errors in a row and one slow 3-minute call. Each of these ends in a recovery step. `MOCK_ROLES` names those agents and `MOCK_TIMING` holds their timings, so later tests can find them.
+- Options `agents` and `durationMs` add busy extra agents in 2 more projects for load and soak runs. `timeScale` speeds the stream up, and `origin` sets where timestamps start. Bad or unknown options fail at once with an error that names the option.
+- `checkStream(events, { complete })` in `src/shared/check-stream.ts` checks any stream, mock or live, and returns a list of named problems instead of throwing. It catches broken ordering, duplicate ids, unpaired tool calls, subagents without a parent, events after an agent or session ended, a session that ends with work still open, and items left open at the end. It reports at most 100 problems plus a total.
+
+### Changed
+
+- `vp check` now fails if `src/data/mock.ts` or its test reads the clock or unseeded randomness (`Date`, `Math.random`, `performance.now`, `performance.timeOrigin`, `crypto`), so the mock stream stays repeatable.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added

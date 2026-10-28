@@ -43,9 +43,9 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/world/` — Geometry.
 - `src/sim/` — Simulation and animation state.
 - `src/ui/` — Dashboard.
-- `src/data/` — Client store and data sources.
+- `src/data/` — Client store and data sources. `mock.ts` exports `createMockStream(options?)`, the seeded, repeatable mock event stream (same seed, same events), plus `MOCK_ROLES` and `MOCK_TIMING` for finding its scripted agents. A lint rule bans `Date`, `Math.random`, `performance.now`, `performance.timeOrigin` and `crypto` in `mock.ts` and its test.
 - `src/debug/` — Dev-only `window.__nexus` test hooks.
-- `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws).
+- `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws); `check-stream.ts` exports `checkStream(events, { complete })`, which validates any event stream and returns named problems instead of throwing.
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
 - Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` only itself and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.

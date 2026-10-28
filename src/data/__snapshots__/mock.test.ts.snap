@@ -1,0 +1,226 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`default scenario > matches the committed file snapshot, one JSON line per event 1`] = `
+"{"id":"mock-20261028-0","ts":1790000000000,"sessionId":"mock-session-1","type":"session_start","projectId":"mock-project-nexus","projectName":"Nexus","provider":"claude"}
+{"id":"mock-20261028-1","ts":1790000000000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-s1-root","parentId":null,"name":"Orchestrator","model":"claude-opus"}
+{"id":"mock-20261028-2","ts":1790000001000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"Summarising what changed for the reviewer."}
+{"id":"mock-20261028-3","ts":1790000002000,"sessionId":"mock-session-1","type":"tokens","agentId":"mock-s1-root","model":"claude-opus","input":2902,"output":539,"cacheRead":15429,"cacheWrite":1607}
+{"id":"mock-20261028-4","ts":1790000003000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-s1-root","callId":"mock-call-s1-wait","tool":"Bash","argsHash":"args-s1-wait"}
+{"id":"mock-20261028-5","ts":1790000005000,"sessionId":"mock-session-2","type":"session_start","projectId":"mock-project-nexus","projectName":"Nexus","provider":"codex"}
+{"id":"mock-20261028-6","ts":1790000005000,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-s2-root","parentId":null,"name":"Codex Lead","model":"gpt-codex"}
+{"id":"mock-20261028-7","ts":1790000006000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-20261028-8","ts":1790000007000,"sessionId":"mock-session-2","type":"tokens","agentId":"mock-s2-root","model":"gpt-codex","input":4345,"output":859,"cacheRead":9179,"cacheWrite":1712}
+{"id":"mock-20261028-9","ts":1790000008000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-s1-root","callId":"mock-call-s1-wait","outcome":"ok"}
+{"id":"mock-20261028-10","ts":1790000008000,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-slow-tool","parentId":"mock-s2-root","name":"Builder","model":"gpt-codex"}
+{"id":"mock-20261028-11","ts":1790000008500,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-attention","parentId":"mock-s2-root","name":"Asker","model":"gpt-codex"}
+{"id":"mock-20261028-12","ts":1790000009000,"sessionId":"mock-session-2","type":"tool_call_start","agentId":"mock-slow-tool","callId":"mock-call-slow","tool":"Bash","argsHash":"args-slow"}
+{"id":"mock-20261028-13","ts":1790000009500,"sessionId":"mock-session-2","type":"message","agentId":"mock-attention","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-20261028-14","ts":1790000010000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-claude-long","parentId":"mock-s1-root","name":"Refactorer","model":"claude-sonnet"}
+{"id":"mock-20261028-15","ts":1790000010000,"sessionId":"mock-session-1","type":"handoff","fromAgentId":"mock-s1-root","toAgentId":"mock-claude-long","direction":"delegate"}
+{"id":"mock-20261028-16","ts":1790000010000,"sessionId":"mock-session-2","type":"tokens","agentId":"mock-attention","model":"gpt-codex","input":4700,"output":1390,"cacheRead":864,"cacheWrite":1296}
+{"id":"mock-20261028-17","ts":1790000010500,"sessionId":"mock-session-2","type":"tool_call_start","agentId":"mock-attention","callId":"mock-call-attention","tool":"Edit","argsHash":"args-attention"}
+{"id":"mock-20261028-18","ts":1790000010900,"sessionId":"mock-session-2","type":"tool_call_end","agentId":"mock-attention","callId":"mock-call-attention","outcome":"ok"}
+{"id":"mock-20261028-19","ts":1790000011000,"sessionId":"mock-session-2","type":"needs_attention","agentId":"mock-attention","reason":"permission"}
+{"id":"mock-20261028-20","ts":1790000012000,"sessionId":"mock-session-1","type":"message","agentId":"mock-claude-long","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-20261028-21","ts":1790000012000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-stuck","parentId":"mock-s1-root","name":"Stalled","model":"claude-sonnet"}
+{"id":"mock-20261028-22","ts":1790000013000,"sessionId":"mock-session-1","type":"message","agentId":"mock-stuck","role":"assistant","text":"Looking for the earlier call site of this helper."}
+{"id":"mock-20261028-23","ts":1790000014000,"sessionId":"mock-session-1","type":"tokens","agentId":"mock-stuck","model":"claude-sonnet","input":3933,"output":560,"cacheRead":4474,"cacheWrite":253}
+{"id":"mock-20261028-24","ts":1790000015000,"sessionId":"mock-session-1","type":"tokens","agentId":"mock-claude-long","model":"claude-sonnet","input":1977,"output":622,"cacheRead":19069,"cacheWrite":2282}
+{"id":"mock-20261028-25","ts":1790000016000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-repeat","parentId":"mock-s1-root","name":"Looper","model":"claude-sonnet"}
+{"id":"mock-20261028-26","ts":1790000017000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-0","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-20261028-27","ts":1790000018000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-claude-long","callId":"mock-call-long1","tool":"Edit","argsHash":"args-long1"}
+{"id":"mock-20261028-28","ts":1790000018000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-0","outcome":"ok"}
+{"id":"mock-20261028-29","ts":1790000018000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-error-streak","parentId":"mock-s1-root","name":"Failer","model":"claude-sonnet"}
+{"id":"mock-20261028-30","ts":1790000019000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-1","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-20261028-31","ts":1790000019000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-0","tool":"Bash","argsHash":"args-error-0"}
+{"id":"mock-20261028-32","ts":1790000020000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-1","outcome":"ok"}
+{"id":"mock-20261028-33","ts":1790000020000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-0","outcome":"error","error":"exit status 1"}
+{"id":"mock-20261028-34","ts":1790000020000,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-codex-long","parentId":"mock-s2-root","name":"Tester","model":"gpt-codex"}
+{"id":"mock-20261028-35","ts":1790000020000,"sessionId":"mock-session-2","type":"handoff","fromAgentId":"mock-s2-root","toAgentId":"mock-codex-long","direction":"delegate"}
+{"id":"mock-20261028-36","ts":1790000021000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-2","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-20261028-37","ts":1790000021000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-1","tool":"Bash","argsHash":"args-error-1"}
+{"id":"mock-20261028-38","ts":1790000022000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-claude-long","callId":"mock-call-long1","outcome":"ok"}
+{"id":"mock-20261028-39","ts":1790000022000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-2","outcome":"ok"}
+{"id":"mock-20261028-40","ts":1790000022000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-1","outcome":"error","error":"file not found"}
+{"id":"mock-20261028-41","ts":1790000022000,"sessionId":"mock-session-2","type":"message","agentId":"mock-codex-long","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-20261028-42","ts":1790000023000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-3","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-20261028-43","ts":1790000023000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-2","tool":"Bash","argsHash":"args-error-2"}
+{"id":"mock-20261028-44","ts":1790000024000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-3","outcome":"ok"}
+{"id":"mock-20261028-45","ts":1790000024000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-2","outcome":"error","error":"permission denied"}
+{"id":"mock-20261028-46","ts":1790000025000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-4","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-20261028-47","ts":1790000025000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-clear","tool":"Bash","argsHash":"args-error-clear"}
+{"id":"mock-20261028-48","ts":1790000025000,"sessionId":"mock-session-2","type":"tokens","agentId":"mock-codex-long","model":"gpt-codex","input":3983,"output":395,"cacheRead":3631,"cacheWrite":1701}
+{"id":"mock-20261028-49","ts":1790000026000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-4","outcome":"ok"}
+{"id":"mock-20261028-50","ts":1790000026000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-clear","outcome":"ok"}
+{"id":"mock-20261028-51","ts":1790000028000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-clear","tool":"Read","argsHash":"args-repeat-clear"}
+{"id":"mock-20261028-52","ts":1790000029000,"sessionId":"mock-session-1","type":"handoff","fromAgentId":"mock-claude-long","toAgentId":"mock-s1-root","direction":"return"}
+{"id":"mock-20261028-53","ts":1790000029000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-clear","outcome":"ok"}
+{"id":"mock-20261028-54","ts":1790000030000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-claude-long","outcome":"ok"}
+{"id":"mock-20261028-55","ts":1790000030000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-repeat","outcome":"ok"}
+{"id":"mock-20261028-56","ts":1790000030000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-error-streak","outcome":"error"}
+{"id":"mock-20261028-57","ts":1790000039000,"sessionId":"mock-session-2","type":"handoff","fromAgentId":"mock-codex-long","toAgentId":"mock-s2-root","direction":"return"}
+{"id":"mock-20261028-58","ts":1790000040000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-codex-long","outcome":"ok"}
+{"id":"mock-20261028-59","ts":1790000060000,"sessionId":"mock-session-3","type":"session_start","projectId":"mock-project-nexus","projectName":"Nexus","provider":"claude"}
+{"id":"mock-20261028-60","ts":1790000060000,"sessionId":"mock-session-3","type":"agent_spawn","agentId":"mock-s3-root","parentId":null,"name":"Planner","model":"claude-opus"}
+{"id":"mock-20261028-61","ts":1790000061000,"sessionId":"mock-session-3","type":"task_queued","taskId":"mock-task-1","title":"Write the tests"}
+{"id":"mock-20261028-62","ts":1790000061500,"sessionId":"mock-session-3","type":"task_queued","taskId":"mock-task-2","title":"Review the patch"}
+{"id":"mock-20261028-63","ts":1790000062000,"sessionId":"mock-session-3","type":"message","agentId":"mock-s3-root","role":"assistant","text":"Reading the failing test before changing anything."}
+{"id":"mock-20261028-64","ts":1790000070000,"sessionId":"mock-session-3","type":"task_dequeued","taskId":"mock-task-1","reason":"started"}
+{"id":"mock-20261028-65","ts":1790000071000,"sessionId":"mock-session-3","type":"agent_spawn","agentId":"mock-helper","parentId":"mock-s3-root","name":"Helper","model":"claude-haiku"}
+{"id":"mock-20261028-66","ts":1790000071000,"sessionId":"mock-session-3","type":"handoff","fromAgentId":"mock-s3-root","toAgentId":"mock-helper","direction":"delegate"}
+{"id":"mock-20261028-67","ts":1790000072000,"sessionId":"mock-session-3","type":"tokens","agentId":"mock-helper","model":"claude-haiku","input":1508,"output":263,"cacheRead":8274,"cacheWrite":232}
+{"id":"mock-20261028-68","ts":1790000075000,"sessionId":"mock-session-3","type":"task_dequeued","taskId":"mock-task-2","reason":"cancelled"}
+{"id":"mock-20261028-69","ts":1790000089000,"sessionId":"mock-session-3","type":"handoff","fromAgentId":"mock-helper","toAgentId":"mock-s3-root","direction":"return"}
+{"id":"mock-20261028-70","ts":1790000090000,"sessionId":"mock-session-3","type":"agent_end","agentId":"mock-helper","outcome":"cancelled"}
+{"id":"mock-20261028-71","ts":1790000100000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"Looking for the earlier call site of this helper."}
+{"id":"mock-20261028-72","ts":1790000100000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"Summarising what changed for the reviewer."}
+{"id":"mock-20261028-73","ts":1790000100000,"sessionId":"mock-session-3","type":"message","agentId":"mock-s3-root","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-20261028-74","ts":1790000120000,"sessionId":"mock-session-3","type":"agent_end","agentId":"mock-s3-root","outcome":"ok"}
+{"id":"mock-20261028-75","ts":1790000121000,"sessionId":"mock-session-3","type":"session_end"}
+{"id":"mock-20261028-76","ts":1790000189000,"sessionId":"mock-session-2","type":"tool_call_end","agentId":"mock-slow-tool","callId":"mock-call-slow","outcome":"ok"}
+{"id":"mock-20261028-77","ts":1790000190000,"sessionId":"mock-session-2","type":"message","agentId":"mock-slow-tool","role":"assistant","text":"Summarising what changed for the reviewer."}
+{"id":"mock-20261028-78","ts":1790000191000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-slow-tool","outcome":"ok"}
+{"id":"mock-20261028-79","ts":1790000200000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"The fix touches two files; running the suite next."}
+{"id":"mock-20261028-80","ts":1790000200000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"The fix touches two files; running the suite next."}
+{"id":"mock-20261028-81","ts":1790000300000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"Reading the failing test before changing anything."}
+{"id":"mock-20261028-82","ts":1790000300000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-20261028-83","ts":1790000371000,"sessionId":"mock-session-2","type":"attention_cleared","agentId":"mock-attention"}
+{"id":"mock-20261028-84","ts":1790000372000,"sessionId":"mock-session-2","type":"message","agentId":"mock-attention","role":"assistant","text":"Reading the failing test before changing anything."}
+{"id":"mock-20261028-85","ts":1790000373000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-attention","outcome":"ok"}
+{"id":"mock-20261028-86","ts":1790000374000,"sessionId":"mock-session-1","type":"message","agentId":"mock-stuck","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-20261028-87","ts":1790000375000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-stuck","outcome":"ok"}
+{"id":"mock-20261028-88","ts":1790000376000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-s1-root","outcome":"ok"}
+{"id":"mock-20261028-89","ts":1790000377000,"sessionId":"mock-session-1","type":"session_end"}
+{"id":"mock-20261028-90","ts":1790000380000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-s2-root","outcome":"ok"}
+{"id":"mock-20261028-91","ts":1790000381000,"sessionId":"mock-session-2","type":"session_end"}"
+`;
+
+exports[`default scenario > matches the committed snapshot for seed 1 with 2 filler agents 1`] = `
+"{"id":"mock-1-0","ts":1790000000000,"sessionId":"mock-session-1","type":"session_start","projectId":"mock-project-nexus","projectName":"Nexus","provider":"claude"}
+{"id":"mock-1-1","ts":1790000000000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-s1-root","parentId":null,"name":"Orchestrator","model":"claude-opus"}
+{"id":"mock-1-2","ts":1790000000000,"sessionId":"mock-f0","type":"session_start","projectId":"mock-project-extra-0","projectName":"Borealis","provider":"codex"}
+{"id":"mock-1-3","ts":1790000000000,"sessionId":"mock-f0","type":"agent_spawn","agentId":"mock-f0-a","parentId":null,"name":"Agent 0","model":"gpt-codex"}
+{"id":"mock-1-4","ts":1790000000000,"sessionId":"mock-f1","type":"session_start","projectId":"mock-project-extra-1","projectName":"Delta","provider":"claude"}
+{"id":"mock-1-5","ts":1790000000000,"sessionId":"mock-f1","type":"agent_spawn","agentId":"mock-f1-a","parentId":null,"name":"Agent 1","model":"claude-sonnet"}
+{"id":"mock-1-6","ts":1790000001000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-1-7","ts":1790000002000,"sessionId":"mock-session-1","type":"tokens","agentId":"mock-s1-root","model":"claude-opus","input":1479,"output":877,"cacheRead":9472,"cacheWrite":594}
+{"id":"mock-1-8","ts":1790000003000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-s1-root","callId":"mock-call-s1-wait","tool":"Bash","argsHash":"args-s1-wait"}
+{"id":"mock-1-9","ts":1790000004666,"sessionId":"mock-f0","type":"tokens","agentId":"mock-f0-a","model":"gpt-codex","input":1449,"output":331,"cacheRead":3771,"cacheWrite":1443}
+{"id":"mock-1-10","ts":1790000005000,"sessionId":"mock-session-2","type":"session_start","projectId":"mock-project-nexus","projectName":"Nexus","provider":"codex"}
+{"id":"mock-1-11","ts":1790000005000,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-s2-root","parentId":null,"name":"Codex Lead","model":"gpt-codex"}
+{"id":"mock-1-12","ts":1790000006000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"Summarising what changed for the reviewer."}
+{"id":"mock-1-13","ts":1790000007000,"sessionId":"mock-session-2","type":"tokens","agentId":"mock-s2-root","model":"gpt-codex","input":1042,"output":788,"cacheRead":12150,"cacheWrite":1546}
+{"id":"mock-1-14","ts":1790000007352,"sessionId":"mock-f1","type":"tool_call_start","agentId":"mock-f1-a","callId":"mock-f1-c0","tool":"Bash","argsHash":"h95569"}
+{"id":"mock-1-15","ts":1790000008000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-s1-root","callId":"mock-call-s1-wait","outcome":"ok"}
+{"id":"mock-1-16","ts":1790000008000,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-slow-tool","parentId":"mock-s2-root","name":"Builder","model":"gpt-codex"}
+{"id":"mock-1-17","ts":1790000008500,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-attention","parentId":"mock-s2-root","name":"Asker","model":"gpt-codex"}
+{"id":"mock-1-18","ts":1790000009000,"sessionId":"mock-session-2","type":"tool_call_start","agentId":"mock-slow-tool","callId":"mock-call-slow","tool":"Bash","argsHash":"args-slow"}
+{"id":"mock-1-19","ts":1790000009252,"sessionId":"mock-f1","type":"tool_call_end","agentId":"mock-f1-a","callId":"mock-f1-c0","outcome":"ok"}
+{"id":"mock-1-20","ts":1790000009500,"sessionId":"mock-session-2","type":"message","agentId":"mock-attention","role":"assistant","text":"Looking for the earlier call site of this helper."}
+{"id":"mock-1-21","ts":1790000010000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-claude-long","parentId":"mock-s1-root","name":"Refactorer","model":"claude-sonnet"}
+{"id":"mock-1-22","ts":1790000010000,"sessionId":"mock-session-1","type":"handoff","fromAgentId":"mock-s1-root","toAgentId":"mock-claude-long","direction":"delegate"}
+{"id":"mock-1-23","ts":1790000010000,"sessionId":"mock-session-2","type":"tokens","agentId":"mock-attention","model":"gpt-codex","input":3995,"output":1309,"cacheRead":19211,"cacheWrite":650}
+{"id":"mock-1-24","ts":1790000010500,"sessionId":"mock-session-2","type":"tool_call_start","agentId":"mock-attention","callId":"mock-call-attention","tool":"Edit","argsHash":"args-attention"}
+{"id":"mock-1-25","ts":1790000010900,"sessionId":"mock-session-2","type":"tool_call_end","agentId":"mock-attention","callId":"mock-call-attention","outcome":"ok"}
+{"id":"mock-1-26","ts":1790000011000,"sessionId":"mock-session-2","type":"needs_attention","agentId":"mock-attention","reason":"permission"}
+{"id":"mock-1-27","ts":1790000011261,"sessionId":"mock-f0","type":"tokens","agentId":"mock-f0-a","model":"gpt-codex","input":1964,"output":1202,"cacheRead":14386,"cacheWrite":2921}
+{"id":"mock-1-28","ts":1790000011409,"sessionId":"mock-f1","type":"message","agentId":"mock-f1-a","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-1-29","ts":1790000012000,"sessionId":"mock-session-1","type":"message","agentId":"mock-claude-long","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-1-30","ts":1790000012000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-stuck","parentId":"mock-s1-root","name":"Stalled","model":"claude-sonnet"}
+{"id":"mock-1-31","ts":1790000013000,"sessionId":"mock-session-1","type":"message","agentId":"mock-stuck","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-1-32","ts":1790000014000,"sessionId":"mock-session-1","type":"tokens","agentId":"mock-stuck","model":"claude-sonnet","input":3921,"output":465,"cacheRead":2570,"cacheWrite":538}
+{"id":"mock-1-33","ts":1790000014803,"sessionId":"mock-f1","type":"message","agentId":"mock-f1-a","role":"assistant","text":"Summarising what changed for the reviewer."}
+{"id":"mock-1-34","ts":1790000015000,"sessionId":"mock-session-1","type":"tokens","agentId":"mock-claude-long","model":"claude-sonnet","input":1506,"output":302,"cacheRead":4348,"cacheWrite":2759}
+{"id":"mock-1-35","ts":1790000015032,"sessionId":"mock-f0","type":"tokens","agentId":"mock-f0-a","model":"gpt-codex","input":3585,"output":380,"cacheRead":5293,"cacheWrite":1954}
+{"id":"mock-1-36","ts":1790000016000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-repeat","parentId":"mock-s1-root","name":"Looper","model":"claude-sonnet"}
+{"id":"mock-1-37","ts":1790000016905,"sessionId":"mock-f1","type":"message","agentId":"mock-f1-a","role":"assistant","text":"Checking the type errors after the rename."}
+{"id":"mock-1-38","ts":1790000017000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-0","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-1-39","ts":1790000018000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-claude-long","callId":"mock-call-long1","tool":"Edit","argsHash":"args-long1"}
+{"id":"mock-1-40","ts":1790000018000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-0","outcome":"ok"}
+{"id":"mock-1-41","ts":1790000018000,"sessionId":"mock-session-1","type":"agent_spawn","agentId":"mock-error-streak","parentId":"mock-s1-root","name":"Failer","model":"claude-sonnet"}
+{"id":"mock-1-42","ts":1790000018937,"sessionId":"mock-f0","type":"tokens","agentId":"mock-f0-a","model":"gpt-codex","input":3014,"output":1110,"cacheRead":17908,"cacheWrite":575}
+{"id":"mock-1-43","ts":1790000019000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-1","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-1-44","ts":1790000019000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-0","tool":"Bash","argsHash":"args-error-0"}
+{"id":"mock-1-45","ts":1790000020000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-1","outcome":"ok"}
+{"id":"mock-1-46","ts":1790000020000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-0","outcome":"error","error":"exit status 1"}
+{"id":"mock-1-47","ts":1790000020000,"sessionId":"mock-session-2","type":"agent_spawn","agentId":"mock-codex-long","parentId":"mock-s2-root","name":"Tester","model":"gpt-codex"}
+{"id":"mock-1-48","ts":1790000020000,"sessionId":"mock-session-2","type":"handoff","fromAgentId":"mock-s2-root","toAgentId":"mock-codex-long","direction":"delegate"}
+{"id":"mock-1-49","ts":1790000021000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-2","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-1-50","ts":1790000021000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-1","tool":"Bash","argsHash":"args-error-1"}
+{"id":"mock-1-51","ts":1790000022000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-claude-long","callId":"mock-call-long1","outcome":"ok"}
+{"id":"mock-1-52","ts":1790000022000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-2","outcome":"ok"}
+{"id":"mock-1-53","ts":1790000022000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-1","outcome":"error","error":"file not found"}
+{"id":"mock-1-54","ts":1790000022000,"sessionId":"mock-session-2","type":"message","agentId":"mock-codex-long","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-1-55","ts":1790000023000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-3","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-1-56","ts":1790000023000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-2","tool":"Bash","argsHash":"args-error-2"}
+{"id":"mock-1-57","ts":1790000023384,"sessionId":"mock-f1","type":"message","agentId":"mock-f1-a","role":"assistant","text":"Summarising what changed for the reviewer."}
+{"id":"mock-1-58","ts":1790000024000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-3","outcome":"ok"}
+{"id":"mock-1-59","ts":1790000024000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-2","outcome":"error","error":"permission denied"}
+{"id":"mock-1-60","ts":1790000025000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-4","tool":"Grep","argsHash":"args-repeat"}
+{"id":"mock-1-61","ts":1790000025000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-error-streak","callId":"mock-call-error-clear","tool":"Bash","argsHash":"args-error-clear"}
+{"id":"mock-1-62","ts":1790000025000,"sessionId":"mock-session-2","type":"tokens","agentId":"mock-codex-long","model":"gpt-codex","input":612,"output":331,"cacheRead":18533,"cacheWrite":633}
+{"id":"mock-1-63","ts":1790000025096,"sessionId":"mock-f0","type":"tokens","agentId":"mock-f0-a","model":"gpt-codex","input":3958,"output":797,"cacheRead":7328,"cacheWrite":311}
+{"id":"mock-1-64","ts":1790000026000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-4","outcome":"ok"}
+{"id":"mock-1-65","ts":1790000026000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-error-streak","callId":"mock-call-error-clear","outcome":"ok"}
+{"id":"mock-1-66","ts":1790000027732,"sessionId":"mock-f1","type":"tokens","agentId":"mock-f1-a","model":"claude-sonnet","input":2040,"output":966,"cacheRead":13033,"cacheWrite":417}
+{"id":"mock-1-67","ts":1790000028000,"sessionId":"mock-session-1","type":"tool_call_start","agentId":"mock-repeat","callId":"mock-call-repeat-clear","tool":"Read","argsHash":"args-repeat-clear"}
+{"id":"mock-1-68","ts":1790000029000,"sessionId":"mock-session-1","type":"handoff","fromAgentId":"mock-claude-long","toAgentId":"mock-s1-root","direction":"return"}
+{"id":"mock-1-69","ts":1790000029000,"sessionId":"mock-session-1","type":"tool_call_end","agentId":"mock-repeat","callId":"mock-call-repeat-clear","outcome":"ok"}
+{"id":"mock-1-70","ts":1790000029630,"sessionId":"mock-f0","type":"tool_call_start","agentId":"mock-f0-a","callId":"mock-f0-c0","tool":"Edit","argsHash":"h71565"}
+{"id":"mock-1-71","ts":1790000030000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-claude-long","outcome":"ok"}
+{"id":"mock-1-72","ts":1790000030000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-repeat","outcome":"ok"}
+{"id":"mock-1-73","ts":1790000030000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-error-streak","outcome":"error"}
+{"id":"mock-1-74","ts":1790000032689,"sessionId":"mock-f1","type":"tool_call_start","agentId":"mock-f1-a","callId":"mock-f1-c1","tool":"Edit","argsHash":"h12769"}
+{"id":"mock-1-75","ts":1790000034658,"sessionId":"mock-f0","type":"tool_call_end","agentId":"mock-f0-a","callId":"mock-f0-c0","outcome":"ok"}
+{"id":"mock-1-76","ts":1790000035273,"sessionId":"mock-f1","type":"tool_call_end","agentId":"mock-f1-a","callId":"mock-f1-c1","outcome":"ok"}
+{"id":"mock-1-77","ts":1790000038674,"sessionId":"mock-f1","type":"message","agentId":"mock-f1-a","role":"assistant","text":"Looking for the earlier call site of this helper."}
+{"id":"mock-1-78","ts":1790000039000,"sessionId":"mock-session-2","type":"handoff","fromAgentId":"mock-codex-long","toAgentId":"mock-s2-root","direction":"return"}
+{"id":"mock-1-79","ts":1790000040000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-codex-long","outcome":"ok"}
+{"id":"mock-1-80","ts":1790000042476,"sessionId":"mock-f0","type":"tool_call_start","agentId":"mock-f0-a","callId":"mock-f0-c1","tool":"Bash","argsHash":"h81474"}
+{"id":"mock-1-81","ts":1790000047529,"sessionId":"mock-f0","type":"tool_call_end","agentId":"mock-f0-a","callId":"mock-f0-c1","outcome":"ok"}
+{"id":"mock-1-82","ts":1790000048051,"sessionId":"mock-f1","type":"message","agentId":"mock-f1-a","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-1-83","ts":1790000054129,"sessionId":"mock-f1","type":"tool_call_start","agentId":"mock-f1-a","callId":"mock-f1-c2","tool":"Bash","argsHash":"h88696"}
+{"id":"mock-1-84","ts":1790000056791,"sessionId":"mock-f0","type":"tokens","agentId":"mock-f0-a","model":"gpt-codex","input":353,"output":1219,"cacheRead":10296,"cacheWrite":669}
+{"id":"mock-1-85","ts":1790000058067,"sessionId":"mock-f1","type":"tool_call_end","agentId":"mock-f1-a","callId":"mock-f1-c2","outcome":"ok"}
+{"id":"mock-1-86","ts":1790000060000,"sessionId":"mock-session-3","type":"session_start","projectId":"mock-project-nexus","projectName":"Nexus","provider":"claude"}
+{"id":"mock-1-87","ts":1790000060000,"sessionId":"mock-session-3","type":"agent_spawn","agentId":"mock-s3-root","parentId":null,"name":"Planner","model":"claude-opus"}
+{"id":"mock-1-88","ts":1790000061000,"sessionId":"mock-session-3","type":"task_queued","taskId":"mock-task-1","title":"Write the tests"}
+{"id":"mock-1-89","ts":1790000061500,"sessionId":"mock-session-3","type":"task_queued","taskId":"mock-task-2","title":"Review the patch"}
+{"id":"mock-1-90","ts":1790000062000,"sessionId":"mock-session-3","type":"message","agentId":"mock-s3-root","role":"assistant","text":"Looking for the earlier call site of this helper."}
+{"id":"mock-1-91","ts":1790000063676,"sessionId":"mock-f0","type":"tool_call_start","agentId":"mock-f0-a","callId":"mock-f0-c2","tool":"Bash","argsHash":"h66165"}
+{"id":"mock-1-92","ts":1790000065578,"sessionId":"mock-f1","type":"tool_call_start","agentId":"mock-f1-a","callId":"mock-f1-c3","tool":"Grep","argsHash":"h16865"}
+{"id":"mock-1-93","ts":1790000070000,"sessionId":"mock-session-3","type":"task_dequeued","taskId":"mock-task-1","reason":"started"}
+{"id":"mock-1-94","ts":1790000071000,"sessionId":"mock-session-3","type":"agent_spawn","agentId":"mock-helper","parentId":"mock-s3-root","name":"Helper","model":"claude-haiku"}
+{"id":"mock-1-95","ts":1790000071000,"sessionId":"mock-session-3","type":"handoff","fromAgentId":"mock-s3-root","toAgentId":"mock-helper","direction":"delegate"}
+{"id":"mock-1-96","ts":1790000072000,"sessionId":"mock-session-3","type":"tokens","agentId":"mock-helper","model":"claude-haiku","input":223,"output":678,"cacheRead":19366,"cacheWrite":812}
+{"id":"mock-1-97","ts":1790000073282,"sessionId":"mock-f0","type":"tool_call_end","agentId":"mock-f0-a","callId":"mock-f0-c2","outcome":"ok"}
+{"id":"mock-1-98","ts":1790000073282,"sessionId":"mock-f0","type":"agent_end","agentId":"mock-f0-a","outcome":"ok"}
+{"id":"mock-1-99","ts":1790000073282,"sessionId":"mock-f0","type":"session_end"}
+{"id":"mock-1-100","ts":1790000075000,"sessionId":"mock-session-3","type":"task_dequeued","taskId":"mock-task-2","reason":"cancelled"}
+{"id":"mock-1-101","ts":1790000077754,"sessionId":"mock-f1","type":"tool_call_end","agentId":"mock-f1-a","callId":"mock-f1-c3","outcome":"error","error":"file not found"}
+{"id":"mock-1-102","ts":1790000077754,"sessionId":"mock-f1","type":"agent_end","agentId":"mock-f1-a","outcome":"ok"}
+{"id":"mock-1-103","ts":1790000077754,"sessionId":"mock-f1","type":"session_end"}
+{"id":"mock-1-104","ts":1790000089000,"sessionId":"mock-session-3","type":"handoff","fromAgentId":"mock-helper","toAgentId":"mock-s3-root","direction":"return"}
+{"id":"mock-1-105","ts":1790000090000,"sessionId":"mock-session-3","type":"agent_end","agentId":"mock-helper","outcome":"cancelled"}
+{"id":"mock-1-106","ts":1790000100000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-1-107","ts":1790000100000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"Reading the failing test before changing anything."}
+{"id":"mock-1-108","ts":1790000100000,"sessionId":"mock-session-3","type":"message","agentId":"mock-s3-root","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-1-109","ts":1790000120000,"sessionId":"mock-session-3","type":"agent_end","agentId":"mock-s3-root","outcome":"ok"}
+{"id":"mock-1-110","ts":1790000121000,"sessionId":"mock-session-3","type":"session_end"}
+{"id":"mock-1-111","ts":1790000189000,"sessionId":"mock-session-2","type":"tool_call_end","agentId":"mock-slow-tool","callId":"mock-call-slow","outcome":"ok"}
+{"id":"mock-1-112","ts":1790000190000,"sessionId":"mock-session-2","type":"message","agentId":"mock-slow-tool","role":"assistant","text":"Looking for the earlier call site of this helper."}
+{"id":"mock-1-113","ts":1790000191000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-slow-tool","outcome":"ok"}
+{"id":"mock-1-114","ts":1790000200000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"The fix touches two files; running the suite next."}
+{"id":"mock-1-115","ts":1790000200000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"Reading the failing test before changing anything."}
+{"id":"mock-1-116","ts":1790000300000,"sessionId":"mock-session-1","type":"message","agentId":"mock-s1-root","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-1-117","ts":1790000300000,"sessionId":"mock-session-2","type":"message","agentId":"mock-s2-root","role":"assistant","text":"Reading the failing test before changing anything."}
+{"id":"mock-1-118","ts":1790000371000,"sessionId":"mock-session-2","type":"attention_cleared","agentId":"mock-attention"}
+{"id":"mock-1-119","ts":1790000372000,"sessionId":"mock-session-2","type":"message","agentId":"mock-attention","role":"assistant","text":"Plan: split the module, then move the callers."}
+{"id":"mock-1-120","ts":1790000373000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-attention","outcome":"ok"}
+{"id":"mock-1-121","ts":1790000374000,"sessionId":"mock-session-1","type":"message","agentId":"mock-stuck","role":"assistant","text":"The fix touches two files; running the suite next."}
+{"id":"mock-1-122","ts":1790000375000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-stuck","outcome":"ok"}
+{"id":"mock-1-123","ts":1790000376000,"sessionId":"mock-session-1","type":"agent_end","agentId":"mock-s1-root","outcome":"ok"}
+{"id":"mock-1-124","ts":1790000377000,"sessionId":"mock-session-1","type":"session_end"}
+{"id":"mock-1-125","ts":1790000380000,"sessionId":"mock-session-2","type":"agent_end","agentId":"mock-s2-root","outcome":"ok"}
+{"id":"mock-1-126","ts":1790000381000,"sessionId":"mock-session-2","type":"session_end"}"
+`;
