@@ -5,6 +5,20 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-28
+
+### Added
+
+- `npx playwright test` now runs a browser smoke test against the dev server on port 5199. It fails on any console error, page error or WebGL error banner, and checks that the canvas fills the window and the "Nexus One" label shows. Run `vp exec playwright install chromium` once first.
+- In dev builds, `window.__nexus` exposes `getCamera()`, `project(worldPos)` and `rendererInfo()`, so browser tests can read the camera, map a 3D point to a clickable page position and count draw calls. `project` reports `visible: false` for points the camera does not draw.
+- Browser tests call these hooks through a typed helper, so a misspelled hook name or wrong argument is a type error in `vp check`.
+- New hooks are added with `registerNexus` (or `registerNexusModule` for module-level code, which cleans up on hot reload); the README explains how.
+- `vp test` now also runs unit tests for the debug API and Node-backed tests in `test/`.
+
+### Changed
+
+- Every `vp build` now fails if a Node built-in reaches the browser bundle (from your code or a dependency), or if `__nexus` appears in production output. Before, a Node import shipped as a silent empty stub.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added
