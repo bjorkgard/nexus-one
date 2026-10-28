@@ -7,7 +7,7 @@ export const MAX_ID = 256;
 export const MAX_SHORT = 200;
 export const MAX_TEXT = 4000;
 export const MAX_ERROR = 1000;
-const MAX_ARGS_HASH = 64;
+export const MAX_ARGS_HASH = 64;
 
 const id = z.string().min(1).max(MAX_ID);
 const short = z.string().min(1).max(MAX_SHORT);

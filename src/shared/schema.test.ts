@@ -5,8 +5,10 @@ import invalid from "./fixtures/invalid.json";
 import {
   Agent,
   EVENT_TYPES,
+  MAX_ARGS_HASH,
   MAX_ERROR,
   MAX_ID,
+  MAX_SHORT,
   MAX_TEXT,
   Project,
   Session,
@@ -108,8 +110,15 @@ describe("canonical event schema", () => {
     expect(result.error?.issues[0]?.code).toBe("invalid_value");
   });
 
+  // Value: protects=length caps on short display strings and argsHash; fails_when=MAX_SHORT or the 64-char argsHash cap is raised, dropped or not applied to a field; why_new=extends the cap table, which covered only id, text and error; seam=none; no_claim=fields not listed in the table
   it.each([
     ["id", "session_end", "id", MAX_ID],
+    ["agent_spawn.name", "agent_spawn", "name", MAX_SHORT],
+    ["session_start.projectName", "session_start", "projectName", MAX_SHORT],
+    ["task_queued.title", "task_queued", "title", MAX_SHORT],
+    ["tokens.model", "tokens", "model", MAX_SHORT],
+    ["tool_call_start.tool", "tool_call_start", "tool", MAX_SHORT],
+    ["tool_call_start.argsHash", "tool_call_start", "argsHash", MAX_ARGS_HASH],
     ["message.text", "message", "text", MAX_TEXT],
     ["tool_call_end.error", "tool_call_end", "error", MAX_ERROR],
   ])("cap %s: at cap passes, cap+1 fails with too_big", (_label, type, field, cap) => {
@@ -119,7 +128,9 @@ describe("canonical event schema", () => {
 
   it("rejects negative ts and fractional token counts", () => {
     expect(codes(patch(eventMap.session_end!, { ts: -1 }))).toContain("too_small");
-    expect(codes(patch(eventMap.tokens!, { input: 1.5 }))).toContain("invalid_type");
+    for (const field of ["input", "output", "cacheRead", "cacheWrite"]) {
+      expect(codes(patch(eventMap.tokens!, { [field]: 1.5 }))).toContain("invalid_type");
+    }
   });
 
   const { argsHash: _omit, ...withoutArgsHash } = eventMap.tool_call_start!;
@@ -163,5 +174,21 @@ describe("canonical event schema", () => {
 
   it("valid session endedAt number", () => {
     expect(Session.safeParse({ ...entities.session, endedAt: 2000 }).success).toBe(true);
+  });
+
+  // Value: protects=empty strings are rejected for ids and display strings; fails_when=a min(1) guard is dropped so "" reaches consumers as an id or name; why_new=no existing case sends an empty string; seam=none; no_claim=other fields sharing the same id/short helpers
+  it.each([
+    ["session_end", "id"],
+    ["agent_spawn", "name"],
+    ["message", "text"],
+    ["tool_call_start", "argsHash"],
+  ])("empty %s.%s fails with too_small", (type, field) => {
+    expect(codes(patch(eventMap[type]!, { [field]: "" }))).toContain("too_small");
+  });
+
+  // Value: protects=nullable parentId/model must be present (null), not omitted; fails_when=nullable is swapped for optional so a missing key parses; why_new=only null and string values were tested; seam=none; no_claim=nullable endedAt on Session
+  it.each(["parentId", "model"])("agent_spawn rejects a missing %s", (field) => {
+    const { [field]: _omit, ...rest } = eventMap.agent_spawn!;
+    expect(codes(rest)).toContain("invalid_type");
   });
 });

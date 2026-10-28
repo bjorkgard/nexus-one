@@ -214,6 +214,12 @@ describe("module-fences wiring", () => {
       "eslint(no-restricted-imports)",
       "Event shapes live in src/shared/schema.ts",
     ],
+    [
+      "ui-zod-subpath.txt",
+      "src/ui/__wiring_zod_subpath.ts",
+      "eslint(no-restricted-imports)",
+      "Event shapes live in src/shared/schema.ts",
+    ],
   ];
   const copies = [
     at("src/ui/__wiring_bad.ts"),
