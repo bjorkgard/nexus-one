@@ -56,6 +56,38 @@
 
 ## Tooling
 
+### Check the production bundle for collector/ and Node code
+
+**What:** Task 1.3's `lint/build-guards.js` already fails the build on any Node built-in (from any importer) and on `__nexus`. Remaining: assert that the browser bundle contains no `collector/` code (pick a marker string in task 4.1 that only collector code contains), and add a matching check that a collector build contains no React or Three.
+
+**Why:** The task 1.2 lint fences (`lint/module-fences.js` plus `vite.config.ts` bans) are an honest-mistake guard, not a guarantee. These known bypasses need deliberate effort and are accepted there; only a bundle check catches them. The build guard now covers imports of any Node built-in (bare or `node:`, from any importer), so Node-only npm packages imported from `src/` (for example `vite-plus`, `typescript`) and `createRequire` reached through destructuring now fail `vp build` (task 1.3 refuter, scratch builds). The bypasses below are not covered by it and still apply to the remaining checks:
+
+- `file://` specifiers, or any specifier hidden with `// @ts-expect-error`
+- React-importing transitive packages not in `browserLibs` (for example `its-fine`, `suspend-react`, `scheduler`)
+- inline `oxlint-disable` comments for the fence rules
+- files in gitignored folders under `src/` (`vp check` skips them, Vite bundles them)
+- bare-relative or percent-encoded `new URL("sub/../..", import.meta.url)` strings
+- `process.getBuiltinModule`
+- `import x = require(...)` (today also blocked by TS1294), extglob `..`, alias specifiers (none configured yet), HTML/CSS entry points
+
+**Context:** Decided in the task 1.2 /ship review (D6, run 2). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. No collector code exists yet, so this waits for task 4.1. Fail the check on any marker match.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 4.1
+
+### Lock down the collector WebSocket beyond loopback
+
+**What:** In task 4.4, have the collector WebSocket server validate `Origin` against an allowlist and require a per-launch random token handed out by Electron main or the dev server.
+
+**Why:** Any web page in the user's browser can open `ws://127.0.0.1` (cross-site WebSocket hijacking) and read transcripts; binding to loopback alone does not stop it.
+
+**Context:** Decided in the task 1.2 /ship review (D9). Test with a foreign `Origin` and with a missing token; both must be rejected.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 4.4
+
 ### Add the last two config-fence wiring rows
 
 **What:** Add two rows to the `configRows` table in `lint/module-fences.test.js`: `collector/` importing `react` (expect `eslint(no-restricted-imports)` with the browser-libraries message) and `src/` importing `electron` (expect `eslint(no-restricted-imports)` with the src message).
@@ -79,26 +111,6 @@
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** Task 1.2; must land before or with task 1.7
-
-### Check the production bundle for collector/ and Node code
-
-**What:** Task 1.3's `lint/build-guards.js` already fails the build on any Node built-in (from any importer) and on `__nexus`. Remaining: assert that the browser bundle contains no `collector/` code (pick a marker string in task 4.1 that only collector code contains), and add a matching check that a collector build contains no React or Three.
-
-**Why:** The task 1.2 lint fences (`lint/module-fences.js` plus `vite.config.ts` bans) are an honest-mistake guard, not a guarantee. These known bypasses need deliberate effort and are accepted there; only a bundle check catches them. The build guard now covers imports of any Node built-in (bare or `node:`, from any importer), so Node-only npm packages imported from `src/` (for example `vite-plus`, `typescript`) and `createRequire` reached through destructuring now fail `vp build` (task 1.3 refuter, scratch builds). The bypasses below are not covered by it and still apply to the remaining checks:
-
-- `file://` specifiers, or any specifier hidden with `// @ts-expect-error`
-- React-importing transitive packages not in `browserLibs` (for example `its-fine`, `suspend-react`, `scheduler`)
-- inline `oxlint-disable` comments for the fence rules
-- files in gitignored folders under `src/` (`vp check` skips them, Vite bundles them)
-- bare-relative or percent-encoded `new URL("sub/../..", import.meta.url)` strings
-- `process.getBuiltinModule`
-- `import x = require(...)` (today also blocked by TS1294), extglob `..`, alias specifiers (none configured yet), HTML/CSS entry points
-
-**Context:** Decided in the task 1.2 /ship review (D6, run 2). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. No collector code exists yet, so this waits for task 4.1. Fail the check on any marker match.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P1
-**Depends on:** Task 4.1
 
 ### Give Phase 3 e2e a test target before agents exist
 
@@ -133,14 +145,4 @@
 **Priority:** P2
 **Depends on:** None
 
-### Lock down the collector WebSocket beyond loopback
-
-**What:** In task 4.4, have the collector WebSocket server validate `Origin` against an allowlist and require a per-launch random token handed out by Electron main or the dev server.
-
-**Why:** Any web page in the user's browser can open `ws://127.0.0.1` (cross-site WebSocket hijacking) and read transcripts; binding to loopback alone does not stop it.
-
-**Context:** Decided in the task 1.2 /ship review (D9). Test with a foreign `Origin` and with a missing token; both must be rejected.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P1
-**Depends on:** Task 4.4
+## Completed
