@@ -58,7 +58,7 @@ Goal: a typed React + R3F + Tailwind app with tests, a data contract, a mock dat
 
 ### 1.4 Canonical event schema
 
-- **Action:** In `src/shared/schema.ts`, define entities `Project`, `Session`, `Agent` (with `provider: 'claude' | 'codex'`, `parentId`, `stage`, `lastProgressAt`) and events `session_start`, `session_end`, `agent_spawn`, `agent_end` (`ok | error | cancelled`), `message`, `tokens`, `tool_call_start`, `tool_call_end` (`ok | error`), `needs_attention`, `attention_cleared`, `handoff`, `task_queued`. Validate with zod. Add JSON fixtures for each event.
+- **Action:** In `src/shared/schema.ts`, define entities `Project`, `Session`, `Agent` (with `provider: 'claude' | 'codex'`, `parentId`, `stage`, `lastProgressAt`) and events `session_start`, `session_end`, `agent_spawn`, `agent_end` (`ok | error | cancelled`), `message`, `tokens`, `tool_call_start`, `tool_call_end` (`ok | error`), `needs_attention`, `attention_cleared`, `handoff`, `task_queued`, `task_dequeued`. Validate with zod. Add JSON fixtures for each event.
 - **Test:** Unit tests: every fixture parses; malformed fixtures (missing id, unknown type, bad enum) are rejected.
 - **Done when:** schema tests pass; the schema file is the only place event shapes are declared (grep finds no duplicates).
 
@@ -270,7 +270,7 @@ Goal: a readable futuristic campus, fully procedural, inside the performance bud
 
 ### 4.3 Collector: derived signals
 
-- **Action:** Per agent: `lastProgressAt`, rolling tokens/min, cost from a configurable price table, error streak, `needs_attention` heuristics (Claude: permission prompt or final question awaiting user; Codex: approval request), lifecycle stage.
+- **Action:** Per agent: `lastProgressAt`, rolling tokens/min, cost from a configurable price table, error streak, `needs_attention` heuristics (Claude: permission prompt or final question awaiting user; Codex: approval request).
 - **Test:** Unit with fake clock and fixtures for each signal.
 - **Done when:** every signal has a passing test, including a case that must not trigger.
 
@@ -310,7 +310,7 @@ Goal: a readable futuristic campus, fully procedural, inside the performance bud
 
 ### 4.8 Agent to world binding and lifecycle stages
 
-- **Action:** Each agent gets a desk and a vehicle. Map events to stages **Queued, Planning, Executing, Waiting on Tool, Reviewing, Done** with written rules (for example: first tool call moves Planning to Executing; open tool call longer than 2 s is Waiting on Tool). Stage drives animation.
+- **Action:** Each agent gets a desk and a vehicle. Map events to stages **Queued, Planning, Executing, Waiting on Tool, Reviewing, Done** with written rules (for example: first tool call moves Planning to Executing; open tool call longer than 2 s is Waiting on Tool). Stage drives animation. Write the rules as one pure function in `src/shared/` that the collector (snapshots) and the client store (deltas) both run; no event carries a stage.
 - **Test:** Unit: rule table, one case per transition.
 - **Done when:** tests pass; rules are documented in `docs/STAGES.md`.
 

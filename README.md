@@ -45,10 +45,11 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/ui/` — Dashboard.
 - `src/data/` — Client store and data sources.
 - `src/debug/` — Dev-only `window.__nexus` test hooks.
-- `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`).
+- `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws).
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
 - Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` only itself and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.
+- Inside `src/`, only `src/shared/` may import `zod`; the rest of `src/` imports schemas and types from `src/shared/schema.ts` (`vp check` enforces this).
 - `lint/` — Local Oxlint plugin with the module-fence rule, and the build-guard plugin (`lint/build-guards.js`).
 - `e2e/` — Playwright specs and the typed `__nexus` helper.
 - `test/` — Node-backed tests, such as the build guards.
