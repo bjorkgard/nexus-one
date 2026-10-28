@@ -27,7 +27,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
 - `vp test` — Run the unit test suite.
-- `npx playwright test` — Run the Playwright tests (smoke and data source) against the dev server on port 5199.
+- `npx playwright test` — Run the Playwright tests (smoke, data source and performance overlay) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
 - `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus` or a performance overlay marker reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
@@ -43,7 +43,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 
 - `index.html` — HTML entry point.
 - `src/main.tsx` — Application entry; mounts React into `#app`.
-- `src/App.tsx` — Root component with the 3D canvas and its error boundary.
+- `src/App.tsx` — Root component with the 3D canvas and its error boundary; in dev it also mounts the performance overlay.
 - `src/style.css` — Tailwind import and base layout styles.
 - `src/world/` — Geometry.
 - `src/sim/` — Simulation and animation state.
@@ -115,7 +115,7 @@ vp run build
 
 If you changed `electron/` or packaging, also run `vp run pack` and `vp run test:packaged`.
 
-`vp test` runs the `src/` and `electron/` unit tests, the `lint/` fence tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule) and the `test/` build-guard tests.
+`vp test` runs the `src/` and `electron/` unit tests, the `lint/` tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule, and `lint/build-guards.test.js`, which checks the guarded dev markers) and the `test/` build-guard tests.
 
 ## Test locations
 

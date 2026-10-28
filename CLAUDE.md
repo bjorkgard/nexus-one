@@ -21,3 +21,9 @@ Every entry in `TODOS.md` has a matching GitHub issue. Whenever you add a TODO (
 - **Parent:** when the TODO is part of an open task or must land before one, add it as a sub-issue of that task's issue: `gh api -X POST repos/bjorkgard/nexus-one/issues/<parent>/sub_issues -F sub_issue_id=<issue id>` (the numeric `id`, not the issue number). Follow-ups of closed tasks get no parent; name the closed task in the Plan link line.
 - **Back-link:** add `**Issue:** [#N](<issue url>)` directly under the TODO heading in `TODOS.md`.
 - **Completing:** when a TODO moves to `## Completed`, close its issue with the PR that did the work.
+
+## Testing
+
+- Unit: `vp test` (Vitest, Node environment; `e2e/**` excluded).
+- E2E: `npx playwright test` (starts the dev server; specs in `e2e/`).
+- Packaged app (only when `electron/` or build output changes): `npm run pack && npm run test:packaged`.
