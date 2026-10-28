@@ -48,6 +48,34 @@
 **Priority:** P2
 **Depends on:** Task 1.7
 
+### Set Electron window safety options explicitly
+
+**Issue:** [#104](https://github.com/bjorkgard/nexus-one/issues/104)
+
+**What:** In `electron/main.ts` (added by task 1.7), set `contextIsolation: true`, `sandbox: true` and `nodeIntegration: false` explicitly in `webPreferences`, and deny `window.open` and navigation away from `app://nexus`.
+
+**Why:** Task 1.7 relies on Electron 45 defaults for these flags (unverified). Nothing in code states them, so a changed default or a later edit would pass unnoticed.
+
+**Context:** Deferred in the task 1.7 CEO review (D3, `docs/plans/1.7-packaging-spike.md`): 8.2 owns the whole security baseline with its tests. 1.7 loads the UI from `app://nexus` through `protocol.handle`, so a navigation allowlist can match that origin.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.7; part of task 8.2
+
+### Single-instance lock for the Electron app
+
+**Issue:** [#105](https://github.com/bjorkgard/nexus-one/issues/105)
+
+**What:** In task 8.1, call `app.requestSingleInstanceLock()` in `electron/main.ts`; a second launch focuses the existing window and exits.
+
+**Why:** Double-clicking the app twice opens a second process and window. Harmless in the 1.7 spike, but once 8.1 runs the collector in Electron, two instances would fight over the WebSocket port and tail the same transcripts.
+
+**Context:** Section 4 of the task 1.7 CEO review (`docs/plans/1.7-packaging-spike.md`, D12). Test: launch the packaged app twice; one process remains and its window is focused.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 1.7; must land with task 8.1
+
 ## Tooling
 
 ### Check the production bundle for collector/ and Node code
@@ -150,6 +178,20 @@
 **Effort:** M (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** None
+
+### Package and boot the app in CI
+
+**Issue:** [#106](https://github.com/bjorkgard/nexus-one/issues/106)
+
+**What:** In task 1.9, add a macOS job that runs `vp run build && vp run pack && vp run test:packaged`.
+
+**Why:** Task 1.7's packaged boot test runs from its own Playwright config, so the normal e2e run skips it, and 1.9's planned commands (`docs/PLAN.md:101`) neither pack nor boot. A broken package would pass CI.
+
+**Context:** Outside voice O1 in `docs/plans/1.7-packaging-spike.md` (D11). `vp install` downloads the Electron binary (~100 MB) on first install; cache it in the workflow.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.7; lands with task 1.9
 
 ## Completed
 
