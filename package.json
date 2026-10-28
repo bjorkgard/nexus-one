@@ -3,36 +3,41 @@
   "version": "0.6.0",
   "private": true,
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vp dev",
     "build": "vp check && tsc && vp build",
     "test": "vp test",
     "preview": "vp preview",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "pack": "vp run build && vp pack && electron-builder --dir",
+    "start": "vp run build && vp pack && electron .",
+    "test:packaged": "playwright test -c playwright.electron.config.ts"
   },
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@tailwindcss/vite": "^4.3.3",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "tailwindcss": "^4.3.3",
-    "three": "^0.186.1",
-    "zod": "^4.6.7",
-    "zustand": "^5.0.16"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
     "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwindcss": "^4.3.3",
+    "three": "^0.186.1",
     "typescript": "~6.0.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
     "vite-plus": "1.3.0",
-    "ws": "8.22.0"
+    "ws": "8.22.0",
+    "zod": "^4.6.7",
+    "zustand": "^5.0.16"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0"
@@ -42,6 +47,28 @@
       "name": "npm",
       "version": "12.2.1",
       "onFail": "download"
+    }
+  },
+  "build": {
+    "appId": "se.bjorkgard.nexusone",
+    "productName": "Nexus One",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**"
+    ],
+    "mac": {
+      "identity": null,
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
     }
   }
 }
