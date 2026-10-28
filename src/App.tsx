@@ -2,7 +2,11 @@ import { Canvas } from "@react-three/fiber";
 import { Component, Suspense, lazy } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 
+import { DevBoundary } from "./debug/DevBoundary";
+
 const NexusBridge = import.meta.env.DEV ? lazy(() => import("./debug/Bridge")) : null;
+const PerfStats = import.meta.env.DEV ? lazy(() => import("./debug/PerfStats")) : null;
+const PerfPanel = import.meta.env.DEV ? lazy(() => import("./debug/PerfPanel")) : null;
 
 interface CanvasErrorBoundaryProps {
   children: ReactNode;
@@ -48,17 +52,34 @@ export function App() {
     <div className="relative h-full w-full">
       <CanvasErrorBoundary>
         <Canvas
+          data-testid="scene"
           fallback={
             <div className="p-4 text-neutral-300">This browser does not support canvas.</div>
           }
         >
           {NexusBridge && (
-            <Suspense fallback={null}>
-              <NexusBridge />
-            </Suspense>
+            <DevBoundary name="Bridge">
+              <Suspense fallback={null}>
+                <NexusBridge />
+              </Suspense>
+            </DevBoundary>
+          )}
+          {PerfStats && (
+            <DevBoundary name="PerfStats">
+              <Suspense fallback={null}>
+                <PerfStats />
+              </Suspense>
+            </DevBoundary>
           )}
         </Canvas>
       </CanvasErrorBoundary>
+      {PerfPanel && (
+        <DevBoundary name="PerfPanel">
+          <Suspense fallback={null}>
+            <PerfPanel />
+          </Suspense>
+        </DevBoundary>
+      )}
       <div className="pointer-events-none absolute top-4 left-4 text-lg font-semibold text-white">
         Nexus One
       </div>

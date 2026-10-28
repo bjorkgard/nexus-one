@@ -29,7 +29,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp test` — Run the unit test suite.
 - `npx playwright test` — Run the Playwright tests (smoke and data source) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
-- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in or `__nexus` reaches the browser bundle.
+- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus` or a performance overlay marker reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
 - `vp run pack` — Build the UI and the Electron main process, then package an unsigned macOS app into `release/mac-arm64/Nexus One.app` (about 1 minute).
 - `vp run start` — Build, then launch the Electron app from source.
@@ -53,7 +53,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `live-source.ts` — `liveTransport(port)`: WebSocket transport to `127.0.0.1` with backoff and a hello+snapshot deadline.
   - `mock-source.ts` — `mockTransport()`: plays the mock stream with a movable clock; a backward seek rebuilds state in a new epoch.
   - `boot.ts` — `startDataSource()`: picks the transport, starts the client and registers the dev hooks; called once from `src/main.tsx`.
-- `src/debug/` — Dev-only `window.__nexus` test hooks.
+- `src/debug/` — Dev-only `window.__nexus` test hooks and the performance overlay.
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws); `check-stream.ts` exports `checkStream(events, { complete })`, which validates any event stream and returns named problems instead of throwing.
   - `protocol.ts` — Wire messages (`hello`, `snapshot`, `event`) and `parseServerMessage`.
   - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.
@@ -123,6 +123,10 @@ If you changed `electron/` or packaging, also run `vp run pack` and `vp run test
 - Main-process unit tests live next to the code in `electron/` (for example `resolve.test.ts`, which covers the `app://` file policy).
 - Tests that need Node live in `test/`, because the `src/` fence bans Node built-ins, tests included.
 - Browser tests live in `e2e/`.
+
+## Performance overlay
+
+In `vp run dev`, press the backtick key (`` ` ``; on a Swedish keyboard Shift + ´) to show or hide the overlay (FPS and CPU graphs, draw calls, triangles, geometries, textures, heap). Draw calls turn yellow from 240 and red from 300. Add `?probe=box` to the URL to draw a 12-triangle box so the counters have something to show. The overlay and the probe exist only in dev builds.
 
 ## Adding a `__nexus` hook
 
