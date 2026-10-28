@@ -17,9 +17,11 @@ export default function Bridge() {
         position: camera.position.toArray(),
         projectionMatrix: camera.projectionMatrix.toArray(),
       })),
-      registerNexus("project", (worldPos) =>
-        projectToPage(camera, gl.domElement.getBoundingClientRect(), worldPos),
-      ),
+      registerNexus("project", (worldPos) => {
+        // R3F refreshes the view matrix only when it renders; a call between frames would read a stale one.
+        camera.updateMatrixWorld();
+        return projectToPage(camera, gl.domElement.getBoundingClientRect(), worldPos);
+      }),
       registerNexus("rendererInfo", () => ({
         calls: gl.info.render.calls,
         triangles: gl.info.render.triangles,
