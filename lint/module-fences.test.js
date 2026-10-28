@@ -220,6 +220,24 @@ describe("module-fences wiring", () => {
       "eslint(no-restricted-imports)",
       "Event shapes live in src/shared/schema.ts",
     ],
+    [
+      "mock-nondeterminism.txt",
+      "src/data/mock__wiring_date.ts",
+      "eslint(no-restricted-globals)",
+      "The mock must stay deterministic; use the sim-time `ts`",
+    ],
+    [
+      "mock-nondeterminism.txt",
+      "src/data/mock__wiring_random.ts",
+      "eslint(no-restricted-properties)",
+      "The mock must stay deterministic; use the seeded PRNG",
+    ],
+    [
+      "mock-nondeterminism.txt",
+      "src/data/mock__wiring_perf.ts",
+      "eslint(no-restricted-properties)",
+      "performance.now reads wall-clock time",
+    ],
   ];
   const copies = [
     at("src/ui/__wiring_bad.ts"),
