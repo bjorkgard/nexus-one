@@ -36,13 +36,24 @@ function inside(target, folder) {
   return target === folder || target.startsWith(`${folder}/`);
 }
 
-// Allowed target folders per importer zone; files in no zone (electron/, lint/, root) are unchecked.
+// Allowed target folders per importer zone; files in no zone (lint/, root) are unchecked.
 function zoneOf(importer) {
   if (inside(importer, "src/shared"))
     return { allowed: ["src/shared"], messageId: "outsideShared" };
   if (inside(importer, "src")) return { allowed: ["src"], messageId: "outsideSrc" };
   if (inside(importer, "collector")) {
-    return { allowed: ["collector", "src/shared"], messageId: "outsideCollector", collector: true };
+    return {
+      allowed: ["collector", "src/shared"],
+      messageId: "outsideCollector",
+      createRequireMessageId: "createRequire",
+    };
+  }
+  if (inside(importer, "electron")) {
+    return {
+      allowed: ["electron", "src/shared"],
+      messageId: "outsideElectron",
+      createRequireMessageId: "electronCreateRequire",
+    };
   }
   return null;
 }
@@ -82,11 +93,15 @@ const noCrossZone = defineRule({
         "src/ may import only other src/ files; Node-only code belongs in collector/ and Electron code in electron/.",
       outsideCollector:
         "collector/ may import only collector/ and src/shared/ files; other src/ code belongs to the browser.",
+      outsideElectron:
+        "electron/ may import only electron/ and src/shared/; renderer code stays in src/.",
       nonStatic:
         "Non-static import in a fenced zone; use a string literal so the module fence can check it.",
       glob: "import.meta.glob in a fenced zone must use relative or root-absolute patterns and no `base` option.",
       globOptions: "glob options must be a literal object without `base`.",
       createRequire: "createRequire is banned in collector/; it would bypass the module fence.",
+      electronCreateRequire:
+        "createRequire is banned in electron/; it would bypass the module fence.",
     },
   },
   create(context) {
@@ -193,8 +208,8 @@ const noCrossZone = defineRule({
       },
       ImportSpecifier(node) {
         const imported = node.imported;
-        if (zone.collector && (imported.name ?? imported.value) === "createRequire") {
-          context.report({ node, messageId: "createRequire" });
+        if (zone.createRequireMessageId && (imported.name ?? imported.value) === "createRequire") {
+          context.report({ node, messageId: zone.createRequireMessageId });
         }
       },
       CallExpression(node) {
@@ -204,12 +219,12 @@ const noCrossZone = defineRule({
         } else if (isImportMeta(callee, "glob")) {
           checkGlob(node);
         } else if (
-          zone.collector &&
+          zone.createRequireMessageId &&
           callee.type === "MemberExpression" &&
           (callee.computed ? stringValue(callee.property) : callee.property.name) ===
             "createRequire"
         ) {
-          context.report({ node, messageId: "createRequire" });
+          context.report({ node, messageId: zone.createRequireMessageId });
         }
       },
       NewExpression(node) {
