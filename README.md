@@ -27,7 +27,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
 - `vp test` — Run the unit test suite.
-- `npx playwright test` — Run the Playwright smoke test against the dev server on port 5199.
+- `npx playwright test` — Run the Playwright tests (smoke and data source) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
 - `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in or `__nexus` reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
