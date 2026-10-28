@@ -65,8 +65,9 @@ export function guardFrame<A extends unknown[]>(
   };
 }
 
-// Per-frame order: the render wrapper runs stats.begin()/end() around gl.render, then the after-effect
-// runs stats.update() and clearStatsEntries(). update() reads the marks, so the clear must come after it.
+// stats.init(gl) wraps gl.render with stats.begin()/end(); restore() below puts the original back.
+// Per frame: that wrapper runs around gl.render, then the after-effect runs stats.update() and
+// clearStatsEntries(). update() reads the marks, so the clear must come after it.
 const PERF_KEY = Symbol.for("nexus.perfStats");
 
 type Entry = { stats: Stats; count: number; restore: () => void };

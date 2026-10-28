@@ -70,6 +70,7 @@ test("stats timing entries stay bounded", async ({ page }) => {
       duration: performance.getEntriesByName("cpu-duration").length,
     }));
   for (let i = 0; i < 2; i++) {
+    // gstack-timing-ok: entries accumulate per rendered frame, so elapsed frames are the input under test.
     await page.waitForTimeout(2000);
     const counts = await sample();
     expect(counts.started).toBeLessThanOrEqual(2);

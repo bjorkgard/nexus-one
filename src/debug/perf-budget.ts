@@ -1,7 +1,8 @@
-// Frame budget from docs/PLAN.md:25: under 300 draw calls at 60 fps.
+// Frame budget from docs/PLAN.md "Performance budget": under 300 draw calls at 60 fps.
 export const PERF_BUDGET = { drawCalls: 300, fps: 60 } as const;
 
-const WARN_FROM = 240;
+// Warn at 80% of the draw-call budget.
+const WARN_FROM = PERF_BUDGET.drawCalls * 0.8;
 
 export type DrawCallLevel = "ok" | "warn" | "over";
 
