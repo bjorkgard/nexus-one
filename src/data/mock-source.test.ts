@@ -142,6 +142,33 @@ describe("mockTransport", () => {
     client.close();
   });
 
+  // Value: protects=a subscriber that closes the client mid-batch stops delivery cleanly; fails_when=deliverDue keeps calling the cleared sink after stop(); why_new=no test closes during a multi-event tick; seam=none; no_claim=wall-clock playback speed
+  it("closing the client during a batch of due events stops delivery without throwing", () => {
+    const transport = mockTransport({
+      ...OPTIONS,
+      now: () => 0,
+      setInterval: () => 1,
+      clearInterval: () => {},
+    });
+    const errors: unknown[] = [];
+    const client = createDataClient(transport, {
+      log: { info() {}, warn() {}, error() {} },
+      reportError: (e) => errors.push(e),
+    });
+    let seen = 0;
+    client.subscribe(
+      () => {},
+      () => {
+        seen += 1;
+        client.close();
+      },
+    );
+    expect(() => transport.setClock(stream.at(-1)!.ts)).not.toThrow();
+    expect(seen).toBe(1);
+    expect(errors).toEqual([]);
+    expect(client.status).toBe("closed");
+  });
+
   it("a rebuild requested during a rebuild is ignored", () => {
     let wall = 0;
     const transport = mockTransport({

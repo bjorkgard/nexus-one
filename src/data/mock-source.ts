@@ -61,7 +61,8 @@ export function mockTransport(options: MockTransportOptions = {}): MockTransport
     if (!sink) return;
     const list = load();
     const at = clock();
-    while (next < list.length && list[next]!.ts <= at) {
+    // A subscriber may close the client during delivery, which stops the transport and clears sink.
+    while (sink !== null && next < list.length && list[next]!.ts <= at) {
       const event = list[next]!;
       next += 1;
       sink({ kind: "frame", data: { type: "event", epoch, seq: next, event } });
