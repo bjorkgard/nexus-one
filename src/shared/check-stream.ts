@@ -21,7 +21,8 @@ export type StreamIssueCode =
   | "attention_not_open"
   | "handoff_endpoint"
   | "dequeue_without_queue"
-  | "open_at_end";
+  | "open_at_end"
+  | "session_ended_while_open";
 
 export type StreamIssue = { code: StreamIssueCode; index: number; message: string };
 export type StreamCheck = { ok: boolean; issues: StreamIssue[]; total: number };
@@ -93,9 +94,26 @@ export function checkStream(
           return ["duplicate_session", `session ${e.sessionId} restarted`];
         sessions.set(e.sessionId, { ended: false });
         return null;
-      case "session_end":
+      case "session_end": {
         sessions.get(e.sessionId)!.ended = true;
-        return null;
+        // Nothing can close an item after its session ends, so this holds for prefixes too.
+        // Each open item is reported once here and then closed, so open_at_end skips it.
+        const open: string[] = [];
+        for (const [id, agent] of agents) {
+          if (agent.sessionId !== e.sessionId) continue;
+          if (!agent.ended) open.push(`agent ${id}`);
+          for (const callId of agent.calls) open.push(`call ${callId}`);
+          if (agent.attention) open.push(`attention of ${id}`);
+          agent.ended = true;
+          agent.calls.clear();
+          agent.attention = false;
+        }
+        if (open.length === 0) return null;
+        return [
+          "session_ended_while_open",
+          `session ${e.sessionId} ended with ${open.join(", ")} open`,
+        ];
+      }
       case "agent_spawn":
         return spawn(e);
       case "agent_end":

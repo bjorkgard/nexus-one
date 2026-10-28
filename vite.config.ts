@@ -126,6 +126,11 @@ export default defineConfig({
               message:
                 "The mock must stay deterministic; use the sim-time `ts` instead of Date (wall-clock time).",
             },
+            {
+              name: "crypto",
+              message:
+                "The mock must stay deterministic; crypto draws OS randomness, derive ids and values from the seeded PRNG.",
+            },
           ],
           "no-restricted-properties": [
             "error",
@@ -140,6 +145,12 @@ export default defineConfig({
               property: "now",
               message:
                 "The mock must stay deterministic; performance.now reads wall-clock time, use the sim-time `ts`.",
+            },
+            {
+              object: "performance",
+              property: "timeOrigin",
+              message:
+                "The mock must stay deterministic; performance.timeOrigin reads wall-clock time, use the sim-time `ts`.",
             },
           ],
         },

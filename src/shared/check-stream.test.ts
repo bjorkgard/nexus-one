@@ -125,6 +125,47 @@ describe("checkStream", () => {
     expect(codesOf(drafts)).toEqual([code]);
   });
 
+  // Value: protects=open_at_end names each kind of open item (call, attention, agent, session) at the stream end;
+  // fails_when=a reportOpen branch is dropped, so that kind of leak passes complete:true silently;
+  // why_new=negatives only removes session_end, so the agent, call and attention branches never ran;
+  // seam=none; no_claim=none beyond protects
+  // The session stays open, so open_at_end (not session_ended_while_open) must name the item.
+  const withoutAndOpen = (index: number) => valid.filter((_, i) => i !== index && i !== 14);
+  it.each([
+    ["a call that never ended", withoutAndOpen(6), "call c1 never ended"],
+    ["attention that was never cleared", withoutAndOpen(10), "attention of a2 never cleared"],
+    ["an agent that never ended", withoutAndOpen(12), "agent a2 never ended"],
+    ["a session that never ended", without(14), "session s1 never ended"],
+  ])("reports %s as open_at_end naming it", (_label, drafts, message) => {
+    const result = checkStream(build(drafts));
+    expect(result.issues).toContainEqual({
+      code: "open_at_end",
+      index: drafts.length,
+      message: expect.stringContaining(message),
+    });
+    expect(result.issues.every((issue) => issue.code === "open_at_end")).toBe(true);
+    expect(checkStream(build(drafts), { complete: false }).ok).toBe(true);
+  });
+
+  // Value: protects=a session_end with its agent, call or attention still open is flagged even for a prefix;
+  // fails_when=the session_end check is removed, so complete:false accepts items nothing can close (D14);
+  // why_new=open_at_end only runs with complete:true at the stream end; seam=none; no_claim=none beyond protects
+  it.each([
+    ["a call", without(6), "call c1"],
+    ["attention", without(10), "attention of a2"],
+    ["an agent", without(12), "agent a2"],
+  ])("flags a session_end with %s still open, even with complete:false", (_label, drafts, item) => {
+    for (const complete of [true, false]) {
+      expect(checkStream(build(drafts), { complete }).issues).toEqual([
+        {
+          code: "session_ended_while_open",
+          index: drafts.length - 1,
+          message: expect.stringContaining(item),
+        },
+      ]);
+    }
+  });
+
   it("flags a session that was never started, a duplicate session and a missing agent", () => {
     expect(codesOf([{ type: "message", agentId: "a1", role: "user", text: "x" }])).toContain(
       "unknown_session",
@@ -151,6 +192,16 @@ describe("checkStream", () => {
     const queued = { type: "task_queued", taskId: "t1", title: "T" };
     const dequeued = { type: "task_dequeued", taskId: "t1", reason: "cancelled" };
     expect(codesOf([sessionStart, queued, dequeued, dequeued])).toContain("dequeue_without_queue");
+  });
+
+  it("reports a started task dequeued twice at the second dequeue", () => {
+    const queued = { type: "task_queued", taskId: "t1", title: "T" };
+    const started = { type: "task_dequeued", taskId: "t1", reason: "started" };
+    const result = checkStream(build([sessionStart, queued, started, started]), {
+      complete: false,
+    });
+    expect(result.issues.map((i) => i.code)).toEqual(["dequeue_without_queue"]);
+    expect(result.issues[0]?.index).toBe(3);
   });
 
   it("reports parse issues for non-object input without throwing", () => {

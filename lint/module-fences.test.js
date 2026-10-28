@@ -238,6 +238,18 @@ describe("module-fences wiring", () => {
       "eslint(no-restricted-properties)",
       "performance.now reads wall-clock time",
     ],
+    [
+      "mock-nondeterminism.txt",
+      "src/data/mock__wiring_crypto.ts",
+      "eslint(no-restricted-globals)",
+      "crypto draws OS randomness",
+    ],
+    [
+      "mock-nondeterminism.txt",
+      "src/data/mock__wiring_time_origin.ts",
+      "eslint(no-restricted-properties)",
+      "performance.timeOrigin reads wall-clock time",
+    ],
   ];
   const copies = [
     at("src/ui/__wiring_bad.ts"),

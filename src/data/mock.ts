@@ -392,8 +392,9 @@ function resolveOptions(options: MockOptions): Config {
     }
   }
   // An option is given when its key holds anything but undefined; null then fails validation.
+  // Only own keys count: an inherited key (prototype pollution) must not change the stream.
   const given = <K extends keyof MockOptions>(key: K, fallback: unknown): unknown =>
-    options[key] === undefined ? fallback : options[key];
+    !Object.hasOwn(options, key) || options[key] === undefined ? fallback : options[key];
   const seed = integerOption("seed", given("seed", DEFAULT_SEED), 0);
   const agents = integerOption("agents", given("agents", 0), 0);
   const origin = integerOption("origin", given("origin", DEFAULT_ORIGIN), 0);

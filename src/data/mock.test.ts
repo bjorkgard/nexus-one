@@ -73,7 +73,7 @@ describe("default scenario", () => {
     expect(builds[2]).toEqual(builds[0]);
   });
 
-  it("closes fully: every session, agent and call ends and ts never decreases", () => {
+  it("ends all 3 sessions and never decreases ts", () => {
     const ends = defaultStream.filter((e) => e.type === "session_end");
     expect(ends).toHaveLength(3);
     for (let i = 1; i < defaultStream.length; i++) {
@@ -93,8 +93,11 @@ describe("MOCK_TIMING", () => {
       longSubagentMs: 20_000,
       waitingOnToolMs: 5_000,
     });
+    // gstack-timing-ok: sim-time thresholds from docs/PLAN.md (4.8, 4.10, 7.1), not elapsed time
     expect(MOCK_TIMING.stuckSilenceMs).toBeGreaterThan(300_000);
+    // gstack-timing-ok: sim-time bound, not elapsed time
     expect(MOCK_TIMING.attentionSilenceMs).toBeGreaterThan(300_000);
+    // gstack-timing-ok: sim-time bound, not elapsed time
     expect(MOCK_TIMING.longSubagentMs).toBeGreaterThan(15_000);
     expect(MOCK_TIMING.waitingOnToolMs).toBeGreaterThan(2_000);
   });
@@ -215,6 +218,20 @@ describe("spine roles", () => {
     }
   });
 
+  it("keeps a root call open exactly waitingOnToolMs (4.8 Waiting on Tool)", () => {
+    const own = forAgent(defaultStream, "mock-s1-root");
+    const start = own.find((e) => e.type === "tool_call_start" && e.callId === "mock-call-s1-wait");
+    const end = own.find((e) => e.type === "tool_call_end" && e.callId === "mock-call-s1-wait");
+    expect(start, "wait call start").toBeDefined();
+    expect(end, "wait call end").toBeDefined();
+    expect((end as Event).ts - (start as Event).ts).toBe(MOCK_TIMING.waitingOnToolMs);
+  });
+
+  it("ignores inherited option keys", () => {
+    const inherited = Object.create({ seed: 7, agents: 3, durationMs: 60_000 }) as never;
+    expect([...createMockStream(inherited)]).toEqual(defaultStream);
+  });
+
   it("has a tool call open over 2 s and an agent ending ok", () => {
     const opened = new Map<string, number>();
     let longest = 0;
@@ -279,6 +296,48 @@ describe("filler and projects", () => {
     expect(collect({ durationMs: 10 ** 9 })).toEqual(defaultStream);
   });
 
+  // Value: protects=the 2 extra projects have different names from each other and from Nexus, one name per id;
+  // fails_when=the second name is drawn without excluding the first, so two projects show the same name;
+  // why_new="adds min(2, agents) projects" counts ids only, never names; seam=none; no_claim=none beyond protects
+  it("names the extra projects differently from each other and from Nexus, for every seed", () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const nameById = new Map<string, string>();
+      for (const e of collect({ seed, agents: 4, durationMs: 60_000 })) {
+        if (e.type !== "session_start") continue;
+        const known = nameById.get(e.projectId);
+        if (known !== undefined) expect(e.projectName, `seed ${seed}`).toBe(known);
+        nameById.set(e.projectId, e.projectName);
+      }
+      expect(nameById.size, `seed ${seed}`).toBe(3);
+      expect(new Set(nameById.values()).size, `seed ${seed}`).toBe(3);
+    }
+  });
+
+  // Value: protects=filler agents cover both providers and every tokens event carries its agent's spawn model;
+  // fails_when=all filler lands on one provider, or tokens report a model other than the spawn's;
+  // why_new=validity checks never compare payload fields; seam=none; no_claim=none beyond protects
+  it("gives filler both providers, one model per provider, and tokens that match the spawn", () => {
+    const events = collect({ seed: 6, agents: 30, durationMs: 60_000 });
+    const modelOf = new Map<string, string | null>();
+    const modelByProvider = new Map<string, Set<string | null>>();
+    for (const e of events) {
+      if (e.type !== "agent_spawn" || !e.agentId.startsWith("mock-f")) continue;
+      modelOf.set(e.agentId, e.model);
+      const provider = providerOf(events, e.sessionId) as string;
+      modelByProvider.set(provider, (modelByProvider.get(provider) ?? new Set()).add(e.model));
+    }
+    expect(modelOf.size).toBe(30);
+    expect([...modelByProvider.keys()].toSorted()).toEqual(["claude", "codex"]);
+    for (const models of modelByProvider.values()) expect(models.size).toBe(1);
+    let tokenEvents = 0;
+    for (const e of events) {
+      if (e.type !== "tokens" || !modelOf.has(e.agentId)) continue;
+      tokenEvents += 1;
+      expect(e.model, e.agentId).toBe(modelOf.get(e.agentId));
+    }
+    expect(tokenEvents).toBeGreaterThan(0);
+  });
+
   it("keeps each filler agent progressing across the whole duration", () => {
     const durationMs = 300_000;
     const progress = new Map<string, number[]>();
@@ -325,10 +384,12 @@ describe("large and lazy streams", () => {
     }
     expectValid(tap(), "100 agents 1 h");
     expect(count).toBeGreaterThan(10_000);
+    // gstack-timing-ok: maxGap is a sim-time gap between events (E-D4), not elapsed time
     expect(maxGap).toBeLessThanOrEqual(30_000);
     expect(spawnedAt.size).toBe(100);
     for (const [id, spawned] of spawnedAt) {
       expect(spawned - origin, `${id} spawn`).toBe(0);
+      // gstack-timing-ok: sim-time bound, not elapsed time
       expect((endedAt.get(id) as number) - spawned, `${id} end`).toBeGreaterThanOrEqual(durationMs);
     }
   });
@@ -433,6 +494,32 @@ describe("option validation", () => {
     } else {
       expect(run).not.toThrow();
     }
+  });
+
+  // Value: protects=options the validator accepts never yield a ts above MAX_SAFE_INTEGER, filler overshoot included;
+  // fails_when=FILLER_SLACK_MS shrinks below the real overshoot of filler agents past durationMs;
+  // why_new=the overflow test below never reaches the filler end, only the spine and a huge durationMs;
+  // seam=none; no_claim=exact slack size (only that accepted options stay safe)
+  it("keeps every ts safe for each origin near the limit that the validator accepts", () => {
+    // Long enough that the filler end, not the 381 s spine, sets the largest ts.
+    const durationMs = 500_000;
+    let accepted = 0;
+    let rejected = 0;
+    for (const margin of [0, 10_000, 25_000, 30_000, 40_000]) {
+      const origin = Number.MAX_SAFE_INTEGER - durationMs - margin;
+      let events: Event[];
+      try {
+        events = collect({ seed: 3, agents: 40, durationMs, origin });
+      } catch (error) {
+        expect(error, `margin ${margin}`).toBeInstanceOf(RangeError);
+        rejected += 1;
+        continue;
+      }
+      accepted += 1;
+      for (const e of events) expect(Number.isSafeInteger(e.ts), `margin ${margin}`).toBe(true);
+    }
+    expect(rejected).toBeGreaterThan(0);
+    expect(accepted).toBeGreaterThan(0);
   });
 
   it("rejects options whose largest ts would be unsafe", () => {
