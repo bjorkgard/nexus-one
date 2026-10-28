@@ -71,6 +71,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration. `electron/`, `collector/` and `src/shared/` each add a `tsconfig.json` that drops the DOM library, so browser globals such as `window` fail type checking there.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
+- `.github/workflows/ci.yml` — The `ci` job (see [CI](#ci)). `.github/dependabot.yml` — Weekly Dependabot updates for GitHub Actions and range-versioned npm packages.
 - `TODOS.md` — Deferred work.
 - `CHANGELOG.md` — Release notes.
 - `AGENTS.md` — Vite+ toolchain instructions for coding agents.
