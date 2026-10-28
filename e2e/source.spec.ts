@@ -39,7 +39,7 @@ test("default page uses the mock source and its clock advances", async ({ page }
 test("emit applies a valid new session_start", async ({ page }) => {
   await openPage(page);
   const before = await nexus(page, "dataState");
-  await nexus(page, "emit", {
+  const event = {
     id: "e2e-ev-1",
     ts: 1,
     type: "session_start",
@@ -47,10 +47,16 @@ test("emit applies a valid new session_start", async ({ page }) => {
     projectId: "e2e-project-1",
     projectName: "e2e",
     provider: "claude",
-  });
+  };
+  await nexus(page, "emit", event);
+  const applied = await nexus(page, "dataState");
+  // The mock source emits on its own timer, so lastEventId and an exact session count can race;
+  // prove the first emit was applied by the re-sent id counting as exactly one duplicate.
+  expect(applied.counts.sessions).toBeGreaterThanOrEqual(before.counts.sessions + 1);
+  await nexus(page, "emit", event);
   const after = await nexus(page, "dataState");
-  expect(after.counts.sessions).toBe(before.counts.sessions + 1);
-  expect(after.lastEventId).toBe("e2e-ev-1");
+  expect(after.counters.duplicates).toBe(applied.counters.duplicates + 1);
+  expect(after.counters.rejected).toBe(applied.counters.rejected);
 });
 
 test("emit rejects an invalid object", async ({ page }) => {
