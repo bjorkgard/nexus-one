@@ -29,10 +29,14 @@ test("page renders", async ({ page }) => {
   await expect(page.locator("canvas")).toBeVisible();
   await expect(page.locator("[role=alert]")).toHaveCount(0);
   await expect(page.getByText("Nexus One")).toBeVisible();
-  const box = await canvasBox(page);
   const viewport = page.viewportSize();
-  expect(box.width).toBe(viewport?.width);
-  expect(box.height).toBe(viewport?.height);
+  // R3F sizes the canvas after its first render; until then it is the default 300x150.
+  await expect
+    .poll(async () => {
+      const box = await canvasBox(page);
+      return { width: box.width, height: box.height };
+    })
+    .toEqual({ width: viewport?.width, height: viewport?.height });
 });
 
 test("hooks are registered", async ({ page }) => {
