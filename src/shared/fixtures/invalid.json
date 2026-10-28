@@ -1,0 +1,17 @@
+[
+  {
+    "name": "missing id",
+    "input": { "ts": 1, "type": "session_end", "sessionId": "s1" },
+    "expectCode": "invalid_type"
+  },
+  {
+    "name": "unknown type",
+    "input": { "id": "e1", "ts": 1, "type": "nope", "sessionId": "s1" },
+    "expectCode": "invalid_union"
+  },
+  {
+    "name": "extra key",
+    "input": { "id": "e1", "ts": 1, "type": "session_end", "sessionId": "s1", "extra": true },
+    "expectCode": "unrecognized_keys"
+  }
+]
