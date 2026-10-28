@@ -14,6 +14,32 @@
 **Priority:** P2
 **Depends on:** Task 1.1 (canvas + error boundary), task 1.3 (`window.__nexus` for an e2e check)
 
+## Data
+
+### Make the 1.6 snapshot restore in-flight state
+
+**What:** In task 1.6, define `Snapshot` in `src/shared/protocol.ts` so it restores open tool calls (`callId`, `tool`, start ts), queued tasks and attention state, not only the `Project`, `Session` and `Agent` entities.
+
+**Why:** A client that connects mid-session otherwise loses waiting agents and queued trays until the next event, and a `tool_call_end` that then arrives has no matching start.
+
+**Context:** Raised by the task 1.4 CEO review outside voice (Codex, finding O2); the owner kept 1.4's entities as they are and gave the snapshot to 1.6 (D12 in `docs/plans/1.4-canonical-event-schema.md`). Test it by connecting `LiveSource` after a `tool_call_start`, a `task_queued` and a `needs_attention`, then sending the matching end events and checking the store.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 1.4 (schema), task 1.6
+
+### Drop duplicate events by id across reconnects
+
+**What:** In task 1.6, have the client skip events whose `id` it has already applied (a bounded set of recent ids), including events resent after a reconnect.
+
+**Why:** Task 1.4 made each `tokens` event one model call's usage, so totals are sums; a resent event would double-count spend and tokens/min with no error.
+
+**Context:** Decision D10 in `docs/plans/1.4-canonical-event-schema.md` (outside voice finding O3). Every event carries a unique `id` (envelope). Test by resending the last few events after a reconnect and checking that token totals do not change.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 1.4 (schema), task 1.6
+
 ## Packaging
 
 ### Do not load the Electron spike from file://
