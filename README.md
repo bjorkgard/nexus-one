@@ -27,7 +27,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
 - `vp test` — Run the unit test suite.
-- `npx playwright test` — Run the Playwright smoke test against the dev server on port 5199.
+- `npx playwright test` — Run the Playwright tests (smoke and data source) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
 - `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in or `__nexus` reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
@@ -44,8 +44,15 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/sim/` — Simulation and animation state.
 - `src/ui/` — Dashboard.
 - `src/data/` — Client store and data sources. `mock.ts` exports `createMockStream(options?)`, the seeded, repeatable mock event stream (same seed, same events), plus `MOCK_ROLES` and `MOCK_TIMING` for finding its scripted agents. A lint rule bans `Date`, `Math.random`, `performance.now`, `performance.timeOrigin` and `crypto` in `mock.ts` and its test.
+  - `source.ts` — `createDataClient(transport)`: the one gate for epoch, seq cursor and dedup; `selectSource(search)` reads `?source=` and `?port=`.
+  - `live-source.ts` — `liveTransport(port)`: WebSocket transport to `127.0.0.1` with backoff and a hello+snapshot deadline.
+  - `mock-source.ts` — `mockTransport()`: plays the mock stream with a movable clock; a backward seek rebuilds state in a new epoch.
+  - `boot.ts` — `startDataSource()`: picks the transport, starts the client and registers the dev hooks; called once from `src/main.tsx`.
 - `src/debug/` — Dev-only `window.__nexus` test hooks.
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws); `check-stream.ts` exports `checkStream(events, { complete })`, which validates any event stream and returns named problems instead of throwing.
+  - `protocol.ts` — Wire messages (`hello`, `snapshot`, `event`) and `parseServerMessage`.
+  - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.
+  - `apply-once.ts` — `applyOnce`, the dedup entry: bounded recent-id ring plus reducer.
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
 - Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` only itself and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.
@@ -63,6 +70,30 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `CLAUDE.md` — Project rules for Claude Code, including where plan reviews are stored.
 - `docs/PLAN.md` — Phased build plan.
 - `docs/plans/` — Per-task plan and review files.
+
+## Data source
+
+The app starts one data client at boot (`src/data/boot.ts`). Pick the source in the URL:
+
+- `?source=mock|live` — default `mock`. Any other value logs a warning and uses `mock`.
+- `?port=` — live port, integer 1024-65535, default 47821. The host is fixed to `127.0.0.1`.
+
+Protocol (`src/shared/protocol.ts`):
+
+- The server sends `hello` (version, epoch), then `snapshot` (epoch, seq, state), then `event` messages (epoch, seq).
+- The snapshot carries in-flight state (open tool calls, queued tasks, attention), per-model usage and `recentIds` (the ids already applied).
+- Events dedup by seq cursor plus a bounded recent-id set. `applyOnce` in `src/shared/apply-once.ts` is the entry the collector must call.
+
+Recovery rules:
+
+- The client resyncs on a seq gap, an order fault or a rejected message.
+- The client waits 5 s for hello and snapshot, then reconnects.
+- Reconnect backoff starts at 250 ms, doubles to 2 s and adds jitter.
+- A version mismatch sets status `incompatible`.
+
+Known limit: rolling tokens/min restarts from new events after a reconnect.
+
+Dev hooks (see below): `__nexus.emit(event)` applies one event and throws on invalid input; `__nexus.setClock(ts)` moves the mock clock (`?source=mock` only); `__nexus.dataState()` returns source, status, clock, last event id, entity counts and counters.
 
 ## Development checks
 

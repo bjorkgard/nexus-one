@@ -29,17 +29,22 @@ test("page renders", async ({ page }) => {
   await expect(page.locator("canvas")).toBeVisible();
   await expect(page.locator("[role=alert]")).toHaveCount(0);
   await expect(page.getByText("Nexus One")).toBeVisible();
-  const box = await canvasBox(page);
   const viewport = page.viewportSize();
-  expect(box.width).toBe(viewport?.width);
-  expect(box.height).toBe(viewport?.height);
+  // R3F sizes the canvas after its first render; until then it is the default 300x150.
+  await expect
+    .poll(async () => {
+      const box = await canvasBox(page);
+      return { width: box.width, height: box.height };
+    })
+    .toEqual({ width: viewport?.width, height: viewport?.height });
 });
 
 test("hooks are registered", async ({ page }) => {
   await page.goto("/");
   await waitForHook(page, "rendererInfo");
+  await waitForHook(page, "dataState");
   const keys = await page.evaluate(() => Object.keys(window.__nexus ?? {}).sort());
-  expect(keys).toEqual(["getCamera", "project", "rendererInfo"]);
+  expect(keys).toEqual(["dataState", "emit", "getCamera", "project", "rendererInfo", "setClock"]);
 });
 
 test("rendererInfo returns finite numbers", async ({ page }) => {
