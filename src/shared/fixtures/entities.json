@@ -1,0 +1,20 @@
+{
+  "project": { "id": "p1", "name": "demo" },
+  "session": {
+    "id": "s1",
+    "projectId": "p1",
+    "provider": "claude",
+    "startedAt": 1000,
+    "endedAt": null
+  },
+  "agent": {
+    "id": "a1",
+    "sessionId": "s1",
+    "provider": "claude",
+    "parentId": null,
+    "name": "root",
+    "model": null,
+    "stage": "queued",
+    "lastProgressAt": 1000
+  }
+}

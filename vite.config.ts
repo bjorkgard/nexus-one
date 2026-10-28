@@ -71,7 +71,14 @@ export default defineConfig({
           "no-restricted-imports": [
             "error",
             {
-              patterns: [{ group: electronPackage, message: electronMessage }],
+              patterns: [
+                { group: electronPackage, message: electronMessage },
+                {
+                  group: ["zod", "zod/**"],
+                  message:
+                    "Event shapes live in src/shared/schema.ts; import its schemas instead of zod.",
+                },
+              ],
             },
           ],
         },

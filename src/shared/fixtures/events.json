@@ -1,0 +1,110 @@
+{
+  "session_start": {
+    "id": "e1",
+    "ts": 1000,
+    "type": "session_start",
+    "sessionId": "s1",
+    "projectId": "p1",
+    "projectName": "demo",
+    "provider": "claude"
+  },
+  "session_end": { "id": "e2", "ts": 2000, "type": "session_end", "sessionId": "s1" },
+  "agent_spawn": {
+    "id": "e3",
+    "ts": 1001,
+    "type": "agent_spawn",
+    "sessionId": "s1",
+    "agentId": "a1",
+    "parentId": null,
+    "name": "root",
+    "model": null
+  },
+  "agent_end": {
+    "id": "e4",
+    "ts": 1900,
+    "type": "agent_end",
+    "sessionId": "s1",
+    "agentId": "a1",
+    "outcome": "ok"
+  },
+  "message": {
+    "id": "e5",
+    "ts": 1100,
+    "type": "message",
+    "sessionId": "s1",
+    "agentId": "a1",
+    "role": "assistant",
+    "text": "hello"
+  },
+  "tokens": {
+    "id": "e6",
+    "ts": 1200,
+    "type": "tokens",
+    "sessionId": "s1",
+    "agentId": "a1",
+    "model": "m1",
+    "input": 10,
+    "output": 20,
+    "cacheRead": 5,
+    "cacheWrite": 2
+  },
+  "tool_call_start": {
+    "id": "e7",
+    "ts": 1300,
+    "type": "tool_call_start",
+    "sessionId": "s1",
+    "agentId": "a1",
+    "callId": "c1",
+    "tool": "read",
+    "argsHash": "abc123"
+  },
+  "tool_call_end": {
+    "id": "e8",
+    "ts": 1350,
+    "type": "tool_call_end",
+    "sessionId": "s1",
+    "agentId": "a1",
+    "callId": "c1",
+    "outcome": "ok"
+  },
+  "needs_attention": {
+    "id": "e9",
+    "ts": 1400,
+    "type": "needs_attention",
+    "sessionId": "s1",
+    "agentId": "a1",
+    "reason": "permission"
+  },
+  "attention_cleared": {
+    "id": "e10",
+    "ts": 1450,
+    "type": "attention_cleared",
+    "sessionId": "s1",
+    "agentId": "a1"
+  },
+  "handoff": {
+    "id": "e11",
+    "ts": 1500,
+    "type": "handoff",
+    "sessionId": "s1",
+    "fromAgentId": "a1",
+    "toAgentId": "a2",
+    "direction": "delegate"
+  },
+  "task_queued": {
+    "id": "e12",
+    "ts": 1600,
+    "type": "task_queued",
+    "sessionId": "s1",
+    "taskId": "t1",
+    "title": "do thing"
+  },
+  "task_dequeued": {
+    "id": "e13",
+    "ts": 1700,
+    "type": "task_dequeued",
+    "sessionId": "s1",
+    "taskId": "t1",
+    "reason": "started"
+  }
+}

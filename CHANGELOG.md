@@ -5,6 +5,19 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-28
+
+### Added
+
+- `src/shared/schema.ts` defines every event the app handles (13 types, from `session_start` to `task_dequeued`) and the `Project`, `Session` and `Agent` records with zod. The collector and the app both import their types from this one file.
+- `parseEvent(input)` checks any incoming value and returns either the typed event or a list of problems (`path` and `code`). It never throws, even on hostile input, so one bad line cannot stop a stream.
+- Events with unknown fields, wrong enum values, negative or fractional numbers, or over-long strings are rejected. Ids are capped at 256 characters, names at 200, message text at 4000 and tool errors at 1000.
+- JSON fixtures in `src/shared/fixtures/` hold one valid example of every event and record, for use by later mock and reducer tests.
+
+### Changed
+
+- `vp check` now fails if code in `src/` outside `src/shared/` imports `zod`, so event shapes stay declared in one place.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added
