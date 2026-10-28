@@ -4,6 +4,8 @@
 
 ### Recover from WebGL context loss
 
+**Issue:** [#89](https://github.com/bjorkgard/nexus-one/issues/89)
+
 **What:** Handle `webglcontextlost` / `webglcontextrestored` on the R3F canvas: show a visible message while lost, restore the scene when the context returns.
 
 **Why:** After laptop sleep or a GPU driver reset, the campus freezes on its last frame with no message. Nothing in `docs/PLAN.md` covers it (task 9.4 restarts the collector, not the renderer).
@@ -18,6 +20,8 @@
 
 ### Make the 1.6 snapshot restore in-flight state
 
+**Issue:** [#90](https://github.com/bjorkgard/nexus-one/issues/90)
+
 **What:** In task 1.6, define `Snapshot` in `src/shared/protocol.ts` so it restores open tool calls (`callId`, `tool`, start ts), queued tasks and attention state, not only the `Project`, `Session` and `Agent` entities.
 
 **Why:** A client that connects mid-session otherwise loses waiting agents and queued trays until the next event, and a `tool_call_end` that then arrives has no matching start.
@@ -29,6 +33,8 @@
 **Depends on:** Task 1.4 (schema), task 1.6
 
 ### Drop duplicate events by id across reconnects
+
+**Issue:** [#91](https://github.com/bjorkgard/nexus-one/issues/91)
 
 **What:** In task 1.6, have the client skip events whose `id` it has already applied (a bounded set of recent ids), including events resent after a reconnect.
 
@@ -44,6 +50,8 @@
 
 ### Do not load the Electron spike from file://
 
+**Issue:** [#92](https://github.com/bjorkgard/nexus-one/issues/92)
+
 **What:** In task 1.7, load the built UI through a custom protocol (as planned for 8.1) or a loopback server instead of `dist/index.html` over `file://`.
 
 **Why:** Vite emits `type="module"` scripts with `crossorigin` and root-relative asset URLs. Under `file://` the origin is `null`, so module and CORS loads can fail even with `base: './'`. The 1.7 spike would then fail for a reason unrelated to packaging.
@@ -57,6 +65,8 @@
 ## Tooling
 
 ### Check the production bundle for collector/ and Node code
+
+**Issue:** [#93](https://github.com/bjorkgard/nexus-one/issues/93)
 
 **What:** Task 1.3's `lint/build-guards.js` already fails the build on any Node built-in (from any importer) and on `__nexus`. Remaining: assert that the browser bundle contains no `collector/` code (pick a marker string in task 4.1 that only collector code contains), and add a matching check that a collector build contains no React or Three.
 
@@ -78,6 +88,8 @@
 
 ### Lock down the collector WebSocket beyond loopback
 
+**Issue:** [#94](https://github.com/bjorkgard/nexus-one/issues/94)
+
 **What:** In task 4.4, have the collector WebSocket server validate `Origin` against an allowlist and require a per-launch random token handed out by Electron main or the dev server.
 
 **Why:** Any web page in the user's browser can open `ws://127.0.0.1` (cross-site WebSocket hijacking) and read transcripts; binding to loopback alone does not stop it.
@@ -89,6 +101,8 @@
 **Depends on:** Task 4.4
 
 ### Add the last two config-fence wiring rows
+
+**Issue:** [#95](https://github.com/bjorkgard/nexus-one/issues/95)
 
 **What:** Add two rows to the `configRows` table in `lint/module-fences.test.js`: `collector/` importing `react` (expect `eslint(no-restricted-imports)` with the browser-libraries message) and `src/` importing `electron` (expect `eslint(no-restricted-imports)` with the src message).
 
@@ -102,6 +116,8 @@
 
 ### Separate type environments for collector/ and electron/
 
+**Issue:** [#96](https://github.com/bjorkgard/nexus-one/issues/96)
+
 **What:** Before task 1.7, give `collector/` and `electron/` their own tsconfig (Node types, no DOM lib) and include them in the build's type-check.
 
 **Why:** `vp check` type-checks those folders with `src` defaults (DOM lib, no Node types), so `window` would pass there and `process` would fail. The `build` script's `tsc` reads `tsconfig.json` (`include: ["src"]`) and skips them entirely (task 1.2 probe P8). `src/shared/` has the same problem in reverse: it must load in plain Node, yet `window` and `document` type-check there (task 1.2 /ship red team); give it a lib without DOM or add `no-restricted-globals` for browser globals.
@@ -114,6 +130,8 @@
 
 ### Give Phase 3 e2e a test target before agents exist
 
+**Issue:** [#97](https://github.com/bjorkgard/nexus-one/issues/97)
+
 **What:** Pick a target for the e2e tests of 3.2 (pick), 3.3 (glide) and 3.4 (follow), for example desks from 2.5 or a test fixture object. Also have 3.1 register the camera-controls target through the `__nexus` registry.
 
 **Why:** Those tasks test against agents, which arrive in 4.5/4.6 after Phase 3. `useThree()`'s camera has no target, so the e2e tests cannot read it without a registered hook.
@@ -125,6 +143,8 @@
 **Depends on:** Task 2.5; must land before task 3.2
 
 ### Harden the module-fence rule and staged hook
+
+**Issue:** [#98](https://github.com/bjorkgard/nexus-one/issues/98)
 
 **What:** Close the remaining edge cases found in the task 1.2 /ship reviews:
 
