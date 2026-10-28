@@ -18,48 +18,6 @@
 
 ## Data
 
-### Make the 1.6 snapshot restore in-flight state
-
-**Issue:** [#90](https://github.com/bjorkgard/nexus-one/issues/90)
-
-**What:** In task 1.6, define `Snapshot` in `src/shared/protocol.ts` so it restores open tool calls (`callId`, `tool`, start ts), queued tasks and attention state, not only the `Project`, `Session` and `Agent` entities.
-
-**Why:** A client that connects mid-session otherwise loses waiting agents and queued trays until the next event, and a `tool_call_end` that then arrives has no matching start.
-
-**Context:** Raised by the task 1.4 CEO review outside voice (Codex, finding O2); the owner kept 1.4's entities as they are and gave the snapshot to 1.6 (D12 in `docs/plans/1.4-canonical-event-schema.md`). Test it by connecting `LiveSource` after a `tool_call_start`, a `task_queued` and a `needs_attention`, then sending the matching end events and checking the store.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P1
-**Depends on:** Task 1.4 (schema), task 1.6
-
-### Drop duplicate events by id across reconnects
-
-**Issue:** [#91](https://github.com/bjorkgard/nexus-one/issues/91)
-
-**What:** In task 1.6, have the client skip events whose `id` it has already applied (a bounded set of recent ids), including events resent after a reconnect.
-
-**Why:** Task 1.4 made each `tokens` event one model call's usage, so totals are sums; a resent event would double-count spend and tokens/min with no error.
-
-**Context:** Decision D10 in `docs/plans/1.4-canonical-event-schema.md` (outside voice finding O3). Every event carries a unique `id` (envelope). Test by resending the last few events after a reconnect and checking that token totals do not change.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P1
-**Depends on:** Task 1.4 (schema), task 1.6
-
-### Give 1.6 a minimal shared event reducer
-
-**Issue:** [#100](https://github.com/bjorkgard/nexus-one/issues/100)
-
-**What:** In task 1.6, add a minimal pure event reducer in `src/shared/` (events in, `Project` / `Session` / `Agent` state out) that `MockSource` and `LiveSource` use to build snapshots and that task 4.5's store later wraps instead of duplicating.
-
-**Why:** Decision D13 of the task 1.5 review gives 1.6 the job of building the mock snapshot by replaying events, but the store reducer is task 4.5, three phases later, and phases run in order. Without an owner in 1.6, it is either blocked or writes a throwaway reducer that 4.5 duplicates.
-
-**Context:** Raised by the task 1.5 CEO review outside voice (Codex, finding O3); owner accepted it as a 1.6 TODO (D25 in `docs/plans/1.5-mock-event-generator.md`). The generator emits events only, in ts order (D13); `checkStream` in `src/shared/check-stream.ts` (D15) already tracks open tool calls, tasks and attention per agent, which the reducer can mirror. Test by reducing the default mock stream and checking entity counts against the 10.1 shape (1 project, 3 sessions, 8 subagents).
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P1
-**Depends on:** Task 1.5 (mock generator), task 1.6
-
 ### Prune ended sessions and agents from reducer state
 
 **Issue:** [#102](https://github.com/bjorkgard/nexus-one/issues/102)
@@ -194,3 +152,51 @@
 **Depends on:** None
 
 ## Completed
+
+### Make the 1.6 snapshot restore in-flight state
+
+**Issue:** [#90](https://github.com/bjorkgard/nexus-one/issues/90)
+
+**What:** In task 1.6, define `Snapshot` in `src/shared/protocol.ts` so it restores open tool calls (`callId`, `tool`, start ts), queued tasks and attention state, not only the `Project`, `Session` and `Agent` entities.
+
+**Why:** A client that connects mid-session otherwise loses waiting agents and queued trays until the next event, and a `tool_call_end` that then arrives has no matching start.
+
+**Context:** Raised by the task 1.4 CEO review outside voice (Codex, finding O2); the owner kept 1.4's entities as they are and gave the snapshot to 1.6 (D12 in `docs/plans/1.4-canonical-event-schema.md`). Test it by connecting `LiveSource` after a `tool_call_start`, a `task_queued` and a `needs_attention`, then sending the matching end events and checking the store.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 1.4 (schema), task 1.6
+
+**Completed:** task 1.6 on branch feat/6-data-source-transport (2026-10-28)
+
+### Drop duplicate events by id across reconnects
+
+**Issue:** [#91](https://github.com/bjorkgard/nexus-one/issues/91)
+
+**What:** In task 1.6, have the client skip events whose `id` it has already applied (a bounded set of recent ids), including events resent after a reconnect.
+
+**Why:** Task 1.4 made each `tokens` event one model call's usage, so totals are sums; a resent event would double-count spend and tokens/min with no error.
+
+**Context:** Decision D10 in `docs/plans/1.4-canonical-event-schema.md` (outside voice finding O3). Every event carries a unique `id` (envelope). Test by resending the last few events after a reconnect and checking that token totals do not change.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 1.4 (schema), task 1.6
+
+**Completed:** task 1.6 on branch feat/6-data-source-transport (2026-10-28)
+
+### Give 1.6 a minimal shared event reducer
+
+**Issue:** [#100](https://github.com/bjorkgard/nexus-one/issues/100)
+
+**What:** In task 1.6, add a minimal pure event reducer in `src/shared/` (events in, `Project` / `Session` / `Agent` state out) that `MockSource` and `LiveSource` use to build snapshots and that task 4.5's store later wraps instead of duplicating.
+
+**Why:** Decision D13 of the task 1.5 review gives 1.6 the job of building the mock snapshot by replaying events, but the store reducer is task 4.5, three phases later, and phases run in order. Without an owner in 1.6, it is either blocked or writes a throwaway reducer that 4.5 duplicates.
+
+**Context:** Raised by the task 1.5 CEO review outside voice (Codex, finding O3); owner accepted it as a 1.6 TODO (D25 in `docs/plans/1.5-mock-event-generator.md`). The generator emits events only, in ts order (D13); `checkStream` in `src/shared/check-stream.ts` (D15) already tracks open tool calls, tasks and attention per agent, which the reducer can mirror. Test by reducing the default mock stream and checking entity counts against the 10.1 shape (1 project, 3 sessions, 8 subagents).
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 1.5 (mock generator), task 1.6
+
+**Completed:** task 1.6 on branch feat/6-data-source-transport (2026-10-28)
