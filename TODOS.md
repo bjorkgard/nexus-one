@@ -48,44 +48,43 @@
 
 **Why:** `vp check` type-checks those folders with `src` defaults (DOM lib, no Node types), so `window` would pass there and `process` would fail. The `build` script's `tsc` reads `tsconfig.json` (`include: ["src"]`) and skips them entirely (task 1.2 probe P8). `src/shared/` has the same problem in reverse: it must load in plain Node, yet `window` and `document` type-check there (task 1.2 /ship red team); give it a lib without DOM or add `no-restricted-globals` for browser globals.
 
-**Context:** Found in the task 1.2 CEO review (D6). Start with a `tsconfig.node.json` (`types: ["node"]`, `lib: ["ES2023"]`) and project references, add `@types/node`, then confirm `vp check` uses it for those paths. Once `@types/node` is installed, Node imports in `src/` fail only through the `import/no-nodejs-modules` lint rule; that is intended.
+**Context:** Found in the task 1.2 CEO review (D6). Task 1.3 set the pattern: `@types/node` is installed; `e2e/tsconfig.json` and `test/tsconfig.json` extend the root and add `types: ["node"]`; `vp check` reads the nearest tsconfig. Reuse it for `collector/` and `electron/` (for example a `collector/tsconfig.json` with `types: ["node"]`, `lib: ["ES2023"]`), then confirm `vp check` uses it for those paths. Node imports in `src/` still fail: the `import/no-nodejs-modules` lint rule at check time, and `lint/build-guards.js` at build time.
 
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** Task 1.2; must land before or with task 1.7
 
-### Pick a home for Node-backed tests before the fences bite
-
-**What:** In task 1.3, choose where tests that need Node live (for example `test/` at the repo root, or next to code in `collector/`), outside `src/**`, and record it in the README.
-
-**Why:** Task 1.2 bans Node built-ins everywhere under `src/**`, test files included. Task 1.6 tests `LiveSource` against an in-test WebSocket server (`docs/PLAN.md:78`). Without a chosen location, the first such test lands next to its code, fails the fence, and the easy fix is to weaken the fence.
-
-**Context:** Raised by the Codex outside voice in the task 1.2 eng review (X2, Eng D4 in `docs/plans/1.2-module-boundaries.md`). Keep the `src/**` fence unchanged. Check whether 1.6 needs Node built-ins at all or only the `ws` package; `ws` is not a built-in, so only `import/no-nodejs-modules` matters.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P2
-**Depends on:** Task 1.2 (fences); do it in task 1.3, before task 1.6
-
 ### Check the production bundle for collector/ and Node code
 
-**What:** Extend task 1.3's bundle check (it already greps `dist/` for `__nexus`) to assert that the browser bundle contains no `collector/` code and no Node built-in import, and add a matching check that a collector build (once one exists) contains no React or Three.
+**What:** Task 1.3's `lint/build-guards.js` already fails the build on any Node built-in (from any importer) and on `__nexus`. Remaining: assert that the browser bundle contains no `collector/` code (pick a marker string in task 4.1 that only collector code contains), and add a matching check that a collector build contains no React or Three.
 
-**Why:** The task 1.2 lint fences (`lint/module-fences.js` plus `vite.config.ts` bans) are an honest-mistake guard, not a guarantee. These known bypasses need deliberate effort and are accepted there; only a bundle check catches them:
+**Why:** The task 1.2 lint fences (`lint/module-fences.js` plus `vite.config.ts` bans) are an honest-mistake guard, not a guarantee. These known bypasses need deliberate effort and are accepted there; only a bundle check catches them. The build guard now covers imports of any Node built-in (bare or `node:`, from any importer), so Node-only npm packages imported from `src/` (for example `vite-plus`, `typescript`) and `createRequire` reached through destructuring now fail `vp build` (task 1.3 refuter, scratch builds). The bypasses below are not covered by it and still apply to the remaining checks:
 
 - `file://` specifiers, or any specifier hidden with `// @ts-expect-error`
 - React-importing transitive packages not in `browserLibs` (for example `its-fine`, `suspend-react`, `scheduler`)
 - inline `oxlint-disable` comments for the fence rules
-- Node-only npm packages imported from `src/` (for example `vite-plus`, `typescript`)
 - files in gitignored folders under `src/` (`vp check` skips them, Vite bundles them)
 - bare-relative or percent-encoded `new URL("sub/../..", import.meta.url)` strings
-- `createRequire` reached through destructuring or `process.getBuiltinModule`
+- `process.getBuiltinModule`
 - `import x = require(...)` (today also blocked by TS1294), extglob `..`, alias specifiers (none configured yet), HTML/CSS entry points
 
-**Context:** Decided in the task 1.2 /ship review (D6, run 2). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. Pick marker strings that only collector code contains, and a list of `node:` / built-in specifiers; fail the check on any match.
+**Context:** Decided in the task 1.2 /ship review (D6, run 2). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. No collector code exists yet, so this waits for task 4.1. Fail the check on any marker match.
 
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P1
-**Depends on:** Task 1.3
+**Depends on:** Task 4.1
+
+### Give Phase 3 e2e a test target before agents exist
+
+**What:** Pick a target for the e2e tests of 3.2 (pick), 3.3 (glide) and 3.4 (follow), for example desks from 2.5 or a test fixture object. Also have 3.1 register the camera-controls target through the `__nexus` registry.
+
+**Why:** Those tasks test against agents, which arrive in 4.5/4.6 after Phase 3. `useThree()`'s camera has no target, so the e2e tests cannot read it without a registered hook.
+
+**Context:** CEO D9 and D11 in `docs/plans/1.3-test-harness-debug-api.md`; `docs/PLAN.md` steps 3.2-3.4.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 2.5; must land before task 3.2
 
 ### Harden the module-fence rule and staged hook
 

@@ -26,8 +26,10 @@ Open the local URL printed in the terminal. Changes to source files update the a
 
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
-- `vp test` — Run the test suite.
-- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`.
+- `vp test` — Run the unit test suite.
+- `npx playwright test` — Run the Playwright smoke test against the dev server on port 5199.
+- `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
+- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in or `__nexus` reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
 
 Use `vp run <name>` for scripts defined in `package.json`. Built-in commands such as `vp check` and `vp test` run directly.
@@ -42,11 +44,15 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/sim/` — Simulation and animation state.
 - `src/ui/` — Dashboard.
 - `src/data/` — Client store and data sources.
+- `src/debug/` — Dev-only `window.__nexus` test hooks.
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`).
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main and preload; intentionally unfenced until task 1.7 defines main/preload rules.
 - Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` only itself and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers.
-- `lint/` — Local Oxlint plugin with the module-fence rule.
+- `lint/` — Local Oxlint plugin with the module-fence rule, and the build-guard plugin (`lint/build-guards.js`).
+- `e2e/` — Playwright specs and the typed `__nexus` helper.
+- `test/` — Node-backed tests, such as the build guards.
+- `playwright.config.ts` — Playwright configuration.
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
@@ -64,10 +70,25 @@ Before committing changes, run:
 ```sh
 vp check
 vp test
+npx playwright test
 vp run build
 ```
 
-`vp test` runs `lint/module-fences.test.js`, the RuleTester suite for the module-fence rule.
+`vp test` runs the `src/` unit tests, the `lint/` fence tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule) and the `test/` build-guard tests.
+
+## Test locations
+
+- Browser-safe unit tests live next to the code in `src/`.
+- Tests that need Node live in `test/`, because the `src/` fence bans Node built-ins, tests included.
+- Browser tests live in `e2e/`.
+
+## Adding a `__nexus` hook
+
+- Add the name and signature to `NexusHooks` in `src/debug/nexus.ts`.
+- In a React component, call `registerNexus` in an effect and return its unregister function as the cleanup.
+- In module-scope code, call `registerNexusModule(import.meta.hot, name, fn)`.
+- Both are no-ops outside dev, and the build fails if `__nexus` reaches production.
+- Call hooks from e2e with `nexus(page, name, ...args)` from `e2e/nexus.ts`.
 
 The pre-commit hook runs `vp staged`, which applies `vp check --fix` to staged files. Review any automatic fixes before pushing.
 
