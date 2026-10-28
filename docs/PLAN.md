@@ -50,9 +50,9 @@ Goal: a typed React + R3F + Tailwind app with tests, a data contract, a mock dat
 
 ### 1.3 Test harness and debug API
 
-- **Action:** Configure Vitest via `vp test` with one sample unit test. Install Playwright with one smoke test that opens the dev server and asserts the canvas exists. Add `window.__nexus` (dev and test builds only) exposing `getCamera()`, `getAgent(id)`, `project(worldPos)`, `rendererInfo()`, `emit(event)`, `setClock(ms)`.
-- **Test:** `vp test`; `npx playwright test`; check a production build for the string `__nexus`.
-- **Done when:** both test commands exit 0; the production bundle does not contain `__nexus`.
+- **Action:** Configure Vitest via `vp test` with one sample unit test. Install Playwright with one smoke test that opens the dev server and asserts the canvas exists. Add `window.__nexus` (dev only) through a typed registry exposing `getCamera()`, `project(worldPos)`, `rendererInfo()`. Later steps add their own hooks: `emit`, `setClock` in 1.6; `getAgent` in 4.5.
+- **Test:** `vp test`; `npx playwright test`; `vp build` fails if `__nexus` or a Node built-in reaches the bundle.
+- **Done when:** both test commands exit 0; the production build passes its `__nexus` guard.
 
 <a id="t1-4"></a>
 
@@ -74,8 +74,8 @@ Goal: a typed React + R3F + Tailwind app with tests, a data contract, a mock dat
 
 ### 1.6 Data source interface and transport
 
-- **Action:** Define `DataSource` (`subscribe(onSnapshot, onEvent)`, `status`). Implement `MockSource` and `LiveSource` (WebSocket client, snapshot then deltas, auto-reconnect). Select with `?source=mock|live` (default `mock` until Phase 4). Define the wire protocol in `src/shared/protocol.ts`.
-- **Test:** Unit: `LiveSource` against an in-test WebSocket server receives snapshot, then events, then reconnects after server restart.
+- **Action:** Define `DataSource` (`subscribe(onSnapshot, onEvent)`, `status`). Implement `MockSource` and `LiveSource` (WebSocket client, snapshot then deltas, auto-reconnect). Select with `?source=mock|live` (default `mock` until Phase 4). Define the wire protocol in `src/shared/protocol.ts`. Register `__nexus.emit(event)` and `__nexus.setClock(ms)` with `registerNexusModule`.
+- **Test:** Unit: `LiveSource` against an in-test WebSocket server receives snapshot, then events, then reconnects after server restart. e2e: `emit` delivers an event to the client and `setClock` moves the mock clock.
 - **Done when:** tests pass; switching the query param switches the source with no code change.
 
 <a id="t1-7"></a>
@@ -286,8 +286,8 @@ Goal: a readable futuristic campus, fully procedural, inside the performance bud
 
 ### 4.5 Client store
 
-- **Action:** Zustand store for projects, sessions, agents, selection, and a bounded event ring buffer; pure reducer from events.
-- **Test:** Unit: reducer for every event type; 10,000 events in one minute processed with no loss and under 4 ms per frame batch.
+- **Action:** Zustand store for projects, sessions, agents, selection, and a bounded event ring buffer; pure reducer from events. Register `__nexus.getAgent(id)`.
+- **Test:** Unit: reducer for every event type; 10,000 events in one minute processed with no loss and under 4 ms per frame batch. e2e: `getAgent` returns an emitted agent.
 - **Done when:** tests pass.
 
 <a id="t4-6"></a>
