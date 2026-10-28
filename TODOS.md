@@ -60,6 +60,20 @@
 **Priority:** P1
 **Depends on:** Task 1.5 (mock generator), task 1.6
 
+### Prune ended sessions and agents from reducer state
+
+**Issue:** [#102](https://github.com/bjorkgard/nexus-one/issues/102)
+
+**What:** In task 4.5, prune ended sessions and agents from the shared reducer state after a retention window, keeping their counts and usage sums, so state and the reconnect snapshot stay bounded.
+
+**Why:** The 1.6 reducer keeps every ended session and agent forever. That is correct and small at the 10.4 soak size, but the Electron app can run for days, and every reconnect sends the whole snapshot. 4.5's ring buffer bounds events only, not these records.
+
+**Context:** Found in the task 1.6 CEO review (Section 7, finding S7-1; TD1 in `docs/plans/1.6-data-source-transport.md`). The reducer is pure copy-on-write (O5) with usage sums per agent and model (O7). 1.6 prints the default mock snapshot size as a baseline. Test by reducing a long mock stream, advancing past the retention window, and checking that ended entities are gone while totals are unchanged.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.6 (reducer), task 4.5 (store)
+
 ## Packaging
 
 ### Do not load the Electron spike from file://
