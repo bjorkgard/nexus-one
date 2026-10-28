@@ -38,9 +38,9 @@
 
 **Issue:** [#104](https://github.com/bjorkgard/nexus-one/issues/104)
 
-**What:** In `electron/main.ts` (added by task 1.7), set `contextIsolation: true`, `sandbox: true` and `nodeIntegration: false` explicitly in `webPreferences`, and deny `window.open` and navigation away from `app://nexus`.
+**What:** In `electron/main.ts` (added by task 1.7), set `contextIsolation: true`, `sandbox: true` and `nodeIntegration: false` explicitly in `webPreferences`, and deny `window.open` and navigation away from `app://nexus`. Also flip the Electron fuses in the electron-builder config (`electronFuses`): `runAsNode: false`, `enableNodeOptionsEnvironmentVariable: false`, `enableNodeCliInspectArguments: false`, `onlyLoadAppFromAsar: true`, `enableEmbeddedAsarIntegrityValidation: true`; confirm the packaged Playwright launch still works.
 
-**Why:** Task 1.7 relies on Electron 45 defaults for these flags (unverified). Nothing in code states them, so a changed default or a later edit would pass unnoticed.
+**Why:** Task 1.7 relies on Electron 45 defaults for these flags (unverified). Nothing in code states them, so a changed default or a later edit would pass unnoticed. With default fuses, anyone who can run the binary can set `ELECTRON_RUN_AS_NODE` to run arbitrary JS as the app (task 1.7 /ship review, deferred by the owner).
 
 **Context:** Deferred in the task 1.7 CEO review (D3, `docs/plans/1.7-packaging-spike.md`): 8.2 owns the whole security baseline with its tests. 1.7 loads the UI from `app://nexus` through `protocol.handle`, so a navigation allowlist can match that origin.
 
@@ -181,7 +181,7 @@
 **Priority:** P2
 **Depends on:** Task 1.7
 
-**Completed:** task 1.7 (2026-10-28)
+**Completed:** v0.7.0 (2026-10-28)
 
 ### Separate type environments for collector/ and electron/
 
@@ -197,7 +197,7 @@
 **Priority:** P2
 **Depends on:** Task 1.2; must land before or with task 1.7
 
-**Completed:** task 1.7 (2026-10-28)
+**Completed:** v0.7.0 (2026-10-28)
 
 ### Make the 1.6 snapshot restore in-flight state
 

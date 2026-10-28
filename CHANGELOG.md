@@ -5,6 +5,22 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-28
+
+### Added
+
+- The app now runs as a standalone macOS app. `vp run pack` builds the app bundle under `release/mac-arm64/`, which opens with a double-click and needs no dev server. The build is unsigned, so the first launch of a downloaded copy may need Open from the right-click menu.
+- The app loads its built page from `app://nexus` instead of plain files. That address serves only regular files inside the built `dist/` folder. Other hosts, `..` and encoded-slash escapes, symlinks that point outside, NUL bytes and malformed encoding all return 404.
+- If the packaged app cannot start, for example because `dist/index.html` is missing, it shows a "Nexus One failed to start" dialog with the reason and exits. Renderer errors and crashes are written to the terminal as `[renderer]` lines.
+- `vp run start` opens the built app in Electron without packaging, for a quick check of main-process changes.
+- `vp run test:packaged` launches the packaged app and checks the 3D canvas, the label, the `app://nexus/index.html` address and that the console stays free of errors on first load and after a reload. Run it after `vp run pack`.
+
+### Changed
+
+- `electron/`, `collector/` and `src/shared/` are type-checked as Node code without browser globals, so `window` or `document` there fails `vp check`.
+- `electron/` code may import only `electron/` and `src/shared/`; React, Three, `createRequire` and CommonJS are rejected there.
+- All libraries are now development dependencies. They are bundled into the app, so the packaged app ships no `node_modules`.
+
 ## [0.6.0] - 2026-10-28
 
 ### Added
