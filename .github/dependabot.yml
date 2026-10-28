@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # An exact version in package.json means hands off. Pinned packages are
+    # upgraded by hand when a vulnerability alert fires.
+    ignore:
+      - dependency-name: electron
+      - dependency-name: electron-builder
+      - dependency-name: vite-plus
+      - dependency-name: vite
+      - dependency-name: "@voidzero-dev/vite-plus-core"
+      - dependency-name: stats-gl
+      - dependency-name: ws
+      - dependency-name: "@types/ws"

@@ -31,7 +31,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
 - `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus` or a performance overlay marker reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
-- `vp run pack` — Build the UI and the Electron main process, then package an unsigned macOS app into `release/mac-arm64/Nexus One.app` (about 1 minute).
+- `vp run pack` — Build the UI and the Electron main process, then package an unsigned macOS app into `release/mac-arm64/Nexus One.app` (about 1 minute). It never publishes.
 - `vp run start` — Build, then launch the Electron app from source.
 - `vp run test:packaged` — Run after `vp run pack`: launch the packaged app with Playwright and check that it renders.
 
@@ -71,6 +71,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration. `electron/`, `collector/` and `src/shared/` each add a `tsconfig.json` that drops the DOM library, so browser globals such as `window` fail type checking there.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
+- `.github/workflows/ci.yml` — The `ci` job (see [CI](#ci)). `.github/dependabot.yml` — Weekly Dependabot updates for GitHub Actions and range-versioned npm packages.
 - `TODOS.md` — Deferred work.
 - `CHANGELOG.md` — Release notes.
 - `AGENTS.md` — Vite+ toolchain instructions for coding agents.
@@ -116,6 +117,18 @@ vp run build
 If you changed `electron/` or packaging, also run `vp run pack` and `vp run test:packaged`.
 
 `vp test` runs the `src/` and `electron/` unit tests, the `lint/` tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule, and `lint/build-guards.test.js`, which checks the guarded dev markers) and the `test/` build-guard tests.
+
+## CI
+
+One GitHub Actions job (`ci`, `.github/workflows/ci.yml`) runs on a `macos-15` arm64 runner for every push to `main` and every pull request. Its steps, in order: restore the Electron and Playwright download cache, install with `vp` (frozen lockfile), install the Playwright browser, `vp check`, `vp test`, `vp exec playwright test`, `vp run pack`, `vp run test:packaged`. `vp run pack` runs the build, so there is no separate build step. Type errors fail at the `vp check` step.
+
+To read a red run, open the failed step by name. When a run fails or is cancelled, it uploads `playwright-report/` and `test-results/` (with Playwright traces) as artifacts, kept for 14 days.
+
+- A network failure at install or pack (the Electron download) may not be a code fault. Re-run the job once.
+- A WebGL failure in e2e on the runner means the runner lacks WebGL. Report it; do not add browser flags.
+- CI installs with a frozen lockfile. After changing `package.json`, run `vp install` and commit `package-lock.json`.
+- Dependabot leaves exact pins in `package.json` alone. Upgrade them by hand when a GitHub vulnerability alert fires.
+- Branch protection on `main` requires the `ci` check and an up-to-date branch. If CI on `main` is itself broken, remove protection with `gh api -X DELETE repos/bjorkgard/nexus-one/branches/main/protection`, merge the revert, then re-apply protection. The exact payload is in `docs/plans/1.9-ci.md`.
 
 ## Test locations
 

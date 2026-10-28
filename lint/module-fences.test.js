@@ -296,11 +296,16 @@ describe("module-fences wiring", () => {
   const lint = (fixture, zonePath) => {
     const target = at(zonePath);
     fs.copyFileSync(path.join(repoRoot, "lint/fixtures", fixture), target);
-    const result = spawnSync(path.join(repoRoot, "node_modules/.bin/vp"), ["lint", target], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      timeout: 55_000,
-    });
+    // Pin the format: on GitHub Actions the linter switches to `github`, which drops custom messages.
+    const result = spawnSync(
+      path.join(repoRoot, "node_modules/.bin/vp"),
+      ["lint", "--format=default", target],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        timeout: 55_000,
+      },
+    );
     // A null status means the run timed out or never started.
     if (result.status === null) {
       throw new Error(`vp lint did not finish: ${result.error ?? ""}${result.stderr}`);

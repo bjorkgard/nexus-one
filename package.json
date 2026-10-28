@@ -1,6 +1,6 @@
 {
   "name": "nexus-one",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -10,7 +10,7 @@
     "test": "vp test",
     "preview": "vp preview",
     "prepare": "vp config",
-    "pack": "vp run build && vp pack && electron-builder --dir",
+    "pack": "vp run build && vp pack && electron-builder --dir --publish never",
     "start": "vp run build && vp pack && electron .",
     "test:packaged": "playwright test -c playwright.electron.config.ts"
   },

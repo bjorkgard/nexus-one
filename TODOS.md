@@ -179,6 +179,22 @@
 **Priority:** P2
 **Depends on:** None
 
+### Assert the packaged app shows no WebGL error box
+
+**Issue:** [#111](https://github.com/bjorkgard/nexus-one/issues/111)
+
+**What:** In `e2e/packaged.spec.ts`, make `assertBooted` also assert that no WebGL error box (`[role=alert]`) is shown, and prove the assertion fails against a packaged build whose renderer cannot start.
+
+**Why:** The packaged boot test checks for a visible canvas, the label and logged errors, but not the error boundary the smoke spec checks (`e2e/smoke.spec.ts:30`). A WebGL startup failure that logs nothing would pass CI's packaged step.
+
+**Context:** `e2e/packaged.spec.ts:29-36`. Renderer console errors and crashes already reach stderr from launch (1.7 D10), so logged failures are caught; this closes the silent case. Codex outside voice in `docs/plans/1.9-ci.md` (O3).
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.7; #106 (lands with 1.9)
+
+## Completed
+
 ### Package and boot the app in CI
 
 **Issue:** [#106](https://github.com/bjorkgard/nexus-one/issues/106)
@@ -187,13 +203,13 @@
 
 **Why:** Task 1.7's packaged boot test runs from its own Playwright config, so the normal e2e run skips it, and 1.9's planned commands (`docs/PLAN.md:101`) neither pack nor boot. A broken package would pass CI.
 
-**Context:** Outside voice O1 in `docs/plans/1.7-packaging-spike.md` (D11). `vp install` downloads the Electron binary (~100 MB) on first install; cache it in the workflow.
+**Context:** Outside voice O1 in `docs/plans/1.7-packaging-spike.md` (D11). electron-builder downloads the Electron binary (~100 MB) at pack time, not `vp install`; cache it in the workflow.
 
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** Task 1.7; lands with task 1.9
 
-## Completed
+**Completed:** v0.9.0 (2026-10-29)
 
 ### Do not load the Electron spike from file://
 
