@@ -34,20 +34,6 @@
 
 ## Packaging
 
-### Do not load the Electron spike from file://
-
-**Issue:** [#92](https://github.com/bjorkgard/nexus-one/issues/92)
-
-**What:** In task 1.7, load the built UI through a custom protocol (as planned for 8.1) or a loopback server instead of `dist/index.html` over `file://`.
-
-**Why:** Vite emits `type="module"` scripts with `crossorigin` and root-relative asset URLs. Under `file://` the origin is `null`, so module and CORS loads can fail even with `base: './'`. The 1.7 spike would then fail for a reason unrelated to packaging.
-
-**Context:** Raised by the /ship red-team review of task 1.1 (inference, not yet reproduced). `docs/PLAN.md` 1.7 currently says to load `dist/index.html`; 8.1 already plans an `app://` protocol. Start 1.7 by packaging the current build and checking the renderer console; if module loads fail, switch to `protocol.handle` early and update the plan wording.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P2
-**Depends on:** Task 1.7
-
 ### Set Electron window safety options explicitly
 
 **Issue:** [#104](https://github.com/bjorkgard/nexus-one/issues/104)
@@ -94,7 +80,7 @@
 - `process.getBuiltinModule`
 - `import x = require(...)` (today also blocked by TS1294), extglob `..`, alias specifiers (none configured yet), HTML/CSS entry points
 
-**Context:** Decided in the task 1.2 /ship review (D6, run 2). `electron/` fences are decided in task 1.7; until then it is intentionally unfenced. No collector code exists yet, so this waits for task 4.1. Fail the check on any marker match.
+**Context:** Decided in the task 1.2 /ship review (D6, run 2). Task 1.7 added the `electron/` zone: it imports only `electron/` and `src/shared/`, no browser libraries, no `createRequire` or CommonJS. No collector code exists yet, so this waits for task 4.1. Fail the check on any marker match.
 
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P1
@@ -127,20 +113,6 @@
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** None
-
-### Separate type environments for collector/ and electron/
-
-**Issue:** [#96](https://github.com/bjorkgard/nexus-one/issues/96)
-
-**What:** Before task 1.7, give `collector/` and `electron/` their own tsconfig (Node types, no DOM lib) and include them in the build's type-check.
-
-**Why:** `vp check` type-checks those folders with `src` defaults (DOM lib, no Node types), so `window` would pass there and `process` would fail. The `build` script's `tsc` reads `tsconfig.json` (`include: ["src"]`) and skips them entirely (task 1.2 probe P8). `src/shared/` has the same problem in reverse: it must load in plain Node, yet `window` and `document` type-check there (task 1.2 /ship red team); give it a lib without DOM or add `no-restricted-globals` for browser globals.
-
-**Context:** Found in the task 1.2 CEO review (D6). Task 1.3 set the pattern: `@types/node` is installed; `e2e/tsconfig.json` and `test/tsconfig.json` extend the root and add `types: ["node"]`; `vp check` reads the nearest tsconfig. Reuse it for `collector/` and `electron/` (for example a `collector/tsconfig.json` with `types: ["node"]`, `lib: ["ES2023"]`), then confirm `vp check` uses it for those paths. Node imports in `src/` still fail: the `import/no-nodejs-modules` lint rule at check time, and `lint/build-guards.js` at build time.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P2
-**Depends on:** Task 1.2; must land before or with task 1.7
 
 ### Give Phase 3 e2e a test target before agents exist
 
@@ -194,6 +166,38 @@
 **Depends on:** Task 1.7; lands with task 1.9
 
 ## Completed
+
+### Do not load the Electron spike from file://
+
+**Issue:** [#92](https://github.com/bjorkgard/nexus-one/issues/92)
+
+**What:** In task 1.7, load the built UI through a custom protocol (as planned for 8.1) or a loopback server instead of `dist/index.html` over `file://`.
+
+**Why:** Vite emits `type="module"` scripts with `crossorigin` and root-relative asset URLs. Under `file://` the origin is `null`, so module and CORS loads can fail even with `base: './'`. The 1.7 spike would then fail for a reason unrelated to packaging.
+
+**Context:** Raised by the /ship red-team review of task 1.1 (inference, not yet reproduced). `docs/PLAN.md` 1.7 currently says to load `dist/index.html`; 8.1 already plans an `app://` protocol. Start 1.7 by packaging the current build and checking the renderer console; if module loads fail, switch to `protocol.handle` early and update the plan wording.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.7
+
+**Completed:** task 1.7 (2026-10-28)
+
+### Separate type environments for collector/ and electron/
+
+**Issue:** [#96](https://github.com/bjorkgard/nexus-one/issues/96)
+
+**What:** Before task 1.7, give `collector/` and `electron/` their own tsconfig (Node types, no DOM lib) and include them in the build's type-check.
+
+**Why:** `vp check` type-checks those folders with `src` defaults (DOM lib, no Node types), so `window` would pass there and `process` would fail. The `build` script's `tsc` reads `tsconfig.json` (`include: ["src"]`) and skips them entirely (task 1.2 probe P8). `src/shared/` has the same problem in reverse: it must load in plain Node, yet `window` and `document` type-check there (task 1.2 /ship red team); give it a lib without DOM or add `no-restricted-globals` for browser globals.
+
+**Context:** Found in the task 1.2 CEO review (D6). Task 1.3 set the pattern: `@types/node` is installed; `e2e/tsconfig.json` and `test/tsconfig.json` extend the root and add `types: ["node"]`; `vp check` reads the nearest tsconfig. Reuse it for `collector/` and `electron/` (for example a `collector/tsconfig.json` with `types: ["node"]`, `lib: ["ES2023"]`), then confirm `vp check` uses it for those paths. Node imports in `src/` still fail: the `import/no-nodejs-modules` lint rule at check time, and `lint/build-guards.js` at build time.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.2; must land before or with task 1.7
+
+**Completed:** task 1.7 (2026-10-28)
 
 ### Make the 1.6 snapshot restore in-flight state
 
