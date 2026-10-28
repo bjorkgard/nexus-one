@@ -46,6 +46,20 @@
 **Priority:** P1
 **Depends on:** Task 1.4 (schema), task 1.6
 
+### Give 1.6 a minimal shared event reducer
+
+**Issue:** [#100](https://github.com/bjorkgard/nexus-one/issues/100)
+
+**What:** In task 1.6, add a minimal pure event reducer in `src/shared/` (events in, `Project` / `Session` / `Agent` state out) that `MockSource` and `LiveSource` use to build snapshots and that task 4.5's store later wraps instead of duplicating.
+
+**Why:** Decision D13 of the task 1.5 review gives 1.6 the job of building the mock snapshot by replaying events, but the store reducer is task 4.5, three phases later, and phases run in order. Without an owner in 1.6, it is either blocked or writes a throwaway reducer that 4.5 duplicates.
+
+**Context:** Raised by the task 1.5 CEO review outside voice (Codex, finding O3); owner accepted it as a 1.6 TODO (D25 in `docs/plans/1.5-mock-event-generator.md`). The generator emits events only, in ts order (D13); `checkStream` in `src/shared/check-stream.ts` (D15) already tracks open tool calls, tasks and attention per agent, which the reducer can mirror. Test by reducing the default mock stream and checking entity counts against the 10.1 shape (1 project, 3 sessions, 8 subagents).
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 1.5 (mock generator), task 1.6
+
 ## Packaging
 
 ### Do not load the Electron spike from file://
