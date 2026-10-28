@@ -278,4 +278,17 @@ describe("createInfoSampler", () => {
     sample();
     expect(usePerfStore.getState().info).toBeNull();
   });
+
+  it("reads heap from performance.memory by default, null when absent", () => {
+    // Value: protects=default heap reader converts usedJSHeapSize to MB or null; fails_when=the byte-to-MB divisor or the missing-memory guard breaks; why_new=other sampler tests inject heap(); seam=none; no_claim=real Chrome heap numbers (stubbed performance)
+    const gl2 = {
+      info: { render: { calls: 1, triangles: 1 }, memory: { geometries: 1, textures: 1 } },
+    };
+    vi.stubGlobal("performance", { memory: { usedJSHeapSize: 3 * 1024 * 1024 }, now: () => 0 });
+    createInfoSampler(gl2, () => 1000)();
+    expect(usePerfStore.getState().info?.heapMB).toBe(3);
+    vi.stubGlobal("performance", { now: () => 0 });
+    createInfoSampler(gl2, () => 1000)();
+    expect(usePerfStore.getState().info?.heapMB).toBeNull();
+  });
 });
