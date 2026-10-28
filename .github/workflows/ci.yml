@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+
+permissions:
+  contents: read
+
+# Each main run gets its own group, so a main run is never cancelled.
+# PR runs share a group per PR, so a new push supersedes the older run.
+concurrency:
+  group: ci-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Branch protection requires this id. Do not rename it or add a `name:`.
+  ci:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # electron-builder downloads Electron at pack time; Playwright downloads Chromium.
+      - name: Cache Electron and Playwright downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/ms-playwright
+          key: electron-pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-pw-${{ runner.os }}-
+
+      # Step inputs are strings, so run-install is a block scalar. A frozen
+      # lockfile fails the install when package-lock.json is out of date.
+      - name: Set up Node and install dependencies
+        uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
+        with:
+          node-version: "26"
+          cache: true
+          run-install: |
+            args: ['--frozen-lockfile']
+
+      - name: Install the Playwright browser
+        run: vp exec playwright install chromium
+
+      - name: Lint, fences and types (vp check)
+        run: vp check
+
+      - name: Unit tests (vp test)
+        run: vp test
+
+      - name: Dev-server e2e tests (Playwright)
+        run: vp exec playwright test
+
+      # pack runs the build, so there is no separate build step.
+      - name: Build and package the app (vp run pack)
+        run: vp run pack
+
+      - name: Packaged app boot test
+        run: vp run test:packaged
+
+      - name: Upload Playwright report and traces
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore
