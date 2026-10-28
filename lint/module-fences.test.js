@@ -208,6 +208,12 @@ describe("module-fences wiring", () => {
     ["collector-require.txt", "collector/__wiring_require.ts", "import(no-commonjs)"],
     ["shared-jsx.txt", "src/shared/__wiring_jsx.tsx", "react(jsx-filename-extension)"],
     ["ui-triple-slash.txt", "src/ui/__wiring_triple.ts", "typescript(triple-slash-reference)"],
+    [
+      "ui-zod.txt",
+      "src/ui/__wiring_zod.ts",
+      "eslint(no-restricted-imports)",
+      "Event shapes live in src/shared/schema.ts",
+    ],
   ];
   const copies = [
     at("src/ui/__wiring_bad.ts"),
