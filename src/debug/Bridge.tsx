@@ -1,6 +1,6 @@
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
-import { installNexus, projectToPage, registerNexus } from "./nexus";
+import { installNexus, projectToPage, readRendererInfo, registerNexus } from "./nexus";
 
 export default function Bridge() {
   const camera = useThree((s) => s.camera);
@@ -22,12 +22,7 @@ export default function Bridge() {
         camera.updateMatrixWorld();
         return projectToPage(camera, gl.domElement.getBoundingClientRect(), worldPos);
       }),
-      registerNexus("rendererInfo", () => ({
-        calls: gl.info.render.calls,
-        triangles: gl.info.render.triangles,
-        geometries: gl.info.memory.geometries,
-        textures: gl.info.memory.textures,
-      })),
+      registerNexus("rendererInfo", () => readRendererInfo(gl)),
     ];
     return () => {
       for (const unregister of unregisters) unregister();

@@ -5,6 +5,18 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-10-28
+
+### Added
+
+- Press backtick in `vp run dev` to show or hide a performance overlay in the top-right corner. On a Swedish keyboard, use Shift + ´. It shows FPS and CPU graphs, a GPU graph where the browser supports GPU timing, draw calls, triangles, geometries, textures and JS heap. Draw calls turn yellow from 240 and red from 300, the budget in `docs/PLAN.md`. Held keys, Cmd/Ctrl/Alt combinations and typing in text fields do not toggle it.
+- Add `?probe=box` to the dev URL to draw one 12-triangle box, so the counters show a known non-zero draw.
+- If the overlay or the debug bridge fails in dev, it logs one console error and disappears instead of blanking the 3D view.
+
+### Changed
+
+- The production build now fails if the overlay, the probe box or the overlay's stats code ends up in the bundle, not only the `__nexus` debug API. A unit test checks that each guarded marker still appears in the file it protects.
+
 ## [0.7.0] - 2026-10-28
 
 ### Added

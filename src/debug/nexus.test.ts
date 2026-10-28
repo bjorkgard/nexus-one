@@ -4,6 +4,7 @@ import {
   createNexusRegistry,
   installNexus,
   projectToPage,
+  readRendererInfo,
   registerNexusModule,
   type CameraInfo,
   type NexusApi,
@@ -190,5 +191,14 @@ describe("projectToPage", () => {
     expect(right.y).toBeCloseTo(70);
     expect(up.y).toBeLessThan(70);
     expect(up.x).toBeCloseTo(110);
+  });
+});
+
+describe("readRendererInfo", () => {
+  it("reads the four counters from gl.info", () => {
+    const gl = {
+      info: { render: { calls: 3, triangles: 12 }, memory: { geometries: 2, textures: 1 } },
+    };
+    expect(readRendererInfo(gl)).toEqual({ calls: 3, triangles: 12, geometries: 2, textures: 1 });
   });
 });

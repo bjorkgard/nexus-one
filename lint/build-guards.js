@@ -2,7 +2,16 @@ import { builtinModules } from "node:module";
 
 // Build-only guards for the client bundle:
 // 1. No importer may resolve a Node built-in (bare or `node:`-prefixed); Vite would ship a stub.
-// 2. No output chunk may contain `__nexus`, the debug API's global.
+// 2. No output chunk may contain a dev-only marker (see DEV_MARKERS).
+
+// Each dev-only marker and the source file that carries it. The build guard rejects the marker in any
+// output chunk; the test asserts the source still contains it, so a rename cannot silently disarm the guard.
+export const DEV_MARKERS = [
+  { marker: "__nexus", source: "src/debug/nexus.ts" },
+  { marker: "nexus-perf-overlay", source: "src/debug/PerfPanel.tsx" },
+  { marker: "nexus-probe", source: "src/debug/PerfStats.tsx" },
+  { marker: "nexus.perfStats", source: "src/debug/perf.ts" },
+];
 
 // Allow-list of built-ins a package may import. Keep it empty: each entry needs a package and a reason.
 const allowedBuiltins = new Set();
@@ -27,10 +36,13 @@ export function buildGuards() {
       return null;
     },
     generateBundle(_options, bundle) {
-      const names = Object.values(bundle)
-        .filter((output) => output.type === "chunk" && output.code.includes("__nexus"))
-        .map((output) => output.fileName);
-      if (names.length > 0) this.error(`__nexus found in ${names.join(", ")}`);
+      const chunks = Object.values(bundle).filter((output) => output.type === "chunk");
+      for (const { marker } of DEV_MARKERS) {
+        const names = chunks
+          .filter((output) => output.code.includes(marker))
+          .map((o) => o.fileName);
+        if (names.length > 0) this.error(`${marker} found in ${names.join(", ")}`);
+      }
     },
   };
 }

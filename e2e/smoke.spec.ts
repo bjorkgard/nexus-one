@@ -19,14 +19,14 @@ test.afterEach(() => {
 });
 
 async function canvasBox(page: Page) {
-  const box = await page.locator("canvas").boundingBox();
+  const box = await page.locator("[data-testid=scene] canvas").boundingBox();
   if (!box) throw new Error("canvas has no bounding box");
   return box;
 }
 
 test("page renders", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("[data-testid=scene] canvas")).toBeVisible();
   await expect(page.locator("[role=alert]")).toHaveCount(0);
   await expect(page.getByText("Nexus One")).toBeVisible();
   const viewport = page.viewportSize();

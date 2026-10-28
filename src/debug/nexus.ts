@@ -19,6 +19,13 @@ export type RendererInfo = {
   textures: number;
 };
 
+export type RendererInfoSource = {
+  info: {
+    render: { calls: number; triangles: number };
+    memory: { geometries: number; textures: number };
+  };
+};
+
 export type DataState = DataStats & { source: "mock" | "live"; clock: number | null };
 
 export interface NexusHooks {
@@ -71,6 +78,15 @@ export const registerNexusModule: <K extends keyof NexusHooks>(
 
 export function installNexus(target: { __nexus?: NexusApi }): void {
   target.__nexus = registry.api;
+}
+
+export function readRendererInfo(gl: RendererInfoSource): RendererInfo {
+  return {
+    calls: gl.info.render.calls,
+    triangles: gl.info.render.triangles,
+    geometries: gl.info.memory.geometries,
+    textures: gl.info.memory.textures,
+  };
 }
 
 export function projectToPage(
