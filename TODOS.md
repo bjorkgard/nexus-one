@@ -209,7 +209,7 @@
 **Priority:** P2
 **Depends on:** Task 1.7; lands with task 1.9
 
-**Completed:** task 1.9 (2026-10-28)
+**Completed:** v0.9.0 (2026-10-29)
 
 ### Do not load the Electron spike from file://
 

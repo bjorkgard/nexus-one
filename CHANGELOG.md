@@ -5,6 +5,24 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-10-29
+
+### Added
+
+- Every pull request and every push to `main` now runs CI on GitHub. One Apple Silicon macOS job checks lint, module fences and types, runs the unit tests and the dev-server Playwright tests, packages the app and boots the packaged app. A type error, a failing test or a broken package turns the `ci` check red, and `main` only accepts pull requests whose `ci` check is green and up to date.
+- When a CI run fails or is cancelled, its Playwright report and traces are attached to the run for 14 days, so a failure can be opened without reproducing it locally.
+- Dependabot proposes weekly updates for the GitHub Actions the workflow uses and for npm packages with version ranges. Packages pinned to an exact version are left alone and are upgraded by hand when a GitHub vulnerability alert names them.
+
+### Changed
+
+- `vp run pack` never tries to publish a release, including when it runs in CI.
+- The README's new CI section explains what runs, how to read a red run, when a re-run is enough, and how to recover if CI on `main` itself breaks.
+
+### Fixed
+
+- The "emit applies a valid new session_start" e2e test no longer fails at random when the mock data source emits an event at the same moment.
+- The module-fence lint tests now pass on GitHub Actions, where the linter's default output format leaves out the rule messages the tests check.
+
 ## [0.8.0] - 2026-10-28
 
 ### Added
