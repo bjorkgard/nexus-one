@@ -5,6 +5,21 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-28
+
+### Added
+
+- The app now has a data source. Open it with `?source=mock` (the default) to play the seeded mock stream, or `?source=live` to connect to a local collector at `ws://127.0.0.1:47821`. Add `?port=` to pick another port between 1024 and 65535. Switching source needs no code change.
+- A shared wire protocol in `src/shared/protocol.ts`: the server sends a hello, then a snapshot, then numbered events. The snapshot carries open tool calls, queued tasks, attention state and token totals per agent and model, so a client that connects mid-session sees the full current picture.
+- A pure shared reducer (`src/shared/reduce.ts`) turns events into project, session and agent state, and `applyOnce` (`src/shared/apply-once.ts`) skips any event id seen among the last 4,096. Resent events after a reconnect no longer double-count tokens.
+- The client recovers on its own. It resyncs from a fresh snapshot after a missed event, an out-of-order message or a rejected frame. It waits at most 5 s for hello and snapshot, and retries with backoff from 250 ms up to 2 s. It reports `incompatible` when the protocol version does not match.
+- Dev-only `__nexus.emit(event)`, `__nexus.setClock(ts)` and `__nexus.dataState()` hooks let tests send events, move the mock clock (forward or back) and read status, counts and counters. They are absent from production builds.
+
+### Changed
+
+- Inbound frames over 8 MiB, non-JSON or binary frames are rejected before parsing, and warnings never include message text.
+- If the data source fails to start, the app still renders and reports the error.
+
 ## [0.5.0] - 2026-10-28
 
 ### Added

@@ -167,7 +167,7 @@
 **Priority:** P1
 **Depends on:** Task 1.4 (schema), task 1.6
 
-**Completed:** task 1.6 on branch feat/6-data-source-transport (2026-10-28)
+**Completed:** v0.6.0 (2026-10-28)
 
 ### Drop duplicate events by id across reconnects
 
@@ -183,7 +183,7 @@
 **Priority:** P1
 **Depends on:** Task 1.4 (schema), task 1.6
 
-**Completed:** task 1.6 on branch feat/6-data-source-transport (2026-10-28)
+**Completed:** v0.6.0 (2026-10-28)
 
 ### Give 1.6 a minimal shared event reducer
 
@@ -199,4 +199,4 @@
 **Priority:** P1
 **Depends on:** Task 1.5 (mock generator), task 1.6
 
-**Completed:** task 1.6 on branch feat/6-data-source-transport (2026-10-28)
+**Completed:** v0.6.0 (2026-10-28)
