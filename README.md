@@ -69,7 +69,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `playwright.config.ts` — Playwright configuration.
 - `playwright.electron.config.ts` — Playwright configuration for the packaged app (`vp run test:packaged`).
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
-- `tsconfig.json` — TypeScript compiler configuration.
+- `tsconfig.json` — TypeScript compiler configuration. `electron/`, `collector/` and `src/shared/` each add a `tsconfig.json` that drops the DOM library, so browser globals such as `window` fail type checking there.
 - `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
 - `TODOS.md` — Deferred work.
 - `CHANGELOG.md` — Release notes.
@@ -115,11 +115,12 @@ vp run build
 
 If you changed `electron/` or packaging, also run `vp run pack` and `vp run test:packaged`.
 
-`vp test` runs the `src/` unit tests, the `lint/` fence tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule) and the `test/` build-guard tests.
+`vp test` runs the `src/` and `electron/` unit tests, the `lint/` fence tests (`lint/module-fences.test.js`, the RuleTester suite for the module-fence rule) and the `test/` build-guard tests.
 
 ## Test locations
 
 - Browser-safe unit tests live next to the code in `src/`.
+- Main-process unit tests live next to the code in `electron/` (for example `resolve.test.ts`, which covers the `app://` file policy).
 - Tests that need Node live in `test/`, because the `src/` fence bans Node built-ins, tests included.
 - Browser tests live in `e2e/`.
 
@@ -133,4 +134,4 @@ If you changed `electron/` or packaging, also run `vp run pack` and `vp run test
 
 The pre-commit hook runs `vp staged`, which applies `vp check --fix` to staged files. Review any automatic fixes before pushing.
 
-Keep credentials out of version control. `.env` and `.env.*` files are ignored, except `.env.example`, which should contain placeholders only. Dependencies (`node_modules/`) and build output (`dist/`) are also ignored.
+Keep credentials out of version control. `.env` and `.env.*` files are ignored, except `.env.example`, which should contain placeholders only. Dependencies (`node_modules/`) and build output (`dist/`, `dist-electron/` and `release/`) are also ignored.
