@@ -125,6 +125,22 @@ describe("outside DEV", () => {
   });
 });
 
+describe("registerNexusModule outside DEV", () => {
+  it("returns a function, registers nothing and never touches hot", async () => {
+    // Value: protects=prod registerNexusModule is a no-op with no hot.dispose use; fails_when=the DEV gate is dropped from it; why_new=outside-DEV test covers registerNexus only; seam=none; no_claim=bundle contents (module-level env stub; build guard owns that)
+    vi.stubEnv("DEV", false);
+    vi.resetModules();
+    const fresh = await import("./nexus");
+    const target: { __nexus?: NexusApi } = {};
+    fresh.installNexus(target);
+    const dispose = vi.fn();
+    const un = fresh.registerNexusModule({ dispose }, "getCamera", getCamera);
+    expect(un).toBeTypeOf("function");
+    expect("getCamera" in (target.__nexus ?? {})).toBe(false);
+    expect(dispose).not.toHaveBeenCalled();
+  });
+});
+
 describe("projectToPage", () => {
   const rect = { left: 10, top: 20, width: 200, height: 100 };
   const perspective = new PerspectiveCamera(50, 2, 0.1, 100);
@@ -164,5 +180,15 @@ describe("projectToPage", () => {
     ortho.updateProjectionMatrix();
     expect(projectToPage(ortho, rect, [0.4, 0, 0]).visible).toBe(true);
     expect(projectToPage(ortho, rect, [0.6, 0, 0]).visible).toBe(false);
+  });
+
+  it("puts +x right of and +y above the rect center (y axis flipped to page space)", () => {
+    // Value: protects=page-space axis orientation (x right, y down); fails_when=the (1 - ndc.y) flip or x sign is inverted; why_new=existing cases only project the symmetric origin; seam=none; no_claim=real renderer canvas rect (hand-built camera and rect)
+    const right = projectToPage(perspective, rect, [1, 0, 0]);
+    const up = projectToPage(perspective, rect, [0, 1, 0]);
+    expect(right.x).toBeGreaterThan(110);
+    expect(right.y).toBeCloseTo(70);
+    expect(up.y).toBeLessThan(70);
+    expect(up.x).toBeCloseTo(110);
   });
 });

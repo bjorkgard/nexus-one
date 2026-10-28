@@ -81,6 +81,16 @@ test("project maps origin to canvas center, also after resize", async ({ page })
   await expectCentered();
 });
 
+test("project orients +x right and +y up of the origin", async ({ page }) => {
+  // Value: protects=project() page-space orientation on the live camera; fails_when=an axis flip or rect offset error in Bridge/projectToPage; why_new=smoke test only projects the origin; seam=none; no_claim=non-default cameras
+  await page.goto("/");
+  const origin = await nexus(page, "project", [0, 0, 0]);
+  const right = await nexus(page, "project", [0.5, 0, 0]);
+  const up = await nexus(page, "project", [0, 0.5, 0]);
+  expect(right.x).toBeGreaterThan(origin.x);
+  expect(up.y).toBeLessThan(origin.y);
+});
+
 test("waitForHook timeout names the hook", async ({ page }) => {
   await page.goto("about:blank");
   await expect(waitForHook(page, "getCamera", 500)).rejects.toThrow(
