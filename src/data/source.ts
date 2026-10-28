@@ -1,6 +1,8 @@
 import { applyOnce, createRecentIds } from "../shared/apply-once";
 import {
   DEFAULT_LIVE_PORT,
+  MAX_LIVE_PORT,
+  MIN_LIVE_PORT,
   PROTOCOL_VERSION,
   parseServerMessage,
   type ServerMessage,
@@ -419,7 +421,7 @@ export function selectSource(search: string): SourceSelection {
   const rawPort = params.get("port");
   if (rawPort !== null) {
     const n = /^\d+$/.test(rawPort) ? Number(rawPort) : NaN;
-    if (Number.isInteger(n) && n >= 1024 && n <= 65535) {
+    if (Number.isInteger(n) && n >= MIN_LIVE_PORT && n <= MAX_LIVE_PORT) {
       port = n;
     } else {
       warnings.push(`bad port "${rawPort}", using ${DEFAULT_LIVE_PORT}`);

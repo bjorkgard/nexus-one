@@ -1,4 +1,4 @@
-import { MAX_FRAME_BYTES } from "../shared/protocol";
+import { MAX_FRAME_BYTES, MAX_LIVE_PORT, MIN_LIVE_PORT } from "../shared/protocol";
 import type { ResyncReason, Transport, TransportControl, TransportInput } from "./source";
 
 // The LiveSource state machine (the client's gate in source.ts owns epoch, cursor and dedup):
@@ -49,7 +49,7 @@ function toInput(data: unknown): TransportInput {
 }
 
 export function liveTransport(port: number, deps: LiveDeps = {}): Transport {
-  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+  if (!Number.isInteger(port) || port < MIN_LIVE_PORT || port > MAX_LIVE_PORT) {
     throw new RangeError(`liveTransport: expected an integer port in 1024-65535, got ${port}`);
   }
   const url = `ws://127.0.0.1:${port}`;

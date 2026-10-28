@@ -252,6 +252,128 @@ describe("gate", () => {
     expect(t.client.stats().counters.resyncs).toBe(1);
   });
 
+  type Gate = ReturnType<typeof setup>;
+  const withSession: Snapshot = {
+    ...emptySnapshot,
+    projects: [{ id: "p1", name: "P" }],
+    sessions: [
+      { id: "s1", projectId: "p1", provider: "claude", startedAt: 1, endedAt: null },
+    ] as Snapshot["sessions"],
+  };
+  const counts = (c: Partial<Record<string, number>>) => ({
+    rejected: 0,
+    duplicates: 0,
+    inconsistent: 0,
+    resyncs: 0,
+    reconnects: 0,
+    ...c,
+  });
+  it.each<[string, (t: Gate) => void, string, ResyncReason[], number, number]>([
+    [
+      "event before any hello",
+      (t) => t.frame(evMsg(1, ev("session_start"))),
+      "syncing",
+      ["order"],
+      1,
+      0,
+    ],
+    [
+      "second hello (v ok) before the snapshot",
+      (t) => {
+        t.frame(hello());
+        t.frame(hello("e2"));
+      },
+      "syncing",
+      ["order"],
+      1,
+      0,
+    ],
+    [
+      "second hello with v != 1 before the snapshot",
+      (t) => {
+        t.frame(hello());
+        t.frame(hello("e2", 99));
+      },
+      "syncing",
+      ["order"],
+      1,
+      0,
+    ],
+    [
+      "hello (v ok) mid-stream",
+      (t) => {
+        t.frame(hello());
+        t.frame(snap(0, withSession));
+        t.frame(hello("e2"));
+      },
+      "open",
+      ["order"],
+      1,
+      1,
+    ],
+    [
+      "hello v != 1 mid-stream",
+      (t) => {
+        t.frame(hello());
+        t.frame(snap(0, withSession));
+        t.frame(hello("e2", 99));
+      },
+      "open",
+      ["order"],
+      1,
+      1,
+    ],
+    [
+      "second snapshot in the same epoch replaces state and resets the cursor",
+      (t) => {
+        t.frame(hello());
+        t.frame(snap(0, withSession));
+        t.frame(snap(5, emptySnapshot));
+        t.frame(evMsg(6, ev("session_start", { id: "n" })));
+      },
+      "open",
+      [],
+      0,
+      1,
+    ],
+    [
+      "hello v != 1 after a resync clears ignoring",
+      (t) => {
+        t.frame(hello());
+        t.frame(snap(0, withSession));
+        t.frame(hello("e2"));
+        t.frame(hello("e3", 99));
+      },
+      "incompatible",
+      ["order", "incompatible"],
+      2,
+      1,
+    ],
+    [
+      "event while ignoring is dropped",
+      (t) => {
+        t.frame(hello());
+        t.frame(snap(0, withSession));
+        t.frame(hello("e2"));
+        t.frame(evMsg(1, ev("session_start", { id: "late" }), "e2"));
+      },
+      "open",
+      ["order"],
+      1,
+      1,
+    ],
+  ])("gate: %s", (_name, act, status, resyncs, resyncCount, sessions) => {
+    const t = setup();
+    t.subscribe();
+    t.connect();
+    act(t);
+    expect(t.client.status).toBe(status);
+    expect(t.calls.resync).toEqual(resyncs);
+    const stats = t.client.stats();
+    expect(stats.counters).toEqual(counts({ resyncs: resyncCount }));
+    expect(stats.counts.sessions).toBe(sessions);
+  });
+
   it("events: seq cursor+1 applies and fans out; seq <= cursor is a duplicate; gap resyncs", () => {
     const t = setup();
     const s = t.subscribe();

@@ -72,36 +72,31 @@ export function mockTransport(options: MockTransportOptions = {}): MockTransport
   // A rebuild requested while one is running is ignored.
   const rebuild = (target: number) => {
     if (!sink || !status || rebuilding) return;
+    const send = sink;
+    const onStatus = status;
     rebuilding = true;
     try {
-      rebuildNow(target, sink, status);
+      const list = load();
+      let count = 0;
+      let state = emptyState();
+      while (count < list.length && list[count]!.ts <= target) {
+        state = reduce(state, list[count]!).state;
+        count += 1;
+      }
+      epochCount += 1;
+      epoch = `mock-${epochCount}`;
+      next = count;
+      const recentIds = list.slice(Math.max(0, count - RECENT_IDS_CAP), count).map((e) => e.id);
+      onStatus("disconnected");
+      onStatus("connected");
+      send({ kind: "frame", data: { type: "hello", v: PROTOCOL_VERSION, epoch } });
+      send({
+        kind: "frame",
+        data: { type: "snapshot", epoch, seq: count, snapshot: toSnapshot(state, recentIds) },
+      });
     } finally {
       rebuilding = false;
     }
-  };
-  const rebuildNow = (
-    target: number,
-    send: (input: TransportInput) => void,
-    onStatus: (s: "connecting" | "connected" | "disconnected") => void,
-  ) => {
-    const list = load();
-    let count = 0;
-    let state = emptyState();
-    while (count < list.length && list[count]!.ts <= target) {
-      state = reduce(state, list[count]!).state;
-      count += 1;
-    }
-    epochCount += 1;
-    epoch = `mock-${epochCount}`;
-    next = count;
-    const recentIds = list.slice(Math.max(0, count - RECENT_IDS_CAP), count).map((e) => e.id);
-    onStatus("disconnected");
-    onStatus("connected");
-    send({ kind: "frame", data: { type: "hello", v: PROTOCOL_VERSION, epoch } });
-    send({
-      kind: "frame",
-      data: { type: "snapshot", epoch, seq: count, snapshot: toSnapshot(state, recentIds) },
-    });
   };
 
   return {
@@ -139,13 +134,10 @@ export function mockTransport(options: MockTransportOptions = {}): MockTransport
       if (!Number.isInteger(ts) || ts < 0) {
         throw new RangeError(`setClock: expected a non-negative integer, got ${ts}`);
       }
-      if (ts >= clock()) {
-        moveClock(ts);
-        deliverDue();
-      } else {
-        moveClock(ts);
-        rebuild(ts);
-      }
+      const backward = ts < clock();
+      moveClock(ts);
+      if (backward) rebuild(ts);
+      else deliverDue();
     },
   };
 }

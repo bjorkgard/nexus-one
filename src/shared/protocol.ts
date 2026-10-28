@@ -5,6 +5,8 @@ import { Agent, Event, MAX_ID, MAX_SHORT, Project, Session, type ParseIssue } fr
 // schema.ts; this file adds the envelope messages and the snapshot.
 export const PROTOCOL_VERSION = 1;
 export const DEFAULT_LIVE_PORT = 47821;
+export const MIN_LIVE_PORT = 1024;
+export const MAX_LIVE_PORT = 65535;
 export const MAX_FRAME_BYTES = 8 * 1024 * 1024;
 export const RECENT_IDS_CAP = 4096;
 

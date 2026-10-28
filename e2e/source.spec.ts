@@ -2,11 +2,14 @@ import { expect, test } from "@playwright/test";
 import { nexus, waitForHook } from "./nexus";
 
 let errors: string[] = [];
+let expectedRefusal: string | null = null;
 
 test.beforeEach(async ({ page }) => {
   errors = [];
+  expectedRefusal = null;
   page.on("console", (msg) => {
-    if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
+    if (msg.type() === "error" && !(expectedRefusal && msg.text().includes(expectedRefusal)))
+      errors.push(`console.error: ${msg.text()}`);
   });
   page.on("pageerror", (err) => {
     errors.push(`pageerror: ${err.message}`);
@@ -82,4 +85,17 @@ test("setClock moves forward and seeks backward", async ({ page }) => {
 test("unknown source falls back to mock", async ({ page }) => {
   await openPage(page, "/?source=foo");
   expect((await nexus(page, "dataState")).source).toBe("mock");
+});
+
+// Value: protects=?source=live selects the live transport, and setClock is refused without the mock; fails_when=boot ignores source=live or setClock stops throwing for live; why_new=every other spec runs the mock source; seam=none; no_claim=a real collector connection (none listens on the port)
+test("source=live selects live and setClock needs the mock", async ({ page }) => {
+  // Nothing listens on this port: Chrome logs each refused connection (backoff retries too) as a
+  // console error naming the URL, so ignore only that URL for this test's lifetime.
+  expectedRefusal = "ws://127.0.0.1:47999";
+  await page.goto("/?source=live&port=47999");
+  await waitForHook(page, "dataState");
+  const state = await nexus(page, "dataState");
+  expect(state.source).toBe("live");
+  expect(state.clock).toBeNull();
+  await expect(nexus(page, "setClock", 1)).rejects.toThrow(/needs \?source=mock/);
 });

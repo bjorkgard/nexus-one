@@ -13,19 +13,12 @@ export type RecentIds = {
 
 // Mutable FIFO ring of recently applied event ids. Adding an id past capacity evicts the oldest.
 export function createRecentIds(capacity: number = RECENT_IDS_CAP): RecentIds {
-  let buffer: string[] = [];
-  let ids = new Set<string>();
-  let head = 0; // index of the oldest id once the buffer is full
+  // A Set iterates in insertion order, so its first value is always the oldest id.
+  const ids = new Set<string>();
 
   const add = (id: string) => {
     if (ids.has(id)) return;
-    if (buffer.length < capacity) {
-      buffer.push(id);
-    } else {
-      ids.delete(buffer[head]!);
-      buffer[head] = id;
-      head = (head + 1) % capacity;
-    }
+    if (ids.size >= capacity) ids.delete(ids.values().next().value!);
     ids.add(id);
   };
 
@@ -33,12 +26,10 @@ export function createRecentIds(capacity: number = RECENT_IDS_CAP): RecentIds {
     has: (id) => ids.has(id),
     add,
     seed(seedIds) {
-      buffer = [];
-      ids = new Set();
-      head = 0;
+      ids.clear();
       for (const id of seedIds.slice(-capacity)) add(id);
     },
-    toArray: () => [...buffer.slice(head), ...buffer.slice(0, head)],
+    toArray: () => [...ids],
   };
 }
 

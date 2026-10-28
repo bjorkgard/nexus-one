@@ -82,14 +82,20 @@ export function reduce(state: NexusState, event: Event): ReduceResult {
       if (!session) return bad(state);
       const inSession = (agentId: string) =>
         state.agents.get(agentId)?.sessionId === event.sessionId;
-      let openCalls = state.openCalls;
+      let openCallsCopy: Map<string, OpenCall> | null = null;
       for (const [callId, call] of state.openCalls) {
-        if (inSession(call.agentId)) openCalls = drop(openCalls, callId);
+        if (!inSession(call.agentId)) continue;
+        openCallsCopy ??= new Map(state.openCalls);
+        openCallsCopy.delete(callId);
       }
-      let attention = state.attention;
+      const openCalls = openCallsCopy ?? state.openCalls;
+      let attentionCopy: Map<string, Attention> | null = null;
       for (const agentId of state.attention.keys()) {
-        if (inSession(agentId)) attention = drop(attention, agentId);
+        if (!inSession(agentId)) continue;
+        attentionCopy ??= new Map(state.attention);
+        attentionCopy.delete(agentId);
       }
+      const attention = attentionCopy ?? state.attention;
       return ok({
         ...state,
         sessions: put(state.sessions, event.sessionId, { ...session, endedAt: event.ts }),

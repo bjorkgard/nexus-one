@@ -1,6 +1,6 @@
 import { Vector3 } from "three";
 import type { Camera } from "three";
-import type { SourceStatus } from "../data/source";
+import type { DataStats } from "../data/source";
 
 export type Vec3 = readonly [number, number, number];
 
@@ -19,20 +19,7 @@ export type RendererInfo = {
   textures: number;
 };
 
-export type DataState = {
-  source: "mock" | "live";
-  status: SourceStatus;
-  clock: number | null;
-  lastEventId: string | null;
-  counts: { projects: number; sessions: number; agents: number };
-  counters: {
-    rejected: number;
-    duplicates: number;
-    inconsistent: number;
-    resyncs: number;
-    reconnects: number;
-  };
-};
+export type DataState = DataStats & { source: "mock" | "live"; clock: number | null };
 
 export interface NexusHooks {
   getCamera(): CameraInfo;

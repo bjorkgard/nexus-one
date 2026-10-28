@@ -185,9 +185,9 @@ describe("liveTransport with a real ws server", () => {
     expect(before.usage.length).toBeGreaterThan(0);
     a.dropClients();
     await waitFor(() => snapshots.length === 2 && a.connections() === 2);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(withoutIds(stateOf(client))).toEqual(before);
+    await waitFor(() => client.stats().counters.duplicates === 5);
     expect(client.stats().counters.duplicates).toBe(5);
+    expect(withoutIds(stateOf(client))).toEqual(before);
     expect(client.stats().counters.resyncs).toBe(0);
   });
 
@@ -357,6 +357,35 @@ describe("liveTransport timing and guards", () => {
     latest().open();
     latest().fail();
     expect(statuses).toEqual(["connecting", "connected", "disconnected"]);
+  });
+
+  // Value: protects=a throwing WebSocket constructor reports disconnected and retries with backoff; fails_when=the constructor catch is removed (start throws) or no retry is scheduled; why_new=no existing case makes the constructor itself throw; seam=none; no_claim=real browser WebSocket errors (fake constructor)
+  it("a throwing WebSocket constructor reports disconnected and retries", () => {
+    const timers = fakeTimers();
+    let calls = 0;
+    class Throwing {
+      constructor() {
+        calls += 1;
+        throw new Error("blocked");
+      }
+    }
+    const transport = liveTransport(4321, {
+      WebSocket: Throwing as unknown as new (url: string) => FakeSocket,
+      setTimeout: timers.setTimeout,
+      clearTimeout: timers.clearTimeout,
+      random: () => 0.5,
+    });
+    const statuses: string[] = [];
+    const control = transport.start(
+      () => {},
+      (s) => statuses.push(s),
+    );
+    expect(statuses).toEqual(["connecting", "disconnected"]);
+    expect(timers.pending()).toBe(1);
+    timers.advance(250);
+    expect(calls).toBe(2);
+    control.stop();
+    expect(timers.pending()).toBe(0);
   });
 
   it("backoff doubles to a 2 s cap, with jitter in [0.8, 1.2]", () => {

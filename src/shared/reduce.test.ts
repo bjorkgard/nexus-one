@@ -110,6 +110,35 @@ describe("reduce", () => {
     expect(s.openCalls.size).toBe(1);
   });
 
+  it("session_end leaves another session's calls and attention intact, copying nothing when none match", () => {
+    const other = { sessionId: "s2", agentId: "a2" };
+    const s = run(
+      [
+        ev("session_start", { id: "x1", sessionId: "s2" }),
+        ev("agent_spawn", { id: "x2", ...other }),
+        ev("tool_call_start", { id: "x3", callId: "c2", ...other }),
+        ev("needs_attention", { id: "x4", ...other }),
+      ],
+      base(),
+    ).state;
+    // s1 has no open calls or attention: the maps must be the very same objects.
+    const r = reduce(s, ev("session_end", { ts: 777 }));
+    expect(r.state.openCalls).toBe(s.openCalls);
+    expect(r.state.attention).toBe(s.attention);
+    expect(r.state.openCalls.has("c2")).toBe(true);
+    expect(r.state.attention.has("a2")).toBe(true);
+    // With s1 matches present, only s1's entries go; s2's stay.
+    const t = run(
+      [ev("tool_call_start", { id: "x5" }), ev("needs_attention", { id: "x6" })],
+      s,
+    ).state;
+    const r2 = reduce(t, ev("session_end", { ts: 778 }));
+    expect([...r2.state.openCalls.keys()]).toEqual(["c2"]);
+    expect([...r2.state.attention.keys()]).toEqual(["a2"]);
+    expect(t.openCalls.size).toBe(2);
+    expect(t.attention.size).toBe(2);
+  });
+
   it.each([
     ["session_end without session", "session_end"],
     ["agent_spawn without session", "agent_spawn"],

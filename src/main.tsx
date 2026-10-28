@@ -9,7 +9,13 @@ if (!container) {
   throw new Error("Root element #app not found");
 }
 
-startDataSource();
+try {
+  startDataSource();
+} catch (error) {
+  // The app still renders without a data source.
+  if (globalThis.reportError) globalThis.reportError(error);
+  else console.error(error);
+}
 
 createRoot(container).render(
   <StrictMode>
