@@ -1,2 +1,2 @@
-// Throwaway: deliberate type error for the 1.9 gate proof. Never merge.
-export const gateProof: number = "not a number";
+// Throwaway: gate proof fix. Never merge.
+export const gateProof: number = 1;
