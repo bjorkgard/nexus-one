@@ -16,6 +16,34 @@
 **Priority:** P2
 **Depends on:** Task 1.1 (canvas + error boundary), task 1.3 (`window.__nexus` for an e2e check)
 
+### Production perf build with the overlay
+
+**Issue:** [#108](https://github.com/bjorkgard/nexus-one/issues/108)
+
+**What:** Add a `vp build --mode perf` build that keeps the 1.8 performance overlay (stats panels and counters) in an otherwise production React build, and extend the build guard so the default production build still excludes it.
+
+**Why:** The 1.8 overlay is dev-only, and dev React adds overhead, so the manual fps reading in task 2.10 would measure dev-mode cost instead of what the packaged app does.
+
+**Context:** Deferred in the task 1.8 CEO review (E2, decision D4; `docs/plans/1.8-performance-overlay.md`). The overlay mounts through `import.meta.env.DEV ? lazy(...) : null` and the guard in `lint/build-guards.js` rejects `__nexus`, `nexus-perf-overlay` and `nexus-probe` in production chunks. A perf mode needs its own gate (for example `import.meta.env.MODE === "perf"`) and a guard test that the default build still has none of those markers. Start by building both modes and grepping the output.
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 1.8 (overlay), must land before task 2.10 (geometry performance check)
+
+### __nexus.frameStats() hook for the soak
+
+**Issue:** [#109](https://github.com/bjorkgard/nexus-one/issues/109)
+
+**What:** Register a dev-only `__nexus.frameStats()` hook that returns fps and frame-time p50/p95 over a rolling window, so e2e and the one-hour soak can read frame timing as data.
+
+**Why:** Task 10.4 samples fps every minute, but no hook exposes fps today; the 1.8 overlay shows it only to a person.
+
+**Context:** Deferred in the task 1.8 CEO review (E4, decision D6; `docs/plans/1.8-performance-overlay.md`). The overlay's `PerfStats` component runs inside the R3F canvas with a `useFrame` callback, which is the natural place to collect frame deltas. Hooks are typed in `src/debug/nexus.ts` (`NexusHooks`) and listed in the smoke test's hook-name assertion (`e2e/smoke.spec.ts`), which must be updated. Let 10.4 choose the sampling window.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 1.8 (overlay), lands with task 10.4 (one-hour soak)
+
 ## Data
 
 ### Prune ended sessions and agents from reducer state
