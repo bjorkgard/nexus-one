@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { MessageChannel, Worker, receiveMessageOnPort } from "node:worker_threads";
 import { globSync } from "tinyglobby";
 import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
@@ -10,6 +11,12 @@ import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 // entry without its last extension, as `/vite.config` resolves to vite.config.ts), when it is `/`,
 // or when it resolves outside the repo. Any other root-absolute path is a Vite publicDir
 // (`public/`) asset URL and is allowed; the disk is not read, so the folder need not exist.
+// Every static specifier but `node:` is also run through Vite's own resolver
+// (lint/module-fences-resolver.js, the project's vite.config.ts, client and ssr environments), and the
+// file Vite loads is fenced too. Vite normalizes `..` after a `?`/`#`, follows the importer's package.json
+// `browser` and `imports` maps and takes absolute disk paths, which the hand-written resolution misses.
+// The hand-written resolution stays as a superset (public/ URLs, files Vite does not resolve, .d.ts,
+// package.json entry fields). If the resolver fails or times out, the import is reported.
 // Bare and `node:` specifiers belong to no-restricted-imports and import/no-nodejs-modules.
 
 // Lower-case root entries: every tracked root entry (`git ls-files`; a unit test guards it) plus
@@ -130,6 +137,67 @@ function realPath(absolute, probe = false) {
 }
 
 const repoRoot = realPath(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
+
+// The rule is synchronous but Vite's resolver is not: a worker runs it, and Atomics.wait blocks
+// until the worker answers. One worker per process, started on first use; it never keeps the process alive.
+const RESOLVE_TIMEOUT_MS = 60_000;
+let worker = null;
+let requestId = 0;
+
+function startWorker() {
+  const signal = new SharedArrayBuffer(4);
+  const { port1, port2 } = new MessageChannel();
+  const thread = new Worker(new URL("./module-fences-resolver.js", import.meta.url), {
+    workerData: { signal, port: port2, root: repoRoot },
+    transferList: [port2],
+  });
+  const started = { thread, port: port1, flag: new Int32Array(signal) };
+  thread.unref();
+  port1.unref();
+  // a dead worker is replaced on the next call; the pending call times out and fails closed
+  thread.on("error", () => {
+    if (worker === started) worker = null;
+  });
+  thread.on("exit", () => {
+    if (worker === started) worker = null;
+  });
+  return started;
+}
+
+// Ids Vite resolves `specifier` to from `importer`, one per environment (null: not resolved).
+// Throws when the worker fails or does not answer within `timeoutMs`.
+export function viteResolve(specifier, importer, timeoutMs = RESOLVE_TIMEOUT_MS) {
+  worker ??= startWorker();
+  const current = worker;
+  const id = ++requestId;
+  Atomics.store(current.flag, 0, 0);
+  current.thread.postMessage({ id, specifier, importer });
+  if (Atomics.wait(current.flag, 0, 0, timeoutMs) === "timed-out") {
+    if (worker === current) worker = null;
+    void current.thread.terminate();
+    throw new Error(`Vite resolver timed out after ${timeoutMs} ms`);
+  }
+  const reply = receiveMessageOnPort(current.port)?.message;
+  if (!reply || reply.id !== id) throw new Error("Vite resolver sent no matching answer");
+  if (reply.error) throw new Error(reply.error);
+  return reply.ids;
+}
+
+let resolveImpl = viteResolve;
+
+// For tests: swaps the resolver, returns the previous one.
+export function setResolveImpl(impl) {
+  const previous = resolveImpl;
+  resolveImpl = impl;
+  return previous;
+}
+
+// The id itself and, for an id that kept a `?query` or `#hash`, each prefix cut before one.
+function fileCandidates(id) {
+  const candidates = [id];
+  for (const match of id.matchAll(/[?#]/g)) candidates.push(id.slice(0, match.index));
+  return candidates;
+}
 
 // Repo-relative, lower-cased, `/`-separated; lower-case because macOS paths are case-insensitive.
 function toRepoPath(absolute, probe = false) {
@@ -304,6 +372,8 @@ const noCrossZone = defineRule({
       globOptions: "glob options must be a literal object without `base`.",
       outsideRepo:
         "{{file}} is outside the repo root, so the module fence cannot place it in a zone.",
+      resolverFailed:
+        "The module fence could not run Vite's resolver, so it cannot check this import; failing closed.",
       createRequire: "createRequire is banned in collector/; it would bypass the module fence.",
       electronCreateRequire:
         "createRequire is banned in electron/; it would bypass the module fence.",
@@ -320,7 +390,8 @@ const noCrossZone = defineRule({
     const zone = zoneOf(importer);
     if (!zone) return {};
     // Relative specifiers resolve from the real directory, so a symlinked importer dir is seen through.
-    const dir = path.dirname(realPath(context.filename));
+    const importerFile = realPath(context.filename);
+    const dir = path.dirname(importerFile);
 
     // Resolves a relative or root-absolute path; null for anything else. `probe` adds the
     // extension/index probing of a module specifier; a glob prefix is the directory searched.
@@ -356,7 +427,50 @@ const noCrossZone = defineRule({
       return target === "package.json" || zone.allowed.some((folder) => inside(target, folder));
     }
 
+    // Repo paths of the files Vite loads for a specifier; null when the resolver failed. Every
+    // specifier goes to Vite: the importer's package.json `browser` map can redirect a bare name. Only
+    // an id that is a file on disk counts (a public/ URL id such as `/logo.svg` is not). A bare name
+    // that lands in node_modules or outside the repo is an npm package, not a zone import.
+    const viteCache = new Map();
+    function viteTargets(specifier) {
+      // `node:` builtins cannot be redirected by a package.json map
+      if (specifier.startsWith("node:")) return [];
+      if (!viteCache.has(specifier)) {
+        const pathLike = /^([./#]|[A-Za-z]:[\\/]|file:)/.test(specifier);
+        let targets;
+        try {
+          targets = resolveImpl(specifier, importerFile)
+            .filter((id) => typeof id === "string" && !id.startsWith("\0") && path.isAbsolute(id))
+            .flatMap(fileCandidates)
+            .filter((file) => fs.statSync(file, { throwIfNoEntry: false })?.isFile())
+            .map((file) => toRepoPath(file))
+            .filter(
+              (target) => pathLike || !(leavesRepo(target) || inside(target, "node_modules")),
+            );
+        } catch {
+          targets = null;
+        }
+        viteCache.set(specifier, targets);
+      }
+      return viteCache.get(specifier);
+    }
+
     function checkSpecifier(specifier, node) {
+      // A data: module carries its own imports (`export * from '/electron/x.ts'`) that the bundler
+      // resolves but Vite's resolver does not see, so it cannot be fenced.
+      if (/^data:/i.test(specifier)) {
+        context.report({ node, messageId: "nonStatic" });
+        return;
+      }
+      const viaVite = viteTargets(specifier);
+      if (viaVite === null) {
+        context.report({ node, messageId: "resolverFailed" });
+        return;
+      }
+      if (viaVite.some((candidate) => !isAllowed(candidate))) {
+        context.report({ node, messageId: zone.messageId });
+        return;
+      }
       const clean = specifier.replace(/[?#][\s\S]*$/, "");
       const target = resolveFrom(clean);
       if (target === null) return;
@@ -498,7 +612,8 @@ const noCrossZone = defineRule({
       if (target && target.type === "ObjectPattern") {
         for (const property of target.properties) {
           const name = patternKey(property);
-          if (name === null || name === "resolve" || name === "glob") {
+          // `url` too: `new URL(x, url)` would otherwise hide the import from the base-URL check
+          if (name === null || name === "resolve" || name === "glob" || name === "url") {
             context.report({ node: property, messageId: "nonStatic" });
           }
         }

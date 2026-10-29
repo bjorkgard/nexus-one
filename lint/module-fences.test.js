@@ -16,7 +16,7 @@ import {
 } from "vite-plus/test";
 import { RuleTester } from "vite-plus/lint/plugins-dev";
 import config from "../vite.config.ts";
-import plugin, { ROOT_ENTRIES } from "./module-fences.js";
+import plugin, { ROOT_ENTRIES, setResolveImpl, viteResolve } from "./module-fences.js";
 
 RuleTester.afterAll = afterAll;
 RuleTester.describe = describe;
@@ -46,6 +46,8 @@ const NON_STATIC =
   "Non-static import in a fenced zone; use a string literal so the module fence can check it.";
 const GLOB =
   "import.meta.glob in a fenced zone must use relative or root-absolute patterns without `#`, and no `base` option.";
+const RESOLVER_FAILED =
+  "The module fence could not run Vite's resolver, so it cannot check this import; failing closed.";
 const GLOB_OPTIONS = "glob options must be a literal object without `base`.";
 const CREATE_REQUIRE = "createRequire is banned in collector/; it would bypass the module fence.";
 const ELECTRON_CREATE_REQUIRE =
@@ -111,7 +113,24 @@ const dctsLink = at("src/ui/__fence_dcts.d.cts");
 const swapRealFile = at("src/ui/__fence_swapreal.js.ts");
 const swapRealLink = at("src/ui/__fence_swapreal.ts");
 const swapOkFile = at("src/ui/__fence_swapok.ts");
+// Vite-resolver fixtures: a file reached through `?`/`#` dot-dot, and package.json maps in the importer's folder.
+const quirkDir = at("src/ui/__fence_q");
+const mapDir = at("src/ui/__fence_vmap");
+const fromMap = path.join(mapDir, "a.ts");
+const qsDir = at("src/shared/__fence_qs");
+const qcDir = at("collector/__fence_qc");
+const publicDir = at("public");
+const publicSentinel = path.join(publicDir, "__fence_sentinel.txt");
+// public/ may hold real assets: the suite plants and removes only its own files, and removes the
+// folder (never recursively) only if it created it.
+const publicExisted = fs.existsSync(publicDir);
+const publicFiles = ["__fence_pub.svg", "__fence_pub.ts"].map((name) => path.join(publicDir, name));
 const fenceScratch = [
+  qsDir,
+  qcDir,
+  ...publicFiles,
+  quirkDir,
+  mapDir,
   pkgNestDir,
   pkgMapDir,
   pkgCycleDir,
@@ -258,6 +277,28 @@ beforeAll(() => {
   // Value: protects=the jsnext:main and jsnext fields (Vite mainFields) are followed out of src/; fails_when=packageEntries drops either field; why_new=no row has a package.json with only a jsnext field; seam=none; no_claim=Vite's real entry choice (superset)
   writePackage(pkgJsnextMainDir, JSON.stringify({ "jsnext:main": outEntry }));
   writePackage(pkgJsnextDir, JSON.stringify({ jsnext: outEntry }));
+  // #126: Vite normalizes `..` after a `?` or `#`, so a path that looks like src/ui/__fence_q/ok.ts reaches electron/
+  fs.mkdirSync(quirkDir);
+  fs.writeFileSync(path.join(quirkDir, "ok.ts"), "export const a = 1;\n");
+  // #121: the importer's own package.json redirects `./x.js` (browser map) and `#s` (imports map) out of src/
+  writePackage(
+    mapDir,
+    JSON.stringify({
+      browser: { "./x.js": "../../../electron/main.ts", zzfence: "../../../electron/main.ts" },
+      imports: { "#s": "../../../electron/main.ts" },
+    }),
+  );
+  fs.writeFileSync(path.join(mapDir, "ok.ts"), "export const a = 1;\n");
+  // `?` climb rows for the other zones, and a real public/ folder (M3)
+  for (const dir of [qsDir, qcDir]) {
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, "ok.ts"), "export const a = 1;\n");
+  }
+  fs.mkdirSync(publicDir, { recursive: true });
+  fs.writeFileSync(publicFiles[0], "<svg/>\n");
+  fs.writeFileSync(publicFiles[1], "export const a = 1;\n");
+  // a file of someone else's in public/ must survive the suite
+  fs.writeFileSync(publicSentinel, "keep\n");
   // Value: protects=every SOURCE_SWAPS and DECLARATION_SWAPS entry reaches the file Vite picks; fails_when=a swap entry is missing or misspelled; why_new=only .js/.mjs -> .ts/.mts and .d.ts were covered; seam=none; no_claim=Vite's own resolver
   fs.symlinkSync("../../collector/__fence_file_target__.ts", swapJsxLink, "file");
   fs.symlinkSync("../../collector/__fence_file_target__.ts", swapCjsLink, "file");
@@ -267,6 +308,10 @@ beforeAll(() => {
 afterAll(() => {
   cleanup(...fenceScratch);
   cleanup(outDir);
+  const survived = fs.existsSync(publicSentinel);
+  cleanup(publicSentinel);
+  if (!publicExisted) fs.rmdirSync(publicDir);
+  if (!survived) throw new Error("the suite deleted a file it did not create in public/");
 });
 
 tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
@@ -322,7 +367,7 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'new URL("./b.ts", import.meta.url as string);'),
     good(fromUi, "(0, import.meta.resolve)(`./x.ts`);"),
     good(fromUi, 'const { env } = import.meta; const u = import.meta.resolve("./x.ts");'),
-    good(fromUi, "const { url, env } = import.meta;"),
+    good(fromUi, "const { env } = import.meta;"),
     // R1: plain member reads of import.meta stay allowed
     good(fromUi, "const u = import.meta.url; const d = import.meta.dirname;"),
     good(fromUi, "const m = import.meta.env.MODE; const e = import.meta.env;"),
@@ -627,6 +672,134 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
       errors: [{ message: outsideRepo(path.join(repoRoot, "..", "fence-outside.ts")) }],
     },
   ],
+});
+
+const quirk = "./__fence_q/ok.ts";
+const climb = "../../../../electron/main.ts";
+
+// Vite's own resolver decides which file an import loads; these are the imports the hand-written
+// resolution used to miss (#126, #121, #123).
+tester.run("no-cross-zone vite resolver", plugin.rules["no-cross-zone"], {
+  valid: [
+    good(fromUi, `import x from "${quirk}";`),
+    good(fromUi, `import x from "${quirk}?raw";`),
+    good(fromUi, `import x from "${quirk}#frag";`),
+    good(fromMap, 'import x from "./ok.ts";'),
+    good(fromMap, 'import x from "./y.js";'),
+    // M3: a file Vite serves from public/ is a public URL, not a disk path
+    good(fromUi, 'import u from "/__fence_pub.svg";'),
+    good(fromUi, 'import u from "/__fence_pub.svg?url";'),
+    good(fromUi, 'import u from "/__fence_pub.ts?url";'),
+    // npm packages stay allowed
+    good(fromUi, 'import x from "react";'),
+    good(fromUi, 'import x from "three";'),
+    good(fromMap, 'import x from "react";'),
+    good(fromUi, `import x from "${at("src/ui/__fence_q/ok.ts")}";`),
+    good(fromElectron, `import x from "${at("electron/resolve.ts")}";`),
+    // #123: Vite (dev server and build) does not decode %2e in a relative specifier; it fails to
+    // resolve it, so the specifier names a folder literally called "%2e%2e" inside src/ui/
+    good(fromUi, 'import x from "./%2e%2e/%2e%2e/%2e%2e/electron/resolve";'),
+    good(fromUi, 'import x from "./%2E%2E/electron/resolve.ts";'),
+    good(fromUi, 'import x from "./..%2f..%2f..%2felectron/resolve.ts";'),
+  ],
+  invalid: [
+    // #126: `..` after `?` or `#` climbs out; the rule used to cut at `?`/`#` before resolving
+    bad(fromUi, `import x from "${quirk}?/${climb}";`, SRC),
+    bad(fromUi, `import x from "${quirk}#/${climb}";`, SRC),
+    bad(fromUi, `import x from "/src/ui/__fence_q/ok.ts?/${climb}";`, SRC),
+    bad(fromUi, `import x from "/src/ui/__fence_q/ok.ts#/${climb}";`, SRC),
+    bad(fromUi, `const m = import("${quirk}?/${climb}");`, SRC),
+    bad(fromUi, `const m = require("${quirk}?/${climb}");`, SRC),
+    bad(fromUi, `const u = import.meta.resolve("${quirk}?/${climb}");`, SRC),
+    bad(fromUi, `const u = new URL("${quirk}?/${climb}", import.meta.url);`, SRC),
+    bad(fromUi, `export * from "${quirk}?/${climb}";`, SRC),
+    bad(
+      fromShared,
+      `import x from "../ui/__fence_q/ok.ts?/../../../../../electron/main.ts";`,
+      SHARED,
+    ),
+    bad(
+      fromCollector,
+      `import x from "../src/ui/__fence_q/ok.ts?/../../../../electron/main.ts";`,
+      COLLECTOR,
+    ),
+    // the cut path (before `?`) stays in the importer's zone; Vite's climb lands in src/ui or the repo root
+    bad(fromShared, 'import x from "./__fence_qs/ok.ts?/../../../ui/__fence_q/ok.ts";', SHARED),
+    bad(
+      fromCollector,
+      'import x from "./__fence_qc/ok.ts?/../../../src/ui/__fence_q/ok.ts";',
+      COLLECTOR,
+    ),
+    // a data: module can import any root-absolute path; Vite's resolver returns null for it
+    bad(
+      fromUi,
+      `export * from "data:text/javascript,export * from '/electron/main.ts'";`,
+      NON_STATIC,
+    ),
+    bad(fromUi, 'import x from "data:text/javascript,export default 1";', NON_STATIC),
+    bad(fromUi, 'export { a } from "data:text/javascript,export const a = 1";', NON_STATIC),
+    bad(fromUi, 'const m = import("data:text/javascript,export default 1");', NON_STATIC),
+    bad(fromUi, 'const m = require("data:text/javascript,export default 1");', NON_STATIC),
+    bad(
+      fromUi,
+      'const u = import.meta.resolve("data:text/javascript,export default 1");',
+      NON_STATIC,
+    ),
+    bad(fromElectron, 'import x from "data:text/javascript,export default 1";', NON_STATIC),
+    // M2: a file: URL names a disk file
+    bad(fromUi, `import x from "file://${at("electron/main.ts")}";`, SRC),
+    bad(fromUi, `const m = import("file://${at("electron/main.ts")}");`, SRC),
+    // M1: the importer's browser map redirects a bare name
+    bad(fromMap, 'import x from "zzfence";', SRC),
+    bad(fromMap, 'const m = import("zzfence");', SRC),
+    // an absolute disk path is not a public/ URL: Vite loads the file
+    bad(fromUi, `import x from "${at("electron/main.ts")}";`, SRC),
+    bad(fromUi, `import x from "${at("electron/main.ts")}?raw";`, SRC),
+    bad(fromElectron, `import x from "${at("src/ui/__fence_q/ok.ts")}";`, ELECTRON),
+    // #121: the importer's package.json browser and imports maps redirect the import
+    bad(fromMap, 'import x from "./x.js";', SRC),
+    bad(fromMap, 'import x from "#s";', SRC),
+    bad(fromMap, 'const m = import("#s");', SRC),
+    bad(fromMap, 'const u = new URL("#s", import.meta.url);', SRC),
+    // #124: destructuring `url` hides import.meta.url from the new URL base check
+    bad(fromUi, "const { url } = import.meta;", NON_STATIC),
+    bad(fromUi, "const { url: here } = import.meta;", NON_STATIC),
+    bad(fromUi, 'const { "url": here } = import.meta;', NON_STATIC),
+    bad(fromUi, "const { url, env } = import.meta; new URL(x, url);", NON_STATIC),
+  ],
+});
+
+// A resolver that cannot answer must not let the import through.
+describe("vite resolver failure", () => {
+  let restore;
+  beforeAll(() => {
+    restore = setResolveImpl(() => {
+      throw new Error("resolver down");
+    });
+  });
+  afterAll(() => setResolveImpl(restore));
+  tester.run("no-cross-zone resolver failure", plugin.rules["no-cross-zone"], {
+    valid: [good(fromUi, 'import fs from "node:fs";'), good(fromUi, "export const a = 1;")],
+    invalid: [
+      bad(fromUi, 'import x from "./y";', RESOLVER_FAILED),
+      bad(fromUi, 'import x from "/src/data/z";', RESOLVER_FAILED),
+      bad(fromUi, 'import x from "#s";', RESOLVER_FAILED),
+      // a bare name too: the importer's package.json can redirect it
+      bad(fromUi, 'import x from "react";', RESOLVER_FAILED),
+    ],
+  });
+});
+
+describe("viteResolve", () => {
+  it("returns the client and ssr answers", () => {
+    const ids = viteResolve("./__fence_q/ok.ts", fromUi);
+    expect(ids).toEqual([at("src/ui/__fence_q/ok.ts"), at("src/ui/__fence_q/ok.ts")]);
+  });
+  it("throws when the answer does not arrive in time", () => {
+    expect(() => viteResolve("./__fence_q/ok.ts", fromUi, 0)).toThrow(/timed out/);
+    // the next call starts a fresh worker
+    expect(viteResolve("./__fence_q/ok.ts", fromUi)[0]).toBe(at("src/ui/__fence_q/ok.ts"));
+  });
 });
 
 // Runs the real linter with this repo's config. Fixtures live as .txt under lint/fixtures/
