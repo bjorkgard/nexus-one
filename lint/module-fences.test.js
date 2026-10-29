@@ -180,6 +180,8 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     // `!` excludes cannot add files; root-absolute `/x` is served from public/
     good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!**/bar.ts"]);'),
     good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!../../collector/**"]);'),
+    // Value: protects=a `!` exclude holding `#` stays skipped; fails_when=the `#` check moves above the `!` skip; why_new=no row has `#` in an exclude; seam=none; no_claim=Vite's exclude semantics
+    good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!./a#/../x/*.ts"]);'),
     good(fromUi, 'import logo from "/logo.svg";'),
     // a directory match and a dangling link are not files, so a glob does not fence them
     good(fromUi, 'const m = import.meta.glob("./__fence_glob_mix/linkd*");'),
@@ -266,6 +268,8 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     // Vite keeps `#` in a glob and joins it raw, so `a#/..` climbs where the fence cannot follow
     bad(fromUi, 'const m = import.meta.glob("./a#/../../electron/*.ts");', GLOB),
     bad(fromUi, 'const m = import.meta.glob("./__fence_ok_dir/*.ts#x");', GLOB),
+    // Value: protects=a `#` in an array element is reported; fails_when=the array loop skips the `#` check; why_new=the # rows are string-only; seam=none; no_claim=Vite's glob join
+    bad(fromUi, 'const m = import.meta.glob(["./a/*.ts", "./b#/../../electron/*.ts"]);', GLOB),
     // bypass 4: glob base option, root-absolute glob
     bad(
       fromUi,
