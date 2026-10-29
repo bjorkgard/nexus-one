@@ -5,6 +5,20 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-10-29
+
+### Fixed
+
+- The module fence now resolves imports the way Vite does in more cases, so these spellings no longer let `src/` reach `collector/` or `electron/` code unreported:
+  - `/@fs/<absolute path>` imports, which were treated as `public/` asset URLs.
+  - Percent-encoded root paths such as `/%63ollector/x`.
+  - `./x.js` when only `x.ts` exists. Vite swaps `.js` for `.ts` (and `.mjs` for `.mts`, `.cjs` for `.cts`) before trying other extensions, and the fence now does the same, in the same order.
+  - Type-only imports that resolve to a `.d.ts`, `.d.mts` or `.d.cts` file.
+  - A folder whose `package.json` (`main`, `module`, `jsnext:main`, `jsnext`, `browser`, `exports`, `types` or `typings`, including nested folders and `browser` maps) points into another zone. A `package.json` that starts with a byte-order mark is read as Vite reads it, and one that exists but cannot be parsed is reported instead of ignored.
+- `new URL(path, base)` is checked whenever `import.meta.url` appears anywhere in the base, such as `import.meta?.url`, `import.meta.url ?? ""`, a template literal, a ternary, `String(...)` or a TypeScript cast.
+- `import.meta.resolve` and `import.meta.glob` are reported when they are used other than as a direct call, for example when copied into a variable, destructured, passed as an argument or wrapped in `(0, ...)`, because the fence cannot follow them there.
+- The pre-commit hook runs the full `vp check` when a commit stages a deletion, rename, type change, symlink or submodule, or when `git` fails. Before, such a commit could run only a partial check, or none at all, though it can change what other files import.
+
 ## [0.9.3] - 2026-10-29
 
 ### Fixed
