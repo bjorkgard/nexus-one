@@ -5,6 +5,12 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-10-29
+
+### Fixed
+
+- An `import.meta.glob` pattern that contains `#` is now reported by the module fence. Vite keeps the `#` and resolves the pattern as written, so `./a#/../../electron/*.ts` reached `electron/` while the fence read only `./a`.
+
 ## [0.9.2] - 2026-10-29
 
 ### Fixed
