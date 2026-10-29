@@ -33,7 +33,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp run preview` — Serve the production build locally after building.
 - `vp run pack` — Build the UI and the Electron main process, then package an unsigned macOS app into `release/mac-arm64/Nexus One.app` (about 1 minute). It never publishes.
 - `vp run start` — Build, then launch the Electron app from source.
-- `vp run test:packaged` — Run after `vp run pack`: launch the packaged app with Playwright and check that it renders.
+- `vp run test:packaged` — Run after `vp run pack`: launch the packaged app with Playwright and check that it renders without the "WebGL is unavailable" error box. A second test starts it with the GPU off to prove that check finds the real box.
 
 The packaged build is unsigned (8.5 owns signing), so the first launch of a downloaded copy may need right-click → Open. To see main-process and `[renderer]` logs, run the binary from a terminal: `"release/mac-arm64/Nexus One.app/Contents/MacOS/Nexus One"`.
 
