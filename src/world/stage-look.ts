@@ -18,7 +18,9 @@ export const LOOK = {
   gridFadeToPx: 6,
   hemisphere: { sky: "#9ab8ff", ground: "#0a0e14", intensity: 3.5 },
   key: { color: "#ffd9a8", intensity: 3.4, direction: [-0.5, 2, 1.5] as const },
+  // Dev overlay type: labels (zone overlay, palette board swatches) and headings (board title, rows, failure line).
   zonesOverlayLabelPx: 11,
+  overlayHeadingPx: 13,
   zonesOverlayPillPx: 18,
   zonesOverlayHideFloorsBelowPx: 22,
 } as const;

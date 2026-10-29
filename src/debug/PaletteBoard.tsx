@@ -19,6 +19,7 @@ import {
   title,
 } from "../world/palette-layout";
 import { useRevealHold } from "../world/reveal-hold";
+import { LOOK } from "../world/stage-look";
 import type { Vec3 } from "../world/zones";
 import { PaletteFailure } from "./PaletteFailure";
 
@@ -80,7 +81,7 @@ function Label({ position, text, large }: { position: Vec3; text: string; large?
         style={{
           color: TOKENS.text.muted,
           fontFamily: "var(--font-sans)",
-          fontSize: large ? 13 : 11,
+          fontSize: large ? LOOK.overlayHeadingPx : LOOK.zonesOverlayLabelPx,
           whiteSpace: "nowrap",
           pointerEvents: "none",
         }}
