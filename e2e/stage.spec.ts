@@ -6,10 +6,6 @@ import { boundsCentre, framingBounds, ISO_PITCH, ISO_YAW } from "../src/world/ca
 import { TOKENS, cssVarName, flattenTokens } from "../src/shared/tokens";
 import { nexus, waitForHook } from "./nexus";
 
-// Each test drives a software-WebGL render up to 2560x1440; running them in parallel saturates the CPU
-// and makes timing assertions flaky, so this file's tests run one at a time.
-test.describe.configure({ mode: "serial" });
-
 let errors: string[] = [];
 
 test.beforeEach(async ({ page }) => {
