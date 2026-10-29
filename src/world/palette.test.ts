@@ -94,6 +94,13 @@ describe("palette.variant", () => {
     expect(materialBudgetCount()).toBe(13);
   });
 
+  it("treats hex case as one colour, so it costs one budget slot", () => {
+    // Value: protects=variant cache key lowercases colour; fails_when=toLowerCase is dropped and "#ABCDEF" clones a second material; why_new=existing cache test uses lowercase only; seam=none; no_claim=none beyond protects
+    const upper = variant("paint", { color: "#ABCDEF" });
+    expect(variant("paint", { color: "#abcdef" })).toBe(upper);
+    expect(materialBudgetCount()).toBe(12);
+  });
+
   it("does not touch the palette material", () => {
     variant("panel", { color: "#112233" });
     expect(`#${palette.panel.color.getHexString()}`).toBe(TOKENS.surface.panel);
@@ -132,9 +139,14 @@ describe("palette.variant", () => {
   });
 
   it("throws on emissiveIntensity above the ceiling", () => {
+    // Value: protects=ceiling is inclusive (exactly LOOK.emissiveCeiling is allowed); fails_when=the check becomes >=; why_new=only ceiling + 0.1 was tested; seam=none; no_claim=AgX rendering at the ceiling
     expect(() => variant("trimCyan", { emissiveIntensity: LOOK.emissiveCeiling + 0.1 })).toThrow(
       /emissiveCeiling/,
     );
+    expect(
+      (variant("trimCyan", { emissiveIntensity: LOOK.emissiveCeiling }) as MeshStandardMaterial)
+        .emissiveIntensity,
+    ).toBe(LOOK.emissiveCeiling);
   });
 
   it("throws at the budget, naming the budget and the count", () => {

@@ -48,6 +48,19 @@ describe("createRevealHold", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it("an unsubscribed listener is not notified", () => {
+    // Value: protects=subscribe returns a working unsubscribe (useSyncExternalStore contract); fails_when=unsubscribe no longer removes the listener; why_new=no test calls the returned function; seam=none; no_claim=React re-render timing
+    const hold = createRevealHold({ holds: 1, ...fakeTimer() });
+    const gone = vi.fn();
+    const kept = vi.fn();
+    const unsubscribe = hold.subscribe(gone);
+    hold.subscribe(kept);
+    unsubscribe();
+    hold.release();
+    expect(gone).not.toHaveBeenCalled();
+    expect(kept).toHaveBeenCalledTimes(1);
+  });
+
   it("times out once, warns once, and notifies once", () => {
     const timer = fakeTimer();
     const warn = vi.fn();
