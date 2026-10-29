@@ -35,15 +35,25 @@ async function canvasBox(page: Page) {
   return box;
 }
 
+// Setup waits only: the first software-WebGL frame at 2560x1440 can take well over 5 s when other
+// specs run beside this one. These waits decide when to start checking, not what is checked.
+const SETUP_TIMEOUT = { timeout: 20_000 };
+
 async function ready(page: Page, size: { width: number; height: number }) {
   await page.setViewportSize(size);
-  await expect.poll(async () => (await nexus(page, "getCamera")).type).toBe("OrthographicCamera");
-  await expect(page.locator("[data-testid=scene]")).toHaveAttribute("data-revealed", "true");
+  await expect
+    .poll(async () => (await nexus(page, "getCamera")).type, SETUP_TIMEOUT)
+    .toBe("OrthographicCamera");
+  await expect(page.locator("[data-testid=scene]")).toHaveAttribute(
+    "data-revealed",
+    "true",
+    SETUP_TIMEOUT,
+  );
   await expect
     .poll(async () => {
       const { width, height } = await canvasBox(page);
       return [width, height];
-    })
+    }, SETUP_TIMEOUT)
     .toEqual([size.width, size.height]);
   // Let R3F finish the resize frame so the projection matrix matches the fitted zoom.
   await page.evaluate(
