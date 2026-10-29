@@ -191,7 +191,7 @@ const noCrossZone = defineRule({
         "electron/ may import only electron/ and src/shared/; renderer code stays in src/.",
       nonStatic:
         "Non-static import in a fenced zone; use a string literal so the module fence can check it.",
-      glob: "import.meta.glob in a fenced zone must use relative or root-absolute patterns and no `base` option.",
+      glob: "import.meta.glob in a fenced zone must use relative or root-absolute patterns without `#`, and no `base` option.",
       globOptions: "glob options must be a literal object without `base`.",
       outsideRepo:
         "{{file}} is outside the repo root, so the module fence cannot place it in a zone.",
@@ -250,15 +250,15 @@ const noCrossZone = defineRule({
     }
 
     function checkGlobPattern(node) {
-      const raw = stringValue(node);
-      if (raw === null) {
+      const pattern = stringValue(node);
+      if (pattern === null) {
         context.report({ node, messageId: "nonStatic" });
         return;
       }
       // A `!` exclude cannot add files, so it needs no zone check.
-      if (raw.startsWith("!")) return;
-      const pattern = raw.replace(/#[\s\S]*$/, "");
-      if (!/^(\.\.?\/|\/)/.test(pattern)) {
+      if (pattern.startsWith("!")) return;
+      // Vite keeps a `#` and joins the raw glob, so `./a#/../x` climbs out of what the fence reads.
+      if (pattern.includes("#") || !/^(\.\.?\/|\/)/.test(pattern)) {
         context.report({ node, messageId: "glob" });
         return;
       }
