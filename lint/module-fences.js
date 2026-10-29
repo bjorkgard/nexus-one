@@ -212,11 +212,12 @@ const noCrossZone = defineRule({
     // Relative specifiers resolve from the real directory, so a symlinked importer dir is seen through.
     const dir = path.dirname(realPath(context.filename));
 
-    // Resolves a relative or root-absolute path; null for anything else.
-    function resolveFrom(specifier) {
-      if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier), true);
+    // Resolves a relative or root-absolute path; null for anything else. `probe` adds the
+    // extension/index probing of a module specifier; a glob prefix is the directory searched.
+    function resolveFrom(specifier, probe = true) {
+      if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier), probe);
       if (specifier.startsWith("/")) {
-        const target = toRepoPath(path.join(repoRoot, specifier), true);
+        const target = toRepoPath(path.join(repoRoot, specifier), probe);
         const [first] = target.split("/");
         return target === "" || leavesRepo(target) || FENCED_FIRST_SEGMENTS.has(first)
           ? target
@@ -265,7 +266,7 @@ const noCrossZone = defineRule({
         context.report({ node, messageId: "glob" });
         return;
       }
-      const target = resolveFrom(prefix === "" ? "/" : prefix);
+      const target = resolveFrom(prefix === "" ? "/" : prefix, false);
       if (target !== null) checkTarget(target, node);
     }
 

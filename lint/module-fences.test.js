@@ -64,7 +64,13 @@ const okDir = at("src/ui/__fence_ok_dir");
 const nfDir = at("src/ui/__fence_nf.mjs");
 const nfLink = at("src/ui/__fence_nf.ts");
 const nfiDir = at("src/ui/__fence_nfi");
+const globIdxDir = at("collector/__fence_glob_idx");
+const globSibDir = at("collector/__fence_glob_sib");
+const globSibLink = at("collector/__fence_glob_sib.ts");
 const fenceScratch = [
+  globIdxDir,
+  globSibDir,
+  globSibLink,
   nfDir,
   nfLink,
   nfiDir,
@@ -105,6 +111,13 @@ beforeAll(() => {
   );
   fs.mkdirSync(okDir);
   fs.writeFileSync(path.join(okDir, "index.ts"), "export const a = 1;\n");
+  // collector/ directories whose index file, or sibling file, is a symlink into src/shared/
+  fs.mkdirSync(globIdxDir);
+  fs.writeFileSync(path.join(globIdxDir, "a.ts"), "export const a = 1;\n");
+  fs.symlinkSync("../../src/shared/schema.ts", path.join(globIdxDir, "index.ts"), "file");
+  fs.mkdirSync(globSibDir);
+  fs.writeFileSync(path.join(globSibDir, "a.ts"), "export const a = 1;\n");
+  fs.symlinkSync("../src/shared/schema.ts", globSibLink, "file");
 });
 afterAll(() => {
   cleanup(...fenceScratch);
@@ -313,6 +326,10 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     // a directory named like a probe candidate is skipped; the later file symlink resolves
     bad(fromUi, 'import x from "./__fence_nf";', SRC),
     bad(fromUi, 'import x from "./__fence_nfi";', SRC),
+    // a glob prefix is the directory searched, never probed to its index or sibling file
+    bad(fromUi, 'const m = import.meta.glob("../../collector/__fence_glob_idx/*.ts");', SRC),
+    bad(fromUi, 'const m = import.meta.glob("../../collector/__fence_glob_sib/*.ts");', SRC),
+    bad(fromUi, 'const m = import.meta.glob("/collector/__fence_glob_idx/*.ts");', SRC),
     // symlinked importer directory: the real directory is src/ui
     bad(at("collector/__fence_dir_link__/a.ts"), 'import x from "../../collector/x";', SRC),
     // importer outside the repo root
