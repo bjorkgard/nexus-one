@@ -34,7 +34,20 @@ function harness() {
     wall += ms;
     tick?.();
   };
-  return { transport, control, inputs, statuses, messages, advance, wasCleared: () => cleared };
+  // Wall time passes without the interval firing, as when CPU load starves the timer.
+  const starve = (ms: number) => {
+    wall += ms;
+  };
+  return {
+    transport,
+    control,
+    inputs,
+    statuses,
+    messages,
+    advance,
+    starve,
+    wasCleared: () => cleared,
+  };
 }
 
 describe("mockTransport", () => {
@@ -105,6 +118,39 @@ describe("mockTransport", () => {
     const events = h.messages().slice(before + 2);
     expect(events.length).toBeGreaterThan(0);
     expect(events[0]).toMatchObject({ epoch: "mock-2", seq: count + 1 });
+  });
+
+  it("pausing delivers up to the clock a starved interval fell behind, then holds it", () => {
+    const h = harness();
+    const first = stream[0]!.ts;
+    h.advance(0);
+    const atStart = h.messages().length;
+    const starved = 6_000;
+    const due = stream.filter((e) => e.ts <= first + starved).length;
+    expect(due).toBeGreaterThan(atStart - 2);
+    h.starve(starved);
+    expect(h.messages().length).toBe(atStart);
+    h.transport.pauseClock(true);
+    expect(h.transport.clock()).toBe(first + starved);
+    expect(h.messages().length).toBe(2 + due);
+    h.advance(60_000);
+    expect(h.transport.clock()).toBe(first + starved);
+    expect(h.messages().length).toBe(2 + due);
+  });
+
+  it("seeks keep a paused clock paused; resuming continues from the paused clock", () => {
+    const h = harness();
+    const first = stream[0]!.ts;
+    h.transport.pauseClock(true);
+    h.transport.setClock(first + 10_000);
+    h.advance(5_000);
+    expect(h.transport.clock()).toBe(first + 10_000);
+    h.transport.setClock(first + 2_000);
+    h.advance(5_000);
+    expect(h.transport.clock()).toBe(first + 2_000);
+    h.transport.pauseClock(false);
+    h.advance(500);
+    expect(h.transport.clock()).toBe(first + 2_500);
   });
 
   it("resync rebuilds at the current clock in a new epoch", () => {
