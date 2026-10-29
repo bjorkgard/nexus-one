@@ -142,62 +142,6 @@
 **Priority:** P2
 **Depends on:** Task 2.5; must land before task 3.2
 
-### Resolve fence imports with Vite's own resolver
-
-**Issue:** [#126](https://github.com/bjorkgard/nexus-one/issues/126)
-
-**What:** Make `lint/module-fences.js` resolve each fenced specifier with Vite's own resolver (for example the dev server's `pluginContainer.resolveId`, with the project's `vite.config.ts`) and fence the resolved file, instead of re-implementing Vite's resolution rules by hand.
-
-**Why:** Each /ship adversarial pass on #116 found new spellings that Vite resolves into another zone while the hand-written rule passes them. Two proven ones are still open on `main`: `./ok.ts?/../../../electron/main.ts` (the rule cuts at `?` or `#` before resolving, while Vite normalizes the `..` first; the same works with `#`, root-absolute paths, `import()`, `import.meta.resolve` and `new URL`), and an absolute disk path such as `/<repo>/electron/main.ts` (the rule treats it as a `public/` URL, while Vite loads the file). Fixing spellings one at a time has not converged.
-
-**Context:** Both bypasses were reproduced with real oxlint and real Vite resolution by the /ship adversarial pass of #116; that pass's harness called `pluginContainer.resolveId` from `node_modules/vite`. Oxlint runs JS plugins synchronously, so check whether a resolver can run synchronously or be precomputed per lint run. Keep the existing RuleTester rows as the acceptance suite and add red-first rows for both bypasses. #121 (importer `package.json` maps) and #123 (relative percent-decoding) are other cases of the same cause.
-
-**Effort:** L (human) / M (CC+gstack)
-**Priority:** P1
-**Depends on:** None
-
-### Fence imports redirected by the importer's package.json
-
-**Issue:** [#121](https://github.com/bjorkgard/nexus-one/issues/121)
-
-**What:** Make `lint/module-fences.js` fence imports that the importer's nearest `package.json` redirects: its `browser` object map (for example `"./x.js": "../../electron/secret.ts"`) and its `imports` map (`#s`). Today the fence reads only the target folder's `package.json`, and a `#` specifier resolves to nothing, so both are allowed.
-
-**Why:** Vite applies both maps when it bundles. With a `src/foo/package.json` in place, `vite build` bundled `electron/` code into `src/` while the fence reported nothing. The root `package.json` can do the same for every `src/` file.
-
-**Context:** Proven by the /ship adversarial pass of #116 (`vite build` plus oxlint in a scratch project). Two fix options: resolve the nearest `package.json` `browser` and `imports` maps for each importer and fence the mapped values, or report every `#` specifier and ban `package.json` files inside fenced zones. Add red-first RuleTester rows with a planted `package.json`, like the existing `__fence_pkg_*` fixtures.
-
-**Effort:** M (human) / S (CC+gstack)
-**Priority:** P1
-**Depends on:** None
-
-### Percent-decode relative specifiers in the module fence
-
-**Issue:** [#123](https://github.com/bjorkgard/nexus-one/issues/123)
-
-**What:** Find out whether Vite decodes percent-escapes in relative specifiers (`./%2e%2e/electron/x`) and, if it does, decode them in `resolveFrom` before resolving, as root-absolute specifiers already are.
-
-**Why:** If Vite decodes them, `./%2e%2e/...` climbs out of the importer's folder while the fence resolves a folder literally named `%2e%2e`.
-
-**Context:** Found by a refuter during #116 and not checked against Vite. The production build does not decode root-absolute paths, but the dev server does, so check both. Write a red-first RuleTester row before the fix.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P2
-**Depends on:** None
-
-### Fence `new URL` with a destructured `import.meta.url` base
-
-**Issue:** [#124](https://github.com/bjorkgard/nexus-one/issues/124)
-
-**What:** Report or check `const { url } = import.meta; new URL(x, url)`, where the `new URL` base is a variable that holds the importer's URL.
-
-**Why:** The fence checks a `new URL` path only when `import.meta.url` appears in the base expression itself, so a destructured or copied `url` hides the import.
-
-**Context:** Deferred during #116 because following the variable needs data flow the rule does not have. The simplest fix is to report destructuring `url` from `import.meta` as non-static, as `resolve` and `glob` already are, after checking that no repo code relies on it.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P3
-**Depends on:** None
-
 ## Completed
 
 ### Run the pre-commit full check against the staged index
@@ -408,3 +352,67 @@ Also run the full pre-commit check when a staged change is a symlink, a deletion
 **Depends on:** Task 1.5 (mock generator), task 1.6
 
 **Completed:** v0.6.0 (2026-10-28)
+
+### Resolve fence imports with Vite's own resolver
+
+**Issue:** [#126](https://github.com/bjorkgard/nexus-one/issues/126)
+
+**What:** Make `lint/module-fences.js` resolve each fenced specifier with Vite's own resolver (for example the dev server's `pluginContainer.resolveId`, with the project's `vite.config.ts`) and fence the resolved file, instead of re-implementing Vite's resolution rules by hand.
+
+**Why:** Each /ship adversarial pass on #116 found new spellings that Vite resolves into another zone while the hand-written rule passes them. Two proven ones are still open on `main`: `./ok.ts?/../../../electron/main.ts` (the rule cuts at `?` or `#` before resolving, while Vite normalizes the `..` first; the same works with `#`, root-absolute paths, `import()`, `import.meta.resolve` and `new URL`), and an absolute disk path such as `/<repo>/electron/main.ts` (the rule treats it as a `public/` URL, while Vite loads the file). Fixing spellings one at a time has not converged.
+
+**Context:** Both bypasses were reproduced with real oxlint and real Vite resolution by the /ship adversarial pass of #116; that pass's harness called `pluginContainer.resolveId` from `node_modules/vite`. Oxlint runs JS plugins synchronously, so check whether a resolver can run synchronously or be precomputed per lint run. Keep the existing RuleTester rows as the acceptance suite and add red-first rows for both bypasses. #121 (importer `package.json` maps) and #123 (relative percent-decoding) are other cases of the same cause.
+
+**Effort:** L (human) / M (CC+gstack)
+**Priority:** P1
+**Depends on:** None
+
+**Completed:** unreleased (2026-10-29)
+
+### Fence imports redirected by the importer's package.json
+
+**Issue:** [#121](https://github.com/bjorkgard/nexus-one/issues/121)
+
+**What:** Make `lint/module-fences.js` fence imports that the importer's nearest `package.json` redirects: its `browser` object map (for example `"./x.js": "../../electron/secret.ts"`) and its `imports` map (`#s`). Today the fence reads only the target folder's `package.json`, and a `#` specifier resolves to nothing, so both are allowed.
+
+**Why:** Vite applies both maps when it bundles. With a `src/foo/package.json` in place, `vite build` bundled `electron/` code into `src/` while the fence reported nothing. The root `package.json` can do the same for every `src/` file.
+
+**Context:** Proven by the /ship adversarial pass of #116 (`vite build` plus oxlint in a scratch project). Two fix options: resolve the nearest `package.json` `browser` and `imports` maps for each importer and fence the mapped values, or report every `#` specifier and ban `package.json` files inside fenced zones. Add red-first RuleTester rows with a planted `package.json`, like the existing `__fence_pkg_*` fixtures.
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** None
+
+**Completed:** unreleased (2026-10-29)
+
+### Percent-decode relative specifiers in the module fence
+
+**Issue:** [#123](https://github.com/bjorkgard/nexus-one/issues/123)
+
+**What:** Find out whether Vite decodes percent-escapes in relative specifiers (`./%2e%2e/electron/x`) and, if it does, decode them in `resolveFrom` before resolving, as root-absolute specifiers already are.
+
+**Why:** If Vite decodes them, `./%2e%2e/...` climbs out of the importer's folder while the fence resolves a folder literally named `%2e%2e`.
+
+**Context:** Found by a refuter during #116 and not checked against Vite. The production build does not decode root-absolute paths, but the dev server does, so check both. Write a red-first RuleTester row before the fix.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** None
+
+**Completed:** unreleased (2026-10-29)
+
+### Fence `new URL` with a destructured `import.meta.url` base
+
+**Issue:** [#124](https://github.com/bjorkgard/nexus-one/issues/124)
+
+**What:** Report or check `const { url } = import.meta; new URL(x, url)`, where the `new URL` base is a variable that holds the importer's URL.
+
+**Why:** The fence checks a `new URL` path only when `import.meta.url` appears in the base expression itself, so a destructured or copied `url` hides the import.
+
+**Context:** Deferred during #116 because following the variable needs data flow the rule does not have. The simplest fix is to report destructuring `url` from `import.meta` as non-static, as `resolve` and `glob` already are, after checking that no repo code relies on it.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** None
+
+**Completed:** unreleased (2026-10-29)

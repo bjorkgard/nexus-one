@@ -37,6 +37,8 @@ dist-ssr
 # Scratch files written by lint/module-fences.test.js
 /src/ui/__fence_*
 /collector/__fence_*
+/src/shared/__fence_*
+/public/__fence_*
 /src/ui/__wiring_*
 /src/shared/__wiring_*
 /collector/__wiring_*

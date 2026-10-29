@@ -456,6 +456,12 @@ const noCrossZone = defineRule({
     }
 
     function checkSpecifier(specifier, node) {
+      // A data: module carries its own imports (`export * from '/electron/x.ts'`) that the bundler
+      // resolves but Vite's resolver does not see, so it cannot be fenced.
+      if (/^data:/i.test(specifier)) {
+        context.report({ node, messageId: "nonStatic" });
+        return;
+      }
       const viaVite = viteTargets(specifier);
       if (viaVite === null) {
         context.report({ node, messageId: "resolverFailed" });

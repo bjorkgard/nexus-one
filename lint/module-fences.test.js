@@ -120,10 +120,15 @@ const fromMap = path.join(mapDir, "a.ts");
 const qsDir = at("src/shared/__fence_qs");
 const qcDir = at("collector/__fence_qc");
 const publicDir = at("public");
+const publicSentinel = path.join(publicDir, "__fence_sentinel.txt");
+// public/ may hold real assets: the suite plants and removes only its own files, and removes the
+// folder (never recursively) only if it created it.
+const publicExisted = fs.existsSync(publicDir);
+const publicFiles = ["__fence_pub.svg", "__fence_pub.ts"].map((name) => path.join(publicDir, name));
 const fenceScratch = [
   qsDir,
   qcDir,
-  publicDir,
+  ...publicFiles,
   quirkDir,
   mapDir,
   pkgNestDir,
@@ -289,9 +294,11 @@ beforeAll(() => {
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir, "ok.ts"), "export const a = 1;\n");
   }
-  fs.mkdirSync(publicDir);
-  fs.writeFileSync(path.join(publicDir, "__fence_pub.svg"), "<svg/>\n");
-  fs.writeFileSync(path.join(publicDir, "__fence_pub.ts"), "export const a = 1;\n");
+  fs.mkdirSync(publicDir, { recursive: true });
+  fs.writeFileSync(publicFiles[0], "<svg/>\n");
+  fs.writeFileSync(publicFiles[1], "export const a = 1;\n");
+  // a file of someone else's in public/ must survive the suite
+  fs.writeFileSync(publicSentinel, "keep\n");
   // Value: protects=every SOURCE_SWAPS and DECLARATION_SWAPS entry reaches the file Vite picks; fails_when=a swap entry is missing or misspelled; why_new=only .js/.mjs -> .ts/.mts and .d.ts were covered; seam=none; no_claim=Vite's own resolver
   fs.symlinkSync("../../collector/__fence_file_target__.ts", swapJsxLink, "file");
   fs.symlinkSync("../../collector/__fence_file_target__.ts", swapCjsLink, "file");
@@ -301,6 +308,10 @@ beforeAll(() => {
 afterAll(() => {
   cleanup(...fenceScratch);
   cleanup(outDir);
+  const survived = fs.existsSync(publicSentinel);
+  cleanup(publicSentinel);
+  if (!publicExisted) fs.rmdirSync(publicDir);
+  if (!survived) throw new Error("the suite deleted a file it did not create in public/");
 });
 
 tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
@@ -719,6 +730,22 @@ tester.run("no-cross-zone vite resolver", plugin.rules["no-cross-zone"], {
       'import x from "./__fence_qc/ok.ts?/../../../src/ui/__fence_q/ok.ts";',
       COLLECTOR,
     ),
+    // a data: module can import any root-absolute path; Vite's resolver returns null for it
+    bad(
+      fromUi,
+      `export * from "data:text/javascript,export * from '/electron/main.ts'";`,
+      NON_STATIC,
+    ),
+    bad(fromUi, 'import x from "data:text/javascript,export default 1";', NON_STATIC),
+    bad(fromUi, 'export { a } from "data:text/javascript,export const a = 1";', NON_STATIC),
+    bad(fromUi, 'const m = import("data:text/javascript,export default 1");', NON_STATIC),
+    bad(fromUi, 'const m = require("data:text/javascript,export default 1");', NON_STATIC),
+    bad(
+      fromUi,
+      'const u = import.meta.resolve("data:text/javascript,export default 1");',
+      NON_STATIC,
+    ),
+    bad(fromElectron, 'import x from "data:text/javascript,export default 1";', NON_STATIC),
     // M2: a file: URL names a disk file
     bad(fromUi, `import x from "file://${at("electron/main.ts")}";`, SRC),
     bad(fromUi, `const m = import("file://${at("electron/main.ts")}");`, SRC),
