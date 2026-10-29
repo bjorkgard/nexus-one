@@ -24,6 +24,23 @@ describe("DevBoundary", () => {
     expect(boundary.render()).toBeNull();
   });
 
+  it("render returns the fallback node with an error", () => {
+    const boundary = new DevBoundary({ name: "PaletteBoard", children: "kids", fallback: "oops" });
+    boundary.state = { error: new Error("boom") };
+    expect(boundary.render()).toBe("oops");
+  });
+
+  it("render calls a fallback function with the error", () => {
+    const error = new Error("boom");
+    const boundary = new DevBoundary({
+      name: "PaletteBoard",
+      children: "kids",
+      fallback: (e) => `failed: ${e.message}`,
+    });
+    boundary.state = { error };
+    expect(boundary.render()).toBe("failed: boom");
+  });
+
   it("componentDidCatch logs once with the part name", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const boundary = new DevBoundary({ name: "PerfPanel", children: null });

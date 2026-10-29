@@ -6,6 +6,28 @@ export const TOKENS = {
   text: { brand: "#9fb0c8", body: "#c7d2e0", muted: "#7d8ba1" },
   danger: "#e2725b",
   zone: { site: "#6b7a90", floor: "#2b6f8a", room: "#c9a227" },
+  // Material colours (task 2.2). Dark ladder bg.top < floor < panel < paint.graphite is tested in tokens.test.ts.
+  surface: {
+    panel: "#253145",
+    trimCyan: "#36d6f5",
+    trimWhite: "#e6f2ff",
+    glass: "#497895",
+    floor: "#18222f",
+    furniture: "#c9c4bc",
+    screenIdle: "#2a6f7c",
+    screenActive: "#5fe3ff",
+  },
+  // Vehicle paints: muted (C* <= 45) and separable for colour-vision deficiency, both tested.
+  paint: {
+    red: "#b07c77",
+    amber: "#664321",
+    ochre: "#ac9243",
+    green: "#95d096",
+    blue: "#5ba2cb",
+    violet: "#596798",
+    silver: "#d9d9d9",
+    graphite: "#3b3e46",
+  },
 } as const;
 
 export const CSS_VAR_PREFIX = "--nx-";

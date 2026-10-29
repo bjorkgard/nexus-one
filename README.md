@@ -87,6 +87,16 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `docs/PLAN.md` — Phased build plan.
 - `docs/plans/` — Per-task plan and review files.
 
+## Material palette and geometry cache
+
+- `src/world/palette.ts` exports `palette`: 10 shared materials (`ground`, `panel`, `trimCyan`, `trimWhite`, `glass`, `floor`, `furniture`, `screen`, `paint`, `led`) built once. They are read-only: never edit `.color`, `.opacity` or any other property on `palette.*` from a mesh. In dev, writing `color` or `emissive` throws `palette.<name>.<prop> is shared and read-only; tint per object with instance or vertex colour (src/world/palette.ts)`.
+- Tint one object with instance colour (`InstancedMesh.setColorAt`). Vertex colours are allowed only when baked into the geometry at build time with the colour data in the geometry cache key (the slab does this). `screen` and `led` are unlit, white-based and take their colour per instance.
+- A deliberate different material goes through `variant(name, overrides)`. Allowed keys: `color` (hex), `opacity` (glass only), `roughness` and `metalness` (lit materials only), `emissiveIntensity` (materials with an emissive colour, at most `LOOK.emissiveCeiling`). Unknown keys, bad values and keys that cannot take effect throw. The cache key is the material name plus the overrides, normalised like geometry keys (hex lower-cased, floats rounded to 4 places), so equal overrides share one clone.
+- Material budget: palette + variants + the drei Grid must stay under `MATERIAL_BUDGET` (30); `variant()` throws when it would reach it.
+- `src/world/geometry-cache.ts`: `getGeometry(kind, params, build)` returns one shared geometry per kind and params. The cache never disposes (app lifetime). On HMR each module clears only its own kinds with `__clearGeometryCache(kinds)`. `__nexus.cacheStats()` returns `{ size, hits, misses }`; `__nexus.rendererInfo()` also reports `materials` and `programs`.
+- `?palette=1` (dev only) shows the swatch board: surfaces, vehicle paints and a "Together" vignette, each swatch labelled with its token name and hex. The stage reveal waits for the board (3 s timeout, one console warning). If the board throws, a "Palette board failed: <message>" line replaces it; if it arrives after the timeout, "Palette board timed out". `?zones=1` wins the framing when both are set.
+- The board exists only in dev; the build fails if its marker (`nexus-palette-board`) reaches the production bundle.
+
 ## Data source
 
 The app starts one data client at boot (`src/data/boot.ts`). Pick the source in the URL:

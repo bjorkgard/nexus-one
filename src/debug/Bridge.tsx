@@ -2,7 +2,14 @@ import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import { Vector3 } from "three";
 import type { Camera } from "three";
-import { installNexus, projectToPage, readRendererInfo, registerNexus } from "./nexus";
+import { geometryCacheStats } from "../world/geometry-cache";
+import {
+  countMaterials,
+  installNexus,
+  projectToPage,
+  readRendererInfo,
+  registerNexus,
+} from "./nexus";
 
 // Stage writes the look-at point to camera.userData.target; null until a camera has one.
 function readTarget(camera: Camera): [number, number, number] | null {
@@ -14,6 +21,7 @@ function readTarget(camera: Camera): [number, number, number] | null {
 export default function Bridge() {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
 
   useEffect(() => {
     installNexus(window);
@@ -37,12 +45,16 @@ export default function Bridge() {
         camera.updateMatrixWorld();
         return projectToPage(camera, gl.domElement.getBoundingClientRect(), worldPos);
       }),
-      registerNexus("rendererInfo", () => readRendererInfo(gl)),
+      registerNexus("rendererInfo", () => ({
+        ...readRendererInfo(gl),
+        materials: countMaterials(scene),
+      })),
+      registerNexus("cacheStats", geometryCacheStats),
     ];
     return () => {
       for (const unregister of unregisters) unregister();
     };
-  }, [camera, gl]);
+  }, [camera, gl, scene]);
 
   return null;
 }

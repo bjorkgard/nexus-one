@@ -45,6 +45,7 @@ test("hooks are registered", async ({ page }) => {
   await waitForHook(page, "dataState");
   const keys = await page.evaluate(() => Object.keys(window.__nexus ?? {}).sort());
   expect(keys).toEqual([
+    "cacheStats",
     "dataState",
     "emit",
     "getCamera",
@@ -58,7 +59,14 @@ test("hooks are registered", async ({ page }) => {
 test("rendererInfo returns finite numbers", async ({ page }) => {
   await page.goto("/");
   const info = await nexus(page, "rendererInfo");
-  for (const key of ["calls", "triangles", "geometries", "textures"] as const) {
+  for (const key of [
+    "calls",
+    "triangles",
+    "geometries",
+    "textures",
+    "programs",
+    "materials",
+  ] as const) {
     expect(Number.isFinite(info[key]), key).toBe(true);
   }
 });

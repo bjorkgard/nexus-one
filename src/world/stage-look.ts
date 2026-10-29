@@ -6,7 +6,8 @@ export const LOOK = {
   exposure: 1,
   slabSize: 120,
   slabThickness: 1.4,
-  slabRoughness: 0.9,
+  // No palette or variant emissiveIntensity above this: AgX pushes brighter emissive toward white.
+  emissiveCeiling: 1.5,
   gridLift: 0.01,
   gridCellSize: 1,
   gridSectionSize: 10,
