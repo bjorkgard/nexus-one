@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { globSync } from "tinyglobby";
 import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
 // Allow-list: a file in a zone may import only inside its allowed folders; static specifiers only.
@@ -212,11 +213,12 @@ const noCrossZone = defineRule({
     // Relative specifiers resolve from the real directory, so a symlinked importer dir is seen through.
     const dir = path.dirname(realPath(context.filename));
 
-    // Resolves a relative or root-absolute path; null for anything else.
-    function resolveFrom(specifier) {
-      if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier), true);
+    // Resolves a relative or root-absolute path; null for anything else. `probe` adds the
+    // extension/index probing of a module specifier; a glob prefix is the directory searched.
+    function resolveFrom(specifier, probe = true) {
+      if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier), probe);
       if (specifier.startsWith("/")) {
-        const target = toRepoPath(path.join(repoRoot, specifier), true);
+        const target = toRepoPath(path.join(repoRoot, specifier), probe);
         const [first] = target.split("/");
         return target === "" || leavesRepo(target) || FENCED_FIRST_SEGMENTS.has(first)
           ? target
@@ -225,12 +227,13 @@ const noCrossZone = defineRule({
       return null;
     }
 
-    function checkTarget(target, node) {
+    function isAllowed(target) {
       // The root package.json is JSON only, so every zone may read it.
-      if (target === "package.json") return;
-      if (!zone.allowed.some((folder) => inside(target, folder))) {
-        context.report({ node, messageId: zone.messageId });
-      }
+      return target === "package.json" || zone.allowed.some((folder) => inside(target, folder));
+    }
+
+    function checkTarget(target, node) {
+      if (!isAllowed(target)) context.report({ node, messageId: zone.messageId });
     }
 
     function checkSpecifier(specifier, node) {
@@ -265,8 +268,25 @@ const noCrossZone = defineRule({
         context.report({ node, messageId: "glob" });
         return;
       }
-      const target = resolveFrom(prefix === "" ? "/" : prefix);
-      if (target !== null) checkTarget(target, node);
+      const target = resolveFrom(prefix === "" ? "/" : prefix, false);
+      if (target === null) return;
+      if (!isAllowed(target)) {
+        context.report({ node, messageId: zone.messageId });
+        return;
+      }
+      // A matched file may be a symlink into another zone, so each one is fenced by its real path.
+      // tinyglobby is Vite's matcher and walks into linked folders; `dot` makes it a superset.
+      const cwd = pattern.startsWith("/") ? repoRoot : dir;
+      const leaks = globSync(pattern.startsWith("/") ? pattern.slice(1) : pattern, {
+        cwd,
+        absolute: true,
+        dot: true,
+        expandDirectories: false,
+      }).some(
+        (file) =>
+          fs.statSync(file, { throwIfNoEntry: false })?.isFile() && !isAllowed(toRepoPath(file)),
+      );
+      if (leaks) context.report({ node, messageId: zone.messageId });
     }
 
     function checkGlobOptions(node) {

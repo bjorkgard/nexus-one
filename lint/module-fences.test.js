@@ -64,7 +64,21 @@ const okDir = at("src/ui/__fence_ok_dir");
 const nfDir = at("src/ui/__fence_nf.mjs");
 const nfLink = at("src/ui/__fence_nf.ts");
 const nfiDir = at("src/ui/__fence_nfi");
+const globIdxDir = at("collector/__fence_glob_idx");
+const globSibDir = at("collector/__fence_glob_sib");
+const globSibLink = at("collector/__fence_glob_sib.ts");
+const globInIdx = at("src/ui/__fence_glob_in_idx");
+const globInAny = at("src/ui/__fence_glob_in_any");
+const globMixDir = at("src/ui/__fence_glob_mix");
+const globWalkDir = at("src/ui/__fence_glob_walk");
 const fenceScratch = [
+  globMixDir,
+  globWalkDir,
+  globInIdx,
+  globInAny,
+  globIdxDir,
+  globSibDir,
+  globSibLink,
   nfDir,
   nfLink,
   nfiDir,
@@ -105,6 +119,34 @@ beforeAll(() => {
   );
   fs.mkdirSync(okDir);
   fs.writeFileSync(path.join(okDir, "index.ts"), "export const a = 1;\n");
+  // collector/ directories whose index file, or sibling file, is a symlink into src/shared/
+  fs.mkdirSync(globIdxDir);
+  fs.writeFileSync(path.join(globIdxDir, "a.ts"), "export const a = 1;\n");
+  fs.symlinkSync("../../src/shared/schema.ts", path.join(globIdxDir, "index.ts"), "file");
+  fs.mkdirSync(globSibDir);
+  fs.writeFileSync(path.join(globSibDir, "a.ts"), "export const a = 1;\n");
+  fs.symlinkSync("../src/shared/schema.ts", globSibLink, "file");
+  // src/ directories a glob searches, holding a file symlink into collector/
+  fs.mkdirSync(globInIdx);
+  fs.symlinkSync(
+    "../../../collector/__fence_file_target__.ts",
+    path.join(globInIdx, "index.ts"),
+    "file",
+  );
+  fs.mkdirSync(globInAny);
+  fs.writeFileSync(path.join(globInAny, "a.ts"), "export const a = 1;\n");
+  fs.symlinkSync(
+    "../../../collector/__fence_file_target__.ts",
+    path.join(globInAny, "c.ts"),
+    "file",
+  );
+  // Value: protects=a glob match is fenced only when it is a regular file; fails_when=a directory link or dangling link match is reported, or a link inside a searched folder is missed; why_new=the in_idx/in_any rows only cover file symlinks matched directly; seam=none; no_claim=Vite's own glob walk (checked against node:fs globSync only)
+  fs.mkdirSync(globMixDir);
+  fs.writeFileSync(path.join(globMixDir, "a.ts"), "export const a = 1;\n");
+  fs.symlinkSync("../../../collector", path.join(globMixDir, "linkdir"), "dir");
+  fs.symlinkSync("./__fence_nowhere__.ts", path.join(globMixDir, "dead.ts"), "file");
+  fs.mkdirSync(globWalkDir);
+  fs.symlinkSync("../../../collector", path.join(globWalkDir, "linkdir"), "dir");
 });
 afterAll(() => {
   cleanup(...fenceScratch);
@@ -128,16 +170,22 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'new URL("./x.ts", import.meta.url);'),
     good(fromUi, 'new URL("https://example.com/x", import.meta.url);'),
     good(fromUi, "new URL(name);"),
-    good(fromUi, 'const m = import.meta.glob("./*.ts");'),
-    good(fromUi, 'const m = import.meta.glob("./*.ts", { eager: true });'),
+    // src/ui/ holds this suite's collector/ symlinks and every match is fenced, so globs search a clean folder
+    good(fromUi, 'const m = import.meta.glob("./__fence_ok_dir/*.ts");'),
+    good(fromUi, 'const m = import.meta.glob("./__fence_ok_dir/*.ts", { eager: true });'),
     good(fromUi, 'const m = import.meta.glob("../shared/*.ts");'),
-    good(fromUi, 'const m = import.meta.glob("/src/ui/*.ts");'),
+    good(fromUi, 'const m = import.meta.glob("/src/ui/__fence_ok_dir/*.ts");'),
     good(fromUi, 'const m = import.meta.glob(["./a/*.ts", "!./b/**"]);'),
     good(fromUi, 'import x from "/src/data/z";'),
     // `!` excludes cannot add files; root-absolute `/x` is served from public/
     good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!**/bar.ts"]);'),
     good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!../../collector/**"]);'),
     good(fromUi, 'import logo from "/logo.svg";'),
+    // a directory match and a dangling link are not files, so a glob does not fence them
+    good(fromUi, 'const m = import.meta.glob("./__fence_glob_mix/linkd*");'),
+    good(fromUi, 'const m = import.meta.glob("./__fence_glob_mix/dead.*");'),
+    // a root-absolute glob under no root entry is a public/ URL pattern, never read from disk
+    good(fromUi, 'const m = import.meta.glob("/assets/*.png");'),
     good(fromUi, 'import x from "/assets/x.png";'),
     good(fromUi, 'import x from "/assets/x.png?url";'),
     // a real directory with a same-zone index still passes
@@ -148,7 +196,7 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'new URL("./x.ts", import.meta["url"]);'),
     good(fromUi, 'import.meta.resolve("./x.ts");'),
     good(fromUi, 'import.meta["resolve"]("./x.ts");'),
-    good(fromUi, 'import.meta["glob"]("./*.ts");'),
+    good(fromUi, 'import.meta["glob"]("./__fence_ok_dir/*.ts");'),
     good(at("src/data/a.ts"), 'import x from "./collector";'),
     // src/shared
     good(at("src/shared/sub/a.ts"), 'import x from "../x";'),
@@ -216,10 +264,18 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     bad(fromUi, 'const m = import.meta.glob(["../../collector/a.ts"]);', SRC),
     bad(fromUi, 'const m = import.meta.glob("./**/../../../collector/*.ts");', GLOB),
     // bypass 4: glob base option, root-absolute glob
-    bad(fromUi, 'const m = import.meta.glob("./*.ts", { base: "../../collector" });', GLOB),
-    bad(fromUi, 'const m = import.meta.glob("./*.ts", { "base": "../../collector" });', GLOB),
-    bad(fromUi, 'const m = import.meta.glob("./*.ts", { ...opts });', GLOB_OPTIONS),
-    bad(fromUi, 'const m = import.meta.glob("./*.ts", opts);', GLOB_OPTIONS),
+    bad(
+      fromUi,
+      'const m = import.meta.glob("./__fence_ok_dir/*.ts", { base: "../../collector" });',
+      GLOB,
+    ),
+    bad(
+      fromUi,
+      'const m = import.meta.glob("./__fence_ok_dir/*.ts", { "base": "../../collector" });',
+      GLOB,
+    ),
+    bad(fromUi, 'const m = import.meta.glob("./__fence_ok_dir/*.ts", { ...opts });', GLOB_OPTIONS),
+    bad(fromUi, 'const m = import.meta.glob("./__fence_ok_dir/*.ts", opts);', GLOB_OPTIONS),
     bad(fromUi, 'const m = import.meta.glob("!./*.ts", { base: "../../collector" });', GLOB),
     bad(fromUi, 'import x from "/public/../collector/x";', SRC),
     bad(fromUi, 'const m = import.meta.glob("/collector/*.ts");', SRC),
@@ -313,6 +369,16 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     // a directory named like a probe candidate is skipped; the later file symlink resolves
     bad(fromUi, 'import x from "./__fence_nf";', SRC),
     bad(fromUi, 'import x from "./__fence_nfi";', SRC),
+    // a glob prefix is the directory searched, never probed to its index or sibling file
+    bad(fromUi, 'const m = import.meta.glob("../../collector/__fence_glob_idx/*.ts");', SRC),
+    bad(fromUi, 'const m = import.meta.glob("../../collector/__fence_glob_sib/*.ts");', SRC),
+    bad(fromUi, 'const m = import.meta.glob("/collector/__fence_glob_idx/*.ts");', SRC),
+    // a file the glob matches is fenced by its real path, whatever its name
+    bad(fromUi, 'const m = import.meta.glob("./__fence_glob_in_idx/*.ts");', SRC),
+    bad(fromUi, 'const m = import.meta.glob("./__fence_glob_in_any/*.ts");', SRC),
+    bad(fromUi, 'const m = import.meta.glob("/src/ui/__fence_glob_in_any/**/*.ts");', SRC),
+    // a directory link inside the searched folder leads the walk into collector/
+    bad(fromUi, 'const m = import.meta.glob("./__fence_glob_walk/**/*.ts");', SRC),
     // symlinked importer directory: the real directory is src/ui
     bad(at("collector/__fence_dir_link__/a.ts"), 'import x from "../../collector/x";', SRC),
     // importer outside the repo root
