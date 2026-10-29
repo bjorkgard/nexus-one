@@ -14,6 +14,7 @@ export function PaletteFailure({ message }: { message: string }) {
     <Html position={[0, 2, 0]} center zIndexRange={[10, 0]}>
       <div
         data-testid="palette-failure"
+        role="alert"
         style={{
           color: TOKENS.danger,
           fontFamily: "var(--font-sans)",
