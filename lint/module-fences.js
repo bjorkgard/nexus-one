@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { globSync } from "tinyglobby";
 import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
 // Allow-list: a file in a zone may import only inside its allowed folders; static specifiers only.
@@ -274,14 +275,17 @@ const noCrossZone = defineRule({
         return;
       }
       // A matched file may be a symlink into another zone, so each one is fenced by its real path.
+      // tinyglobby is Vite's matcher and walks into linked folders; `dot` makes it a superset.
       const cwd = pattern.startsWith("/") ? repoRoot : dir;
-      const leaks = fs
-        .globSync(pattern.startsWith("/") ? pattern.slice(1) : pattern, { cwd })
-        .map((match) => path.resolve(cwd, match))
-        .some(
-          (file) =>
-            fs.statSync(file, { throwIfNoEntry: false })?.isFile() && !isAllowed(toRepoPath(file)),
-        );
+      const leaks = globSync(pattern.startsWith("/") ? pattern.slice(1) : pattern, {
+        cwd,
+        absolute: true,
+        dot: true,
+        expandDirectories: false,
+      }).some(
+        (file) =>
+          fs.statSync(file, { throwIfNoEntry: false })?.isFile() && !isAllowed(toRepoPath(file)),
+      );
       if (leaks) context.report({ node, messageId: zone.messageId });
     }
 

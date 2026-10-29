@@ -69,7 +69,11 @@ const globSibDir = at("collector/__fence_glob_sib");
 const globSibLink = at("collector/__fence_glob_sib.ts");
 const globInIdx = at("src/ui/__fence_glob_in_idx");
 const globInAny = at("src/ui/__fence_glob_in_any");
+const globMixDir = at("src/ui/__fence_glob_mix");
+const globWalkDir = at("src/ui/__fence_glob_walk");
 const fenceScratch = [
+  globMixDir,
+  globWalkDir,
   globInIdx,
   globInAny,
   globIdxDir,
@@ -136,6 +140,13 @@ beforeAll(() => {
     path.join(globInAny, "c.ts"),
     "file",
   );
+  // Value: protects=a glob match is fenced only when it is a regular file; fails_when=a directory link or dangling link match is reported, or a link inside a searched folder is missed; why_new=the in_idx/in_any rows only cover file symlinks matched directly; seam=none; no_claim=Vite's own glob walk (checked against node:fs globSync only)
+  fs.mkdirSync(globMixDir);
+  fs.writeFileSync(path.join(globMixDir, "a.ts"), "export const a = 1;\n");
+  fs.symlinkSync("../../../collector", path.join(globMixDir, "linkdir"), "dir");
+  fs.symlinkSync("./__fence_nowhere__.ts", path.join(globMixDir, "dead.ts"), "file");
+  fs.mkdirSync(globWalkDir);
+  fs.symlinkSync("../../../collector", path.join(globWalkDir, "linkdir"), "dir");
 });
 afterAll(() => {
   cleanup(...fenceScratch);
@@ -170,6 +181,11 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!**/bar.ts"]);'),
     good(fromUi, 'const m = import.meta.glob(["./dir/*.ts", "!../../collector/**"]);'),
     good(fromUi, 'import logo from "/logo.svg";'),
+    // a directory match and a dangling link are not files, so a glob does not fence them
+    good(fromUi, 'const m = import.meta.glob("./__fence_glob_mix/linkd*");'),
+    good(fromUi, 'const m = import.meta.glob("./__fence_glob_mix/dead.*");'),
+    // a root-absolute glob under no root entry is a public/ URL pattern, never read from disk
+    good(fromUi, 'const m = import.meta.glob("/assets/*.png");'),
     good(fromUi, 'import x from "/assets/x.png";'),
     good(fromUi, 'import x from "/assets/x.png?url";'),
     // a real directory with a same-zone index still passes
@@ -361,6 +377,8 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     bad(fromUi, 'const m = import.meta.glob("./__fence_glob_in_idx/*.ts");', SRC),
     bad(fromUi, 'const m = import.meta.glob("./__fence_glob_in_any/*.ts");', SRC),
     bad(fromUi, 'const m = import.meta.glob("/src/ui/__fence_glob_in_any/**/*.ts");', SRC),
+    // a directory link inside the searched folder leads the walk into collector/
+    bad(fromUi, 'const m = import.meta.glob("./__fence_glob_walk/**/*.ts");', SRC),
     // symlinked importer directory: the real directory is src/ui
     bad(at("collector/__fence_dir_link__/a.ts"), 'import x from "../../collector/x";', SRC),
     // importer outside the repo root
