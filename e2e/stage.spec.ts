@@ -556,6 +556,35 @@ test("?palette=1&zones=1 frames the campus and still renders the board", async (
   expect(await page.locator("[data-testid=palette-label]").count()).toBeGreaterThan(0);
 });
 
+test("?palette=1 hides swatch labels when small and keeps them apart when large", async ({
+  page,
+}) => {
+  const rows = ["Material palette", "Surfaces", "Vehicle paints", "Together"];
+  const boxes = async () =>
+    page.locator("[data-testid=palette-label]").evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { text: el.textContent ?? "", x: r.x, y: r.y, w: r.width, h: r.height };
+      }),
+    );
+  await page.goto("/?palette=1");
+  await ready(page, { width: 375, height: 812 });
+  expect((await boxes()).map((b) => b.text).sort()).toEqual([...rows].sort());
+  for (const text of rows) await expect(page.getByText(text, { exact: true })).toBeVisible();
+
+  await ready(page, { width: 1440, height: 900 });
+  await expect
+    .poll(async () => (await boxes()).length, SETUP_TIMEOUT)
+    .toBe(8 + 8 + 1 + rows.length);
+  const all = await boxes();
+  for (const [i, a] of all.entries())
+    for (const b of all.slice(i + 1))
+      expect(
+        a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h,
+        `${a.text} overlaps ${b.text}`,
+      ).toBe(false);
+});
+
 // ---- Rendered-pixel checks (eng E2): decode a screenshot inside the page, no Node PNG decoder ----
 
 type Rgb = [number, number, number];
