@@ -170,20 +170,6 @@
 **Priority:** P1
 **Depends on:** None
 
-### Run the pre-commit full check against the staged index
-
-**Issue:** [#122](https://github.com/bjorkgard/nexus-one/issues/122)
-
-**What:** When `.vite-hooks/pre-commit` takes the full-check branch, check what will be committed (the index), not the working tree.
-
-**Why:** The full `vp check` runs outside lint-staged and reads the files on disk, so an unstaged edit can hide a staged break. For example: stage the deletion of `a.ts`, and leave unstaged the edit that removes `b.ts`'s import of it. CI's full check still catches this, so the gap is local only.
-
-**Context:** Found by the /ship red team of #116; the hook comment documents the limit. Options: run the check in a temporary `git worktree` of the index, or route the full check through lint-staged so it hides unstaged changes (lint-staged skips commits that stage only symlinks, which is why the hook decides on its own today). Avoid `git stash` in the hook.
-
-**Effort:** M (human) / S (CC+gstack)
-**Priority:** P2
-**Depends on:** None
-
 ### Percent-decode relative specifiers in the module fence
 
 **Issue:** [#123](https://github.com/bjorkgard/nexus-one/issues/123)
@@ -212,6 +198,24 @@
 **Priority:** P3
 **Depends on:** None
 
+## Completed
+
+### Run the pre-commit full check against the staged index
+
+**Issue:** [#122](https://github.com/bjorkgard/nexus-one/issues/122)
+
+**What:** When `.vite-hooks/pre-commit` takes the full-check branch, check what will be committed (the index), not the working tree.
+
+**Why:** The full `vp check` runs outside lint-staged and reads the files on disk, so an unstaged edit can hide a staged break. For example: stage the deletion of `a.ts`, and leave unstaged the edit that removes `b.ts`'s import of it. CI's full check still catches this, so the gap is local only.
+
+**Context:** Found by the /ship red team of #116; the hook comment documents the limit. Options: run the check in a temporary `git worktree` of the index, or route the full check through lint-staged so it hides unstaged changes (lint-staged skips commits that stage only symlinks, which is why the hook decides on its own today). Avoid `git stash` in the hook.
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** None
+
+**Completed:** unreleased (2026-10-29)
+
 ### Harden the pre-commit hook's git diff against config and env
 
 **Issue:** [#125](https://github.com/bjorkgard/nexus-one/issues/125)
@@ -226,7 +230,7 @@
 **Priority:** P3
 **Depends on:** None
 
-## Completed
+**Completed:** unreleased (2026-10-29)
 
 ### Close the remaining module-fence resolution gaps
 

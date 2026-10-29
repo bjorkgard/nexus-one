@@ -1,12 +1,28 @@
 # lint-staged lists ACMR files and drops symlink (120000) and submodule (160000) entries, so a commit that
 # stages only deletions, renames, type changes or such entries would run no check. Decide here, from git:
 # any of those, or a git failure, runs the full check; everything else stays partial.
-if ! raw=$(git diff --cached --raw -M) ||
+# The diff ignores settings that hide or reshape entries: diff.ignoreSubmodules and `ignore = all` in
+# .gitmodules (hide a gitlink), GIT_PRINT_SHA1_ELLIPSIS (appends "..." to the abbreviated hashes, which
+# breaks the pattern), core.abbrev, diff.relative and color.
+unset GIT_PRINT_SHA1_ELLIPSIS
+if ! raw=$(git diff --cached --raw -M --no-abbrev --no-relative --no-color --ignore-submodules=none) ||
   printf '%s\n' "$raw" | grep -Eq '^:(120000|160000) |^:[0-7]+ (120000|160000) |^:[0-7]+ [0-7]+ [0-9a-f]+ [0-9a-f]+ [DRT]'; then
-  vp check
+  # The full `vp check` reads the working tree, so an unstaged edit could mask a staged break (a staged
+  # deletion of a.ts, with the edit that drops b.ts's import of it left unstaged). Check an export of the
+  # index instead, in a temporary directory that is removed on every exit path. node_modules is linked
+  # in, not copied. If the export fails, fall back to the working tree rather than skip the check.
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/pre-commit-index.XXXXXX") || exit 1
+  trap 'rm -rf "$tmp"' EXIT
+  trap 'exit 1' HUP INT TERM
+  if root=$(git rev-parse --show-toplevel) && git checkout-index -a --prefix="$tmp/"; then
+    [ -e "$root/node_modules" ] && ln -s "$root/node_modules" "$tmp/node_modules"
+    cd "$tmp" && vp check
+  else
+    echo "pre-commit: could not export the index; checking the working tree" >&2
+    vp check
+  fi
 else
   # D stays in the filter harmlessly: D, R, T, 120000 and 160000 entries and git failures took the full
-  # branch above, so only A, C and M reach here. The full `vp check` reads the working tree, not the
-  # index, so an unstaged edit can mask a staged break; CI's full check covers that.
+  # branch above, so only A, C and M reach here.
   vp staged --diff-filter=ACDMR
 fi
