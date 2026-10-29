@@ -226,12 +226,13 @@ const noCrossZone = defineRule({
       return null;
     }
 
-    function checkTarget(target, node) {
+    function isAllowed(target) {
       // The root package.json is JSON only, so every zone may read it.
-      if (target === "package.json") return;
-      if (!zone.allowed.some((folder) => inside(target, folder))) {
-        context.report({ node, messageId: zone.messageId });
-      }
+      return target === "package.json" || zone.allowed.some((folder) => inside(target, folder));
+    }
+
+    function checkTarget(target, node) {
+      if (!isAllowed(target)) context.report({ node, messageId: zone.messageId });
     }
 
     function checkSpecifier(specifier, node) {
@@ -267,7 +268,21 @@ const noCrossZone = defineRule({
         return;
       }
       const target = resolveFrom(prefix === "" ? "/" : prefix, false);
-      if (target !== null) checkTarget(target, node);
+      if (target === null) return;
+      if (!isAllowed(target)) {
+        context.report({ node, messageId: zone.messageId });
+        return;
+      }
+      // A matched file may be a symlink into another zone, so each one is fenced by its real path.
+      const cwd = pattern.startsWith("/") ? repoRoot : dir;
+      const leaks = fs
+        .globSync(pattern.startsWith("/") ? pattern.slice(1) : pattern, { cwd })
+        .map((match) => path.resolve(cwd, match))
+        .some(
+          (file) =>
+            fs.statSync(file, { throwIfNoEntry: false })?.isFile() && !isAllowed(toRepoPath(file)),
+        );
+      if (leaks) context.report({ node, messageId: zone.messageId });
     }
 
     function checkGlobOptions(node) {
