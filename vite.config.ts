@@ -31,9 +31,22 @@ const browserLibs = [
 // ":oldmode newmode oldsha newsha STATUS\0path\0" (a rename or copy lists two paths). A git failure counts.
 function needsFullCheck(): boolean {
   try {
-    const raw = childProcess.execFileSync("git", ["diff", "--cached", "--raw", "-z", "-M"], {
-      encoding: "utf8",
-    });
+    // Same flags as the hook: no config may hide a submodule entry or reshape the output.
+    const { GIT_PRINT_SHA1_ELLIPSIS: _ellipsis, ...env } = process.env;
+    const raw = childProcess.execFileSync(
+      "git",
+      [
+        "diff",
+        "--cached",
+        "--raw",
+        "-z",
+        "-M",
+        "--no-abbrev",
+        "--no-relative",
+        "--ignore-submodules=none",
+      ],
+      { encoding: "utf8", env },
+    );
     const tokens = raw.split("\0");
     for (let i = 0; i < tokens.length && tokens[i] !== "";) {
       const [oldMode, newMode, , , status] = tokens[i].split(" ");

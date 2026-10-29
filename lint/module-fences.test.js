@@ -834,8 +834,18 @@ describe("staged function", () => {
     expect(staged([at("src/a.ts")])).toBe(`vp check --fix "${at("src/a.ts")}"`);
     expect(git.mock.calls[0].slice(0, 2)).toEqual([
       "git",
-      ["diff", "--cached", "--raw", "-z", "-M"],
+      [
+        "diff",
+        "--cached",
+        "--raw",
+        "-z",
+        "-M",
+        "--no-abbrev",
+        "--no-relative",
+        "--ignore-submodules=none",
+      ],
     ]);
+    expect(git.mock.calls[0][2].env).not.toHaveProperty("GIT_PRINT_SHA1_ELLIPSIS");
   });
   it.each([
     ["a deletion", entry("100644", "000000", "D", "src/a.ts")],
@@ -873,8 +883,11 @@ describe("staged function", () => {
 describe("pre-commit hook", () => {
   const hook = fs.readFileSync(at(".vite-hooks/pre-commit"), "utf8");
   // Commits `before`, applies `change` (a list of git args or functions), runs the hook, returns its output.
-  // `stubGit` puts a `git` that exits 1 ahead of the real one for the hook only.
-  function runHook(before, change, stubGit = false) {
+  // `stubGit` puts a `git` that exits 1 ahead of the real one for the hook only. `extra.config` is a list of
+  // [key, value] repo settings made before staging, `extra.env` is added to the hook's environment,
+  // `extra.afterAdd` edits the working tree after staging, `extra.status` is the expected exit status, and
+  // `extra.vp` is appended to the stub `vp` script. The hook gets its own TMPDIR, which must be empty afterwards.
+  function runHook(before, change, stubGit = false, extra = {}) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fence-hook-"));
     try {
       // No user or system git config, and every git call must succeed.
@@ -891,21 +904,28 @@ describe("pre-commit hook", () => {
       git("init", "-q");
       git("config", "user.email", "t@example.com");
       git("config", "user.name", "t");
+      for (const [key, value] of extra.config ?? []) git("config", key, value);
       before(dir);
       git("add", "-A");
       git("-c", "commit.gpgsign=false", "commit", "-qm", "init");
       change(dir, git);
       git("add", "-A");
+      extra.afterAdd?.(dir);
       const bin = path.join(dir, "__bin");
+      const tmp = path.join(dir, "__tmp");
       fs.mkdirSync(bin);
-      fs.writeFileSync(path.join(bin, "vp"), '#!/bin/sh\necho "VP_RAN $*"\n', { mode: 0o755 });
+      fs.mkdirSync(tmp);
+      fs.writeFileSync(path.join(bin, "vp"), `#!/bin/sh\necho "VP_RAN $*"\n${extra.vp ?? ""}`, {
+        mode: 0o755,
+      });
       if (stubGit) fs.writeFileSync(path.join(bin, "git"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
       const run = spawnSync("sh", ["-c", hook], {
         cwd: dir,
         encoding: "utf8",
-        env: { ...env, PATH: `${bin}:${process.env.PATH}` },
+        env: { ...env, ...extra.env, TMPDIR: tmp, PATH: `${bin}:${process.env.PATH}` },
       });
-      expect(run.status).toBe(0);
+      expect(run.status, run.stderr).toBe(extra.status ?? 0);
+      expect(fs.readdirSync(tmp)).toEqual([]);
       return run.stdout.trim();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -960,31 +980,92 @@ describe("pre-commit hook", () => {
     };
     expect(runHook(before, change)).toBe("VP_RAN check");
   });
+  // `git add -A` stages a nested repository as a gitlink.
+  const addGitlink = (dir, git) => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    git("-C", "sub", "init", "-q");
+    git(
+      "-C",
+      "sub",
+      "-c",
+      "user.email=t@example.com",
+      "-c",
+      "user.name=t",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "x",
+    );
+  };
   it("runs the full check for a staged submodule (gitlink)", () => {
-    // `git add -A` stages a nested repository as a gitlink.
-    const change = (dir, git) => {
-      fs.mkdirSync(path.join(dir, "sub"));
-      git("-C", "sub", "init", "-q");
-      git(
-        "-C",
-        "sub",
-        "-c",
-        "user.email=t@example.com",
-        "-c",
-        "user.name=t",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "x",
-      );
-    };
-    expect(runHook(base, change)).toBe("VP_RAN check");
+    expect(runHook(base, addGitlink)).toBe("VP_RAN check");
   });
   it("runs the full check when git fails", () => {
     expect(runHook(base, (dir) => write(dir, "a.txt", "y\n"), true)).toBe("VP_RAN check");
+  });
+  it("runs the full check for a deletion with diff.ignoreSubmodules=all set", () => {
+    const extra = { config: [["diff.ignoreSubmodules", "all"]] };
+    expect(runHook(base, (dir) => unlink(dir, "gone.txt"), false, extra)).toBe("VP_RAN check");
+  });
+  it("runs the full check for a staged gitlink with diff.ignoreSubmodules=all set", () => {
+    const extra = { config: [["diff.ignoreSubmodules", "all"]] };
+    expect(runHook(base, addGitlink, false, extra)).toBe("VP_RAN check");
+  });
+  it("runs the full check for a staged gitlink with ignore = all in .gitmodules", () => {
+    const change = (dir, git) => {
+      write(dir, ".gitmodules", '[submodule "sub"]\n\tpath = sub\n\turl = ./sub\n\tignore = all\n');
+      addGitlink(dir, git);
+    };
+    expect(runHook(base, change)).toBe("VP_RAN check");
+  });
+  it("runs the full check for a deletion with GIT_PRINT_SHA1_ELLIPSIS=yes", () => {
+    const extra = { env: { GIT_PRINT_SHA1_ELLIPSIS: "yes" } };
+    expect(runHook(base, (dir) => unlink(dir, "gone.txt"), false, extra)).toBe("VP_RAN check");
+  });
+  it("runs the full check for a rename with GIT_PRINT_SHA1_ELLIPSIS=yes", () => {
+    const extra = { env: { GIT_PRINT_SHA1_ELLIPSIS: "yes" } };
+    const change = (dir) => fs.renameSync(path.join(dir, "gone.txt"), path.join(dir, "moved.txt"));
+    expect(runHook(base, change, false, extra)).toBe("VP_RAN check");
+  });
+  it("runs the full check for a deletion with core.abbrev=40 and diff.renames=false", () => {
+    const extra = {
+      config: [
+        ["core.abbrev", "40"],
+        ["diff.renames", "false"],
+      ],
+    };
+    expect(runHook(base, (dir) => unlink(dir, "gone.txt"), false, extra)).toBe("VP_RAN check");
+  });
+  // #122: the full check must see the index. The stub `vp` fails when b.ts imports the deleted a.ts.
+  const brokenImport = '[ ! -f a.ts ] && grep -q "./a" b.ts && { echo BROKEN; exit 1; }\nexit 0\n';
+  const importer = (dir) => {
+    write(dir, "a.ts", "export const a = 1;\n");
+    write(dir, "b.ts", 'import { a } from "./a";\nexport const b = a;\n');
+  };
+  it("fails a staged deletion whose unstaged edit hides the broken import", () => {
+    const extra = {
+      vp: brokenImport,
+      status: 1,
+      afterAdd: (dir) => write(dir, "b.ts", "export const b = 1;\n"),
+    };
+    expect(runHook(importer, (dir) => unlink(dir, "a.ts"), false, extra)).toBe(
+      "VP_RAN check\nBROKEN",
+    );
+  });
+  it("passes a staged deletion when the import removal is staged too", () => {
+    const change = (dir) => {
+      unlink(dir, "a.ts");
+      write(dir, "b.ts", "export const b = 1;\n");
+    };
+    expect(runHook(importer, change, false, { vp: brokenImport })).toBe("VP_RAN check");
+  });
+  it("checks a copy of the index, which holds no untracked file", () => {
+    const extra = { afterAdd: (dir) => write(dir, "stray.ts", "export {};\n"), vp: "ls\n" };
+    const out = runHook(base, (dir) => unlink(dir, "gone.txt"), false, extra);
+    expect(out.split("\n")).not.toContain("stray.ts");
   });
   it("keeps the partial path for a modify-only commit", () => {
     expect(runHook(base, (dir) => write(dir, "a.txt", "y\n"))).toBe(
