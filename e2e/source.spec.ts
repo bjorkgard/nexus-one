@@ -64,21 +64,25 @@ test("emit rejects an invalid object", async ({ page }) => {
   await expect(nexus(page, "emit", { nope: true })).rejects.toThrow(/invalid event/);
 });
 
+// The clock is paused for every read: a running clock moves between reads, and under CPU load the
+// delivery interval lags the clock, so counts read beside a live clock are off by the events in
+// that gap (the mock's second session starts 5 s in).
 test("setClock moves forward and seeks backward", async ({ page }) => {
   await openPage(page);
+  await nexus(page, "pauseClock", true);
   const start = await nexus(page, "dataState");
   const first = start.clock ?? 0;
   const target = first + 60_000;
   await nexus(page, "setClock", target);
   const forward = await nexus(page, "dataState");
-  expect(forward.clock ?? 0).toBeGreaterThanOrEqual(target);
-
+  expect(forward.clock).toBe(target);
   expect(forward.counts.sessions).toBeGreaterThan(start.counts.sessions);
 
-  // Backward seek to the first event's ts: rebuild in a new epoch, status back to open.
+  // Backward seek: rebuild in a new epoch, status back to open, same state as at `first`.
   await nexus(page, "setClock", first);
   await expect.poll(async () => (await nexus(page, "dataState")).status).toBe("open");
   const back = await nexus(page, "dataState");
+  expect(back.clock).toBe(first);
   expect(back.counters.reconnects).toBe(start.counters.reconnects + 1);
   expect(back.counts).toEqual(start.counts);
 
@@ -86,6 +90,26 @@ test("setClock moves forward and seeks backward", async ({ page }) => {
   await nexus(page, "setClock", target);
   const again = await nexus(page, "dataState");
   expect(again.counts).toEqual(forward.counts);
+});
+
+// Value: protects=pauseClock brings the delivered state up to the clock; fails_when=pauseClock skips delivery, so a starved interval leaves the counts behind the clock (the source of the setClock flake); why_new=no other spec starves the page's timers; seam=busy main thread; no_claim=behaviour of a running clock under load
+test("pauseClock catches up with a clock the delivery interval fell behind", async ({ page }) => {
+  await openPage(page);
+  // Block the main thread past the second session's start (5 s in), then pause in the same task,
+  // so no interval tick can run in between.
+  const paused = await page.evaluate(() => {
+    const until = performance.now() + 5_500;
+    while (performance.now() < until);
+    window.__nexus!.pauseClock!(true);
+    return window.__nexus!.dataState!();
+  });
+  // A rebuild at the paused clock is the reference state for that clock.
+  await nexus(page, "setClock", (paused.clock ?? 0) - 1);
+  await nexus(page, "setClock", paused.clock ?? 0);
+  await expect.poll(async () => (await nexus(page, "dataState")).status).toBe("open");
+  const rebuilt = await nexus(page, "dataState");
+  expect(rebuilt.counts.sessions).toBeGreaterThanOrEqual(2);
+  expect(paused.counts).toEqual(rebuilt.counts);
 });
 
 test("unknown source falls back to mock", async ({ page }) => {

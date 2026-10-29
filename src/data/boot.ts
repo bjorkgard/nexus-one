@@ -21,6 +21,10 @@ export function startDataSource(search: string = location.search): DataClient {
     if (!mock) throw new Error("setClock needs ?source=mock");
     mock.setClock(ts);
   });
+  registerNexusModule(hot, "pauseClock", (paused) => {
+    if (!mock) throw new Error("pauseClock needs ?source=mock");
+    mock.pauseClock(paused);
+  });
   registerNexusModule(hot, "dataState", () => ({
     ...client.stats(),
     source: selection.kind,
