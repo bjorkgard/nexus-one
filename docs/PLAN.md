@@ -187,8 +187,8 @@ Goal: a readable futuristic campus, fully procedural, inside the performance bud
 ### 2.10 Geometry performance check
 
 - **Action:** Static scene sized for 100 desks and full campus.
-- **Test:** e2e reads `rendererInfo()`; manual FPS reading at 2560×1440.
-- **Done when:** under 300 draw calls and 60 fps with an empty office.
+- **Test:** e2e reads `rendererInfo()` (draw calls; materials under 30, the 2.2 cap; programs reported); manual FPS reading at 2560×1440.
+- **Done when:** under 300 draw calls, under 30 unique materials and 60 fps with an empty office.
 
 **Phase 2 gate:** campus reads as a working building from any angle; budget met; all layout tests green.
 

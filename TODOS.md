@@ -16,6 +16,34 @@
 **Priority:** P2
 **Depends on:** Task 2.1 (light baseline); lands with task 2.3 (first casters)
 
+### Precompile palette shaders before the stage reveal
+
+**Issue:** [#134](https://github.com/bjorkgard/nexus-one/issues/134)
+
+**What:** Compile the shader programs for every palette material (and its variants) with `gl.compileAsync` before the stage fades in, so the first appearance of glass, trims or paints does not stall a frame.
+
+**Why:** Each new material program compiles on first use and stalls that frame. Task 2.2 ships the palette before any scene uses most of it, so warming it then would only move the 2.1 reveal timing for unused samples (CEO D7 in `docs/plans/2.2-material-palette.md`).
+
+**Context:** Deferred in the task 2.2 CEO review (E4, decision D7). The palette lives in `src/world/palette.ts`; `__nexus.rendererInfo().programs` (added in 2.2) shows the compiled count, so an e2e can assert the count does not grow after reveal while the camera moves. The stage signals ready in `src/world/Stage.tsx` (`onReady` after the first fitted frame) and the 2.1 reveal e2e depends on that timing (`e2e/stage.spec.ts`). Start by measuring frame times the first time each 2.3-2.8 surface appears.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (palette, program count); lands with task 2.10 (geometry performance check)
+
+### Status LED colour tokens for racks and server load
+
+**Issue:** [#135](https://github.com/bjorkgard/nexus-one/issues/135)
+
+**What:** Add `led.ok`, `led.busy` and `led.err` colour tokens (or the states 2.8 and 4.16 actually need), tested with the 2.2 paint machinery (ΔE2000 and deutan/protan simulation), plus a non-colour cue such as blink rate or position for each state.
+
+**Why:** Task 2.2 gives the `led` material only one neutral colour (`trimCyan`), because LEDs have no meaning until racks exist. Without shared status tokens, 2.8 and 4.16 will each pick their own greens and reds, which clash with the paints and fail red/green colour blindness (design review Q13 in `docs/plans/2.2-material-palette.md`).
+
+**Context:** Deferred in the task 2.2 design review (Q13). LED colour is per instance (`setColorAt`) on the unlit `led` material (`toneMapped: false`); the glow order is trimCyan edges > LEDs > idle screens > lit surfaces, with `LOOK.emissiveCeiling` (design Q5). The paint test in `src/shared/tokens.test.ts` already computes ΔE2000 under Machado CVD matrices; reuse it. Start from the states 4.16 server-room load needs.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (led material, CVD test); lands with task 2.8 (server racks)
+
 ### Recover from WebGL context loss
 
 **Issue:** [#89](https://github.com/bjorkgard/nexus-one/issues/89)
