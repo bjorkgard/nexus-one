@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "@fontsource-variable/instrument-sans/wght.css";
+
+@theme {
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+}
 
 html,
 body,
@@ -7,8 +12,109 @@ body,
   margin: 0;
 }
 
-html,
-body {
-  background-color: var(--color-neutral-950);
+html {
+  min-height: 100%;
+  background: linear-gradient(var(--nx-bg-top, #0b1220), var(--nx-bg-bottom, #05070c)) fixed
+    no-repeat;
+  color: var(--nx-text-body, #c7d2e0);
   color-scheme: dark;
+}
+
+/* The canvas is transparent so the html gradient shows through; it fades in once Stage is ready. */
+.nx-stage canvas {
+  opacity: 0;
+  transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nx-stage[data-revealed="true"] canvas {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-stage canvas {
+    transition: none;
+  }
+}
+
+.nx-wordmark {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--nx-text-brand, #9fb0c8);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.nx-error {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.nx-error-block {
+  display: flex;
+  max-width: 40rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+}
+
+.nx-error-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--nx-text-body, #c7d2e0);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.nx-error-dot {
+  width: 4px;
+  height: 4px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--nx-danger, #e2725b);
+}
+
+.nx-error-text {
+  margin: 0;
+  color: var(--nx-text-muted, #7d8ba1);
+  font-size: 14px;
+}
+
+.nx-error-button {
+  height: 40px;
+  padding: 0 20px;
+  border: 1px solid var(--nx-text-muted, #7d8ba1);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nx-text-body, #c7d2e0);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.nx-error-button:hover {
+  border-color: var(--nx-text-body, #c7d2e0);
+}
+
+.nx-error-button:focus-visible {
+  outline: 2px solid var(--nx-text-brand, #9fb0c8);
+  outline-offset: 2px;
+}
+
+.nx-error-detail {
+  margin: 0;
+  color: var(--nx-text-muted, #7d8ba1);
+  font-size: 12px;
+  white-space: pre-wrap;
 }

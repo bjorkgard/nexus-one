@@ -13,6 +13,9 @@ import {
 const cameraInfo: CameraInfo = {
   type: "PerspectiveCamera",
   position: [0, 0, 5],
+  direction: [0, 0, -1],
+  target: null,
+  zoom: 1,
   projectionMatrix: [],
 };
 const getCamera = () => cameraInfo;

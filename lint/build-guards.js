@@ -10,6 +10,7 @@ export const DEV_MARKERS = [
   { marker: "__nexus", source: "src/debug/nexus.ts" },
   { marker: "nexus-perf-overlay", source: "src/debug/PerfPanel.tsx" },
   { marker: "nexus-probe", source: "src/debug/PerfStats.tsx" },
+  { marker: "nexus-zone-overlay", source: "src/debug/ZoneOverlay.tsx" },
   { marker: "nexus.perfStats", source: "src/debug/perf.ts" },
 ];
 

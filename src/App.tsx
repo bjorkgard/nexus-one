@@ -1,12 +1,18 @@
 import { Canvas } from "@react-three/fiber";
-import { Component, Suspense, lazy } from "react";
+import { Component, Suspense, lazy, useState } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { AgXToneMapping, SRGBColorSpace } from "three";
 
 import { DevBoundary } from "./debug/DevBoundary";
+import { ErrorPanel } from "./ui/ErrorPanel";
+import { Wordmark } from "./ui/Wordmark";
+import { Stage } from "./world/Stage";
+import { LOOK } from "./world/stage-look";
 
 const NexusBridge = import.meta.env.DEV ? lazy(() => import("./debug/Bridge")) : null;
 const PerfStats = import.meta.env.DEV ? lazy(() => import("./debug/PerfStats")) : null;
 const PerfPanel = import.meta.env.DEV ? lazy(() => import("./debug/PerfPanel")) : null;
+const ZoneOverlay = import.meta.env.DEV ? lazy(() => import("./debug/ZoneOverlay")) : null;
 
 interface CanvasErrorBoundaryProps {
   children: ReactNode;
@@ -31,32 +37,41 @@ export class CanvasErrorBoundary extends Component<
   }
 
   render() {
-    if (this.state.error) {
-      const { message } = this.state.error;
-      const title = /webgl/i.test(message) ? "WebGL is unavailable" : "The 3D view failed to load";
-      return (
-        <div
-          role="alert"
-          className="flex h-full items-center justify-center p-4 text-center text-red-400"
-        >
-          {title}: {message}
-        </div>
-      );
-    }
+    if (this.state.error) return <ErrorPanel error={this.state.error} />;
     return this.props.children;
   }
 }
 
 export function App() {
+  const [revealed, setRevealed] = useState(false);
   return (
     <div className="relative h-full w-full">
       <CanvasErrorBoundary>
         <Canvas
           data-testid="scene"
-          fallback={
-            <div className="p-4 text-neutral-300">This browser does not support canvas.</div>
-          }
+          className="nx-stage"
+          role="img"
+          aria-label="Nexus One campus, isometric view"
+          data-revealed={revealed}
+          dpr={LOOK.dpr}
+          gl={{
+            antialias: true,
+            alpha: true,
+            toneMapping: AgXToneMapping,
+            toneMappingExposure: LOOK.exposure,
+            outputColorSpace: SRGBColorSpace,
+          }}
+          fallback={<p className="nx-error-text p-4">This browser does not support canvas.</p>}
         >
+          <Stage onReady={() => setRevealed(true)}>
+            {ZoneOverlay && (
+              <DevBoundary name="ZoneOverlay">
+                <Suspense fallback={null}>
+                  <ZoneOverlay />
+                </Suspense>
+              </DevBoundary>
+            )}
+          </Stage>
           {NexusBridge && (
             <DevBoundary name="Bridge">
               <Suspense fallback={null}>
@@ -80,9 +95,7 @@ export function App() {
           </Suspense>
         </DevBoundary>
       )}
-      <div className="pointer-events-none absolute top-4 left-4 text-lg font-semibold text-white">
-        Nexus One
-      </div>
+      <Wordmark />
     </div>
   );
 }

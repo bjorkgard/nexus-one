@@ -27,9 +27,9 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
 - `vp test` — Run the unit test suite.
-- `npx playwright test` — Run the Playwright tests (smoke, data source and performance overlay) against the dev server on port 5199.
+- `npx playwright test` — Run the Playwright tests (smoke, data source, performance overlay and isometric stage) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
-- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus` or a performance overlay marker reaches the browser bundle.
+- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus`, a performance overlay marker or the zone overlay marker reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
 - `vp run pack` — Build the UI and the Electron main process, then package an unsigned macOS app into `release/mac-arm64/Nexus One.app` (about 1 minute). It never publishes.
 - `vp run start` — Build, then launch the Electron app from source.
@@ -42,22 +42,30 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 ## Project structure
 
 - `index.html` — HTML entry point.
-- `src/main.tsx` — Application entry; mounts React into `#app`.
-- `src/App.tsx` — Root component with the 3D canvas and its error boundary; in dev it also mounts the performance overlay.
-- `src/style.css` — Tailwind import and base layout styles.
+- `src/main.tsx` — Application entry; writes the colour tokens as `--nx-*` CSS variables, then mounts React into `#app`.
+- `src/App.tsx` — Root component with the 3D canvas, the stage, the wordmark and the canvas error boundary (which shows `ErrorPanel`); in dev it also mounts the performance overlay and the zone overlay.
+- `src/style.css` — Tailwind import, the bundled Instrument Sans font, base layout styles, the stage fade-in and the wordmark and error panel styles.
 - `src/world/` — Geometry.
+  - `zones.ts` — `createZoneRegistry({ floors })`: the named campus zones (lobby, office floors, garage, loading bay, break room, server room, roof) as boxes, with `byId(id)` and `at(point)` lookups. `floors` counts the lobby and must be an integer from 2 to 40 (default 6).
+  - `camera.ts` — Isometric camera maths: view direction, framing bounds, camera rig and `fitZoom`, plus the grid fade.
+  - `Stage.tsx` — The ground slab, grid, lights and orthographic camera; refits on resize and calls `onReady` after the first fitted frame. In dev, `?floors=<n>` overrides the floor count (an invalid value shows the error panel) and `?zones=1` frames the whole campus box and turns on the zone overlay.
+  - `stage-look.ts` — `LOOK`: the stage's size, grid, light and overlay constants (surface colours come from `src/shared/tokens.ts`).
 - `src/sim/` — Simulation and animation state.
 - `src/ui/` — Dashboard.
+  - `Wordmark.tsx` — The "Nexus One" wordmark in the top-left corner.
+  - `ErrorPanel.tsx` — The message and Reload button shown when the 3D view cannot start; in dev it also shows the error text.
+  - `applyCssTokens.ts` — Writes every token from `src/shared/tokens.ts` to `<html>` as a `--nx-*` CSS variable.
 - `src/data/` — Client store and data sources. `mock.ts` exports `createMockStream(options?)`, the seeded, repeatable mock event stream (same seed, same events), plus `MOCK_ROLES` and `MOCK_TIMING` for finding its scripted agents. A lint rule bans `Date`, `Math.random`, `performance.now`, `performance.timeOrigin` and `crypto` in `mock.ts` and its test.
   - `source.ts` — `createDataClient(transport)`: the one gate for epoch, seq cursor and dedup; `selectSource(search)` reads `?source=` and `?port=`.
   - `live-source.ts` — `liveTransport(port)`: WebSocket transport to `127.0.0.1` with backoff and a hello+snapshot deadline.
   - `mock-source.ts` — `mockTransport()`: plays the mock stream with a movable clock; a backward seek rebuilds state in a new epoch.
   - `boot.ts` — `startDataSource()`: picks the transport, starts the client and registers the dev hooks; called once from `src/main.tsx`.
-- `src/debug/` — Dev-only `window.__nexus` test hooks and the performance overlay.
+- `src/debug/` — Dev-only `window.__nexus` test hooks, the performance overlay and the zone overlay (`ZoneOverlay.tsx`: zone box edges and name labels, shown with `?zones=1`).
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws); `check-stream.ts` exports `checkStream(events, { complete })`, which validates any event stream and returns named problems instead of throwing.
   - `protocol.ts` — Wire messages (`hello`, `snapshot`, `event`) and `parseServerMessage`.
   - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.
   - `apply-once.ts` — `applyOnce`, the dedup entry: bounded recent-id ring plus reducer.
+  - `tokens.ts` — `TOKENS`, the shared colour tokens (background, slab, grid, text, danger, zone kinds), as data only; `flattenTokens` and `cssVarName` map them to `--nx-*` names.
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main process. `main.ts` is start-up and the window; `resolve.ts` is the `app://` file policy. Imports only `electron/` and `src/shared/`; no browser libraries (React, Three, zustand, three-stdlib); no `createRequire` or CommonJS.
 - `package.json` `dependencies` is empty on purpose: it means "loaded by Electron main at run time". Everything else is bundled (Vite for the renderer, `vp pack` for main) and goes in `devDependencies`.

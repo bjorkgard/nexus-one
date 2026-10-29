@@ -5,7 +5,7 @@ const executablePath = "release/mac-arm64/Nexus One.app/Contents/MacOS/Nexus One
 
 let app: ElectronApplication | null = null;
 
-// CanvasErrorBoundary (src/App.tsx) renders its fallback as [role=alert].
+// CanvasErrorBoundary (src/App.tsx) renders ErrorPanel as [role=alert].
 const errorBox = (page: Page) => page.locator("[role=alert]");
 
 test.afterEach(async () => {
@@ -74,7 +74,14 @@ test("error box locator finds the real box when WebGL is unavailable", async () 
   const page = await app.firstWindow();
 
   await expect(errorBox(page)).toBeVisible();
-  await expect(errorBox(page)).toContainText("WebGL is unavailable");
+  await expect(errorBox(page)).toContainText("WebGL is unavailable on this device");
+  await expect(page.getByTestId("error-detail")).toHaveCount(0);
+  const reload = page.getByRole("button", { name: "Reload" });
+  await expect(reload).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(reload).toBeFocused();
+  const outline = await reload.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe("none");
   await expect(expect(errorBox(page)).toHaveCount(0, { timeout: 1000 })).rejects.toThrow(
     /toHaveCount/,
   );
