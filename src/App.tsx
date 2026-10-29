@@ -61,9 +61,7 @@ export function App() {
             toneMappingExposure: LOOK.exposure,
             outputColorSpace: SRGBColorSpace,
           }}
-          fallback={
-            <div className="p-4 text-neutral-300">This browser does not support canvas.</div>
-          }
+          fallback={<p className="nx-error-text p-4">This browser does not support canvas.</p>}
         >
           <Stage onReady={() => setRevealed(true)}>
             {ZoneOverlay && (

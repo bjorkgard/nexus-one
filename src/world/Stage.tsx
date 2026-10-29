@@ -26,9 +26,11 @@ import { LOOK } from "./stage-look";
 import { DEFAULT_FLOORS, createZoneRegistry } from "./zones";
 import type { ZoneRegistry } from "./zones";
 
-export const ZonesContext = createContext<ZoneRegistry | null>(null);
+export type ZonesValue = { registry: ZoneRegistry; zonesOverlay: boolean };
 
-export function useZones(): ZoneRegistry {
+export const ZonesContext = createContext<ZonesValue | null>(null);
+
+export function useZones(): ZonesValue {
   const zones = useContext(ZonesContext);
   if (!zones) throw new Error("useZones must be used inside <Stage>");
   return zones;
@@ -72,6 +74,7 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
   // Built in render, not at import: a bad `?floors` throws into CanvasErrorBoundary instead of a blank page.
   const { floors, zonesOverlay } = useMemo(() => readDevParams(), []);
   const zones = useMemo(() => createZoneRegistry({ floors }), [floors]);
+  const zonesValue = useMemo(() => ({ registry: zones, zonesOverlay }), [zones, zonesOverlay]);
   const bounds = useMemo(() => framingBounds({ zonesOverlay, floors }), [zonesOverlay, floors]);
   // Derived in render (zero-size viewport keeps the previous zoom); the effect below applies it to the camera.
   const nextZoom = fitZoom(bounds, size);
@@ -119,7 +122,7 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
   const half = LOOK.slabSize / 2;
 
   return (
-    <ZonesContext.Provider value={zones}>
+    <ZonesContext.Provider value={zonesValue}>
       <OrthographicCamera ref={cameraRef} makeDefault />
       <hemisphereLight
         args={[LOOK.hemisphere.sky, LOOK.hemisphere.ground, LOOK.hemisphere.intensity]}

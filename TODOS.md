@@ -10,7 +10,7 @@
 
 **Why:** Task 2.1 keeps the key light but ships no shadows, because nothing casts one yet and VSM would cost two full-screen blur passes per frame for an invisible result (CEO D13 in `docs/plans/2.1-isometric-stage.md`).
 
-**Context:** three 0.186 removed `PCFSoftShadowMap` and falls back to PCF with a warning (`node_modules/three/build/three.module.js:9152`); R3F `<Canvas shadows>` with a boolean picks it (`@react-three/fiber` events file, line 1719). `shadows="variance"` (VSM) supports `shadow.radius`/`blurSamples` but adds two blur draws per frame (`three.module.js:9415-9419`). Key-light direction is `LOOK.keyLightDir` in `src/world/stage-look.ts`. The 2.1 e2e asserts exactly 2 draw calls for the empty stage; update it when shadows land. Consider `shadow.autoUpdate = false` for static casters.
+**Context:** three 0.186 removed `PCFSoftShadowMap` and falls back to PCF with a warning (`node_modules/three/build/three.module.js:9152`); R3F `<Canvas shadows>` with a boolean picks it (`@react-three/fiber` events file, line 1719). `shadows="variance"` (VSM) supports `shadow.radius`/`blurSamples` but adds two blur draws per frame (`three.module.js:9415-9419`). Key-light direction is `LOOK.key.direction` in `src/world/stage-look.ts`. The 2.1 e2e asserts 1 to 2 draw calls for the empty stage (`e2e/stage.spec.ts`); update that bound when shadows land. Consider `shadow.autoUpdate = false` for static casters.
 
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2

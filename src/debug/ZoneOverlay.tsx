@@ -38,7 +38,7 @@ function buildEdges(zones: readonly Zone[]) {
 }
 
 export default function ZoneOverlay() {
-  const zones = useZones();
+  const { registry: zones, zonesOverlay } = useZones();
   const camera = useThree((s) => s.camera);
   const [zoom, setZoom] = useState(camera.zoom);
   const edges = useMemo(() => buildEdges(zones.zones), [zones]);
@@ -47,7 +47,7 @@ export default function ZoneOverlay() {
     if (camera.zoom !== zoom) setZoom(camera.zoom);
   });
 
-  if (new URLSearchParams(location.search).get("zones") !== "1") return null;
+  if (!zonesOverlay) return null;
 
   const hideFloors = zoom * BAND_PX_PER_ZOOM < LOOK.zonesOverlayHideFloorsBelowPx;
 

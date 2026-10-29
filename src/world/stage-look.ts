@@ -1,5 +1,6 @@
-// Every non-colour look constant for the stage; colours come from src/shared/tokens.ts.
-// 6.1 takes over lights and exposure, 2.2 takes over material colours.
+// Every look constant for the stage except surface colours, which come from src/shared/tokens.ts.
+// Light colours stay here with the light intensities until 6.1 takes over lights and exposure;
+// 2.2 takes over material colours.
 export const LOOK = {
   dpr: [1, 2] as [number, number],
   exposure: 1,

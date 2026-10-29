@@ -21,17 +21,17 @@ html {
 }
 
 /* The canvas is transparent so the html gradient shows through; it fades in once Stage is ready. */
-.nx-stage {
+.nx-stage canvas {
   opacity: 0;
   transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.nx-stage[data-revealed="true"] {
+.nx-stage[data-revealed="true"] canvas {
   opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nx-stage {
+  .nx-stage canvas {
     transition: none;
   }
 }
@@ -101,6 +101,10 @@ html {
   font: inherit;
   font-size: 14px;
   cursor: pointer;
+}
+
+.nx-error-button:hover {
+  border-color: var(--nx-text-body, #c7d2e0);
 }
 
 .nx-error-button:focus-visible {
