@@ -1,3 +1,4 @@
+import childProcess from "node:child_process";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
@@ -24,6 +25,35 @@ const browserLibs = [
   "three-stdlib/**",
 ];
 
+// A staged deletion, rename, type change, symlink (new or old mode 120000) or submodule (mode 160000
+// on either side) can change what unstaged files resolve to, so the partial check is not enough. Keep
+// in step with .vite-hooks/pre-commit. `git diff --cached --raw -z` entries look like
+// ":oldmode newmode oldsha newsha STATUS\0path\0" (a rename or copy lists two paths). A git failure counts.
+function needsFullCheck(): boolean {
+  try {
+    const raw = childProcess.execFileSync("git", ["diff", "--cached", "--raw", "-z", "-M"], {
+      encoding: "utf8",
+    });
+    const tokens = raw.split("\0");
+    for (let i = 0; i < tokens.length && tokens[i] !== "";) {
+      const [oldMode, newMode, , , status] = tokens[i].split(" ");
+      if (
+        oldMode === ":120000" ||
+        oldMode === ":160000" ||
+        newMode === "120000" ||
+        newMode === "160000" ||
+        "DRT".includes(status[0])
+      ) {
+        return true;
+      }
+      i += 1 + (status[0] === "R" || status[0] === "C" ? 2 : 1);
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 const electronMessage =
   "src/ runs in the browser; Electron main and preload code lives in electron/.";
 const collectorElectronMessage =
@@ -38,7 +68,8 @@ export default defineConfig({
   staged: {
     // One entry, so the tasks never run concurrently. Function form: lint-staged would otherwise
     // append the paths and check only those files. Staging the config, the fence plugin or a tsconfig.json
-    // or package.json changes what every file is checked against, so those run the full check.
+    // or package.json changes what every file is checked against, so those run the full check; so does
+    // a staged deletion, rename or symlink, which can change what other files resolve to.
     "*": (files) => {
       // Paths are absolute; a same-named nested file only costs an unneeded full check.
       const fullCheck = files.some((file) =>
@@ -48,7 +79,8 @@ export default defineConfig({
       );
       // No shell runs this: lint-staged splits it with string-argv, which has no escapes inside
       // quotes. Double-quote each path; a path holding `"` cannot be quoted, so check everything.
-      if (fullCheck || files.some((file) => file.includes('"'))) return "vp check";
+      if (fullCheck || files.some((file) => file.includes('"')) || needsFullCheck())
+        return "vp check";
       return `vp check --fix ${files.map((file) => `"${file}"`).join(" ")}`;
     },
   },
