@@ -61,7 +61,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main process. `main.ts` is start-up and the window; `resolve.ts` is the `app://` file policy. Imports only `electron/` and `src/shared/`; no browser libraries (React, Three, zustand, three-stdlib); no `createRequire` or CommonJS.
 - `package.json` `dependencies` is empty on purpose: it means "loaded by Electron main at run time". Everything else is bundled (Vite for the renderer, `vp pack` for main) and goes in `devDependencies`.
-- Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` and `electron/` only themselves and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers. An `import.meta.glob` is fenced by the folder it searches, and each file it matches is also checked by its real path, so a link into another zone is reported. A glob pattern that contains `#` is also reported, because Vite keeps the `#` and the fence cannot follow the path.
+- Module fences: `src/` may import only `src/`, `src/shared/` only itself, and `collector/` and `electron/` only themselves and `src/shared/`; `src/` also cannot import Node built-ins. `vp check` enforces this as an allow-list on resolved paths in `lint/module-fences.js`, and dynamic imports, globs and `new URL` in those folders must use static string specifiers. An `import.meta.glob` is fenced by the folder it searches, and each file it matches is also checked by its real path, so a link into another zone is reported. A glob pattern that contains `#` is also reported, because Vite keeps the `#` and the fence cannot follow the path. The fence resolves specifiers the way Vite does (`/@fs/` paths, percent-encoded root paths, `.js` to `.ts` swaps, `.d.ts` type imports and `package.json` entry points, including `browser` maps; an imported folder whose `package.json` is not valid JSON is reported), and reports `import.meta.resolve` and `import.meta.glob` when they are used other than as a direct call.
 - Inside `src/`, only `src/shared/` may import `zod`; the rest of `src/` imports schemas and types from `src/shared/schema.ts` (`vp check` enforces this).
 - `lint/` — Local Oxlint plugin with the module-fence rule, and the build-guard plugin (`lint/build-guards.js`).
 - `e2e/` — Playwright specs and the typed `__nexus` helper.
@@ -70,7 +70,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `playwright.electron.config.ts` — Playwright configuration for the packaged app (`vp run test:packaged`).
 - `vite.config.ts` — Vite+ configuration, plugins, formatting, linting, type checking, and staged-file checks.
 - `tsconfig.json` — TypeScript compiler configuration. `electron/`, `collector/` and `src/shared/` each add a `tsconfig.json` that drops the DOM library, so browser globals such as `window` fail type checking there.
-- `.vite-hooks/pre-commit` — Runs checks on staged files before committing.
+- `.vite-hooks/pre-commit` — Runs checks on staged files before committing; a staged deletion, rename, type change, symlink or submodule runs the full `vp check` instead.
 - `.github/workflows/ci.yml` — The `ci` job (see [CI](#ci)). `.github/dependabot.yml` — Weekly Dependabot updates for GitHub Actions and range-versioned npm packages.
 - `TODOS.md` — Deferred work.
 - `CHANGELOG.md` — Release notes.
@@ -149,6 +149,6 @@ In `vp run dev`, press the backtick key (`` ` ``; on a Swedish keyboard Shift + 
 - Both are no-ops outside dev, and the build fails if `__nexus` reaches production.
 - Call hooks from e2e with `nexus(page, name, ...args)` from `e2e/nexus.ts`.
 
-The pre-commit hook runs `vp staged`, which applies `vp check --fix` to staged files. Review any automatic fixes before pushing.
+The pre-commit hook runs `vp staged`, which applies `vp check --fix` to staged files, or runs the full `vp check` when the commit stages a deletion, rename, type change, symlink or submodule (or `git` fails). Review any automatic fixes before pushing.
 
 Keep credentials out of version control. `.env` and `.env.*` files are ignored, except `.env.example`, which should contain placeholders only. Dependencies (`node_modules/`) and build output (`dist/`, `dist-electron/` and `release/`) are also ignored.
