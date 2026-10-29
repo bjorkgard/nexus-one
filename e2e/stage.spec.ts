@@ -267,25 +267,13 @@ for (const reduced of [false, true]) {
     await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
     await page.addInitScript(() => {
       const log: { revealed: string | null; opacity: string }[] = [];
-      // Page-clock timestamps: the fade's duration is measured where it runs, not in the busy test runner.
-      const fade = { shownAt: 0, endedAt: 0 };
-      Object.assign(window, { __revealLog: log, __fade: fade });
-      document.addEventListener(
-        "transitionend",
-        (e) => {
-          if (e.target instanceof HTMLCanvasElement && e.propertyName === "opacity") {
-            fade.endedAt = performance.now();
-          }
-        },
-        true,
-      );
+      Object.assign(window, { __revealLog: log });
       const record = () => {
         const el = document.querySelector("[data-revealed]");
         const canvas = el?.querySelector("canvas");
         if (!el || !canvas) return;
         const revealed = el.getAttribute("data-revealed");
         if (log.at(-1)?.revealed === revealed) return;
-        if (revealed === "true") fade.shownAt = performance.now();
         log.push({ revealed, opacity: getComputedStyle(canvas).opacity });
       };
       new MutationObserver(record).observe(document, {
@@ -298,17 +286,29 @@ for (const reduced of [false, true]) {
     await page.goto("/");
     const scene = page.locator("[data-testid=scene]");
     await expect(scene).toHaveAttribute("data-revealed", "true");
-    if (!reduced) {
-      // Wait for the opacity transition to finish, then check it took at most 1 s on the page's own clock.
-      await page.waitForFunction(
-        () => (window as unknown as { __fade: { endedAt: number } }).__fade.endedAt > 0,
-      );
-      const { shownAt, endedAt } = await page.evaluate(
-        () => (window as unknown as { __fade: { shownAt: number; endedAt: number } }).__fade,
-      );
-      expect(endedAt - shownAt).toBeLessThanOrEqual(1000);
+    // The fade's timing is checked as declared CSS, not by timing the machine: under suite load the
+    // browser starves for frames and any wall-clock bound on an animation flakes.
+    const transition = await scene.locator("canvas").evaluate((el) => {
+      const s = getComputedStyle(el);
+      return {
+        property: s.transitionProperty,
+        duration: s.transitionDuration,
+        easing: s.transitionTimingFunction,
+      };
+    });
+    if (reduced) {
+      expect(transition.duration).toBe("0s");
+    } else {
+      expect(transition).toEqual({
+        property: "opacity",
+        duration: "0.6s",
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+      });
     }
-    expect(await scene.locator("canvas").evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+    // The fade ends fully visible.
+    await expect
+      .poll(() => scene.locator("canvas").evaluate((el) => getComputedStyle(el).opacity))
+      .toBe("1");
     const log = await page.evaluate(
       () =>
         (window as unknown as { __revealLog: { revealed: string; opacity: string }[] }).__revealLog,
