@@ -44,7 +44,15 @@ test("hooks are registered", async ({ page }) => {
   await waitForHook(page, "rendererInfo");
   await waitForHook(page, "dataState");
   const keys = await page.evaluate(() => Object.keys(window.__nexus ?? {}).sort());
-  expect(keys).toEqual(["dataState", "emit", "getCamera", "project", "rendererInfo", "setClock"]);
+  expect(keys).toEqual([
+    "dataState",
+    "emit",
+    "getCamera",
+    "pauseClock",
+    "project",
+    "rendererInfo",
+    "setClock",
+  ]);
 });
 
 test("rendererInfo returns finite numbers", async ({ page }) => {

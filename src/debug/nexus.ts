@@ -38,6 +38,7 @@ export interface NexusHooks {
   rendererInfo(): RendererInfo;
   emit(event: unknown): void;
   setClock(ts: number): void;
+  pauseClock(paused: boolean): void;
   dataState(): DataState;
 }
 

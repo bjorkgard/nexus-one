@@ -10,11 +10,16 @@ export type MockTransportOptions = MockOptions & {
   clearInterval?: (handle: unknown) => void;
   tickMs?: number;
 };
-export type MockTransport = Transport & { setClock(ts: number): void; clock(): number };
+export type MockTransport = Transport & {
+  setClock(ts: number): void;
+  pauseClock(paused: boolean): void;
+  clock(): number;
+};
 
 // Plays the deterministic mock stream through the Transport contract. A clock (stream ts) starts
 // at the first event and follows `now()`; setClock moves it. A backward seek rebuilds state in a
-// new epoch and sends it as hello + snapshot.
+// new epoch and sends it as hello + snapshot. pauseClock freezes the clock, so reads of the
+// delivered state do not race the wall clock or a starved interval.
 export function mockTransport(options: MockTransportOptions = {}): MockTransport {
   const {
     now: nowOption,
@@ -37,12 +42,13 @@ export function mockTransport(options: MockTransportOptions = {}): MockTransport
 
   let clockBase: number | null = null;
   let wallBase = 0;
+  let paused = false;
   const clock = (): number => {
     if (clockBase === null) {
       clockBase = load()[0]?.ts ?? 0;
       wallBase = now();
     }
-    return clockBase + Math.max(0, now() - wallBase);
+    return paused ? clockBase : clockBase + Math.max(0, now() - wallBase);
   };
   const moveClock = (ts: number) => {
     clockBase = ts;
@@ -139,6 +145,14 @@ export function mockTransport(options: MockTransportOptions = {}): MockTransport
       moveClock(ts);
       if (backward) rebuild(ts);
       else deliverDue();
+    },
+    pauseClock(pause) {
+      if (pause === paused) return;
+      // Re-base at the current clock so it neither jumps on resume nor counts paused wall time.
+      moveClock(clock());
+      paused = pause;
+      // The interval may lag the clock; deliver up to the frozen clock so the state matches it.
+      if (paused) deliverDue();
     },
   };
 }
