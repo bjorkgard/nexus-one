@@ -66,11 +66,14 @@ test("getCamera returns plain data", async ({ page }) => {
   expect(cam.projectionMatrix.every(Number.isFinite)).toBe(true);
 });
 
-test("project maps origin to canvas center, also after resize", async ({ page }) => {
+test("project maps the camera target to canvas center, also after resize", async ({ page }) => {
   await page.goto("/");
   const expectCentered = async () => {
     const box = await canvasBox(page);
-    const p = await nexus(page, "project", [0, 0, 0]);
+    // The default camera has no target until Stage swaps in its own.
+    await expect.poll(async () => (await nexus(page, "getCamera")).target).not.toBeNull();
+    const { target } = await nexus(page, "getCamera");
+    const p = await nexus(page, "project", target!);
     expect(p.visible).toBe(true);
     expect(Math.abs(p.x - (box.x + box.width / 2))).toBeLessThanOrEqual(1);
     expect(Math.abs(p.y - (box.y + box.height / 2))).toBeLessThanOrEqual(1);

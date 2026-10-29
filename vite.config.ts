@@ -107,7 +107,8 @@ export default defineConfig({
     // platform "node" otherwise forces .mjs; package.json "main" names main.js.
     fixedExtension: false,
   },
-  test: { exclude: [...configDefaults.exclude, "e2e/**"] },
+  // Vitest blanks every CSS import unless `css.include` matches; the token test reads style.css via ?raw.
+  test: { exclude: [...configDefaults.exclude, "e2e/**"], css: { include: [/\.css\?raw$/] } },
   lint: {
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },

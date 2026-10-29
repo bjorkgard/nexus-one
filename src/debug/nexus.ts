@@ -1,12 +1,16 @@
 import { Vector3 } from "three";
 import type { Camera } from "three";
 import type { DataStats } from "../data/source";
+import type { Vec3 } from "../world/zones";
 
-export type Vec3 = readonly [number, number, number];
+export type { Vec3 };
 
 export type CameraInfo = {
   type: string;
   position: [number, number, number];
+  direction: [number, number, number];
+  target: [number, number, number] | null;
+  zoom: number;
   projectionMatrix: number[];
 };
 
