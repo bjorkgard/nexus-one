@@ -23,4 +23,6 @@ export const LOOK = {
   overlayHeadingPx: 13,
   zonesOverlayPillPx: 18,
   zonesOverlayHideFloorsBelowPx: 22,
+  // Palette board swatch labels hide below this projected slot pitch; widest label is 119.3 px at 11 px type.
+  paletteHideSwatchLabelsBelowPx: 120,
 } as const;

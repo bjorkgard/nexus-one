@@ -1,11 +1,13 @@
 import { Html } from "@react-three/drei";
-import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { BoxGeometry, Color, Euler, InstancedMesh, Matrix4, Quaternion, Vector3 } from "three";
 import type { BufferGeometry, Material } from "three";
 import { TOKENS, flattenTokens } from "../shared/tokens";
 import { __clearGeometryCache, getGeometry } from "../world/geometry-cache";
 import { palette } from "../world/palette";
 import {
+  PITCH,
   SIZE,
   TOGETHER_HALF_U,
   TOGETHER_HALF_V,
@@ -73,7 +75,19 @@ function Instances({
   );
 }
 
+// Slots run along the screen-horizontal ground axis, so one slot is PITCH * zoom px apart.
+function useSwatchLabelsVisible() {
+  const camera = useThree((s) => s.camera);
+  const [zoom, setZoom] = useState(camera.zoom);
+  useFrame(() => {
+    if (camera.zoom !== zoom) setZoom(camera.zoom);
+  });
+  return zoom * PITCH >= LOOK.paletteHideSwatchLabelsBelowPx;
+}
+
 function Label({ position, text, large }: { position: Vec3; text: string; large?: boolean }) {
+  const swatchLabelsVisible = useSwatchLabelsVisible();
+  if (!large && !swatchLabelsVisible) return null;
   return (
     <Html position={position} center zIndexRange={[10, 0]}>
       <div
