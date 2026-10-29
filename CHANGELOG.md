@@ -5,6 +5,18 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-10-29
+
+### Added
+
+- The app now opens on a campus stage instead of a black window. A dark ground slab sits in true isometric view, softly lit from the upper left with a warm left edge and a cool right edge, under a fine grid that thins out in small windows.
+- The stage fills any window size. It stays centred and fills about 85% of the window, and it refits when you resize.
+- The stage fades in over 600 ms once it is ready. With Reduce Motion turned on it appears at once.
+- A "Nexus One" wordmark with a thin "N" mark sits in the top-left corner, set in Instrument Sans, a typeface that is bundled so it works offline.
+- When the 3D view cannot start, the app shows a calm message with a Reload button instead of raw red error text.
+- Screen readers announce the stage as "Nexus One campus, isometric view".
+- The campus is divided into named areas: lobby, office floors, garage, loading bay, break room, server room and roof. Later features use them to place desks, people and the camera.
+
 ## [0.9.4] - 2026-10-29
 
 ### Fixed
