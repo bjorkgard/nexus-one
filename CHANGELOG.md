@@ -5,6 +5,13 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-10-29
+
+### Fixed
+
+- An `import.meta.glob` is fenced by the folder it searches again. A folder outside the zone no longer passes because its `index.ts`, or a `.ts` file beside it, links into an allowed zone.
+- Every file an `import.meta.glob` matches is now checked by its real path. A file or folder inside the searched folder that links to another zone is reported, including links reached through a `**` walk. The fence lists matches with tinyglobby, the matcher Vite uses, now a declared dev dependency.
+
 ## [0.9.1] - 2026-10-29
 
 ### Changed
