@@ -2,6 +2,20 @@
 
 ## Rendering
 
+### Add key-light shadows with the first casters
+
+**Issue:** [#130](https://github.com/bjorkgard/nexus-one/issues/130)
+
+**What:** Turn on key-light shadows when the tower shell adds the first shadow casters: pick the shadow map type, fit the light's shadow camera to the campus box, tune softness against the 2.1 "night studio diorama" target look, and budget the extra draw calls.
+
+**Why:** Task 2.1 keeps the key light but ships no shadows, because nothing casts one yet and VSM would cost two full-screen blur passes per frame for an invisible result (CEO D13 in `docs/plans/2.1-isometric-stage.md`).
+
+**Context:** three 0.186 removed `PCFSoftShadowMap` and falls back to PCF with a warning (`node_modules/three/build/three.module.js:9152`); R3F `<Canvas shadows>` with a boolean picks it (`@react-three/fiber` events file, line 1719). `shadows="variance"` (VSM) supports `shadow.radius`/`blurSamples` but adds two blur draws per frame (`three.module.js:9415-9419`). Key-light direction is `LOOK.keyLightDir` in `src/world/stage-look.ts`. The 2.1 e2e asserts exactly 2 draw calls for the empty stage; update it when shadows land. Consider `shadow.autoUpdate = false` for static casters.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 2.1 (light baseline); lands with task 2.3 (first casters)
+
 ### Recover from WebGL context loss
 
 **Issue:** [#89](https://github.com/bjorkgard/nexus-one/issues/89)
@@ -141,6 +155,22 @@
 **Effort:** S (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** Task 2.5; must land before task 3.2
+
+## Design
+
+### Write DESIGN.md from the 2.1 design decisions
+
+**Issue:** [#131](https://github.com/bjorkgard/nexus-one/issues/131)
+
+**What:** Write `DESIGN.md` (via `/design-consultation`) from the 2.1 design decisions: colour tokens, Instrument Sans type scale, spacing, the 600 ms reveal motion rule, the thin-stroke "N" wordmark and the calm error-panel pattern.
+
+**Why:** Task 2.1's design review created the first real design system pieces, but they live only in `docs/plans/2.1-isometric-stage.md` and `src/shared/tokens.ts`. Phase 5 panels and Phase 7 alerts need a type scale, spacing rules and component patterns; without a shared document each panel invents its own.
+
+**Context:** Decisions Q1-Q12 in the "Design review" section of `docs/plans/2.1-isometric-stage.md`; approved mockups in `~/.gstack/projects/bjorkgard-nexus-one/designs/isometric-stage-20261029/variant-A.png` and `.../error-panel-20261029/variant-A.png`. Task 5.1 plans "Tailwind tokens and a GlassPanel"; those tokens must extend `src/shared/tokens.ts` (single source, design Q8), not start a second set. Start by running `/design-consultation` with the 2.1 plan as input.
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 2.1 (tokens.ts exists); must land before or with task 5.1
 
 ## Completed
 

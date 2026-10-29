@@ -2,6 +2,16 @@
 
 These rules apply to this repo and win over global rules when they conflict.
 
+## Visual quality comes first
+
+The GUI is the product. People come back to Nexus One because it is beautiful to look at, so every task that changes what is on screen (3D scene, lighting, materials, camera, motion, overlay, dashboard) must aim for the most pleasing result we can reach, not the first one that works.
+
+- **Plans and reviews:** every plan review of a visual task includes a visual-quality section: the target look, reference mood, palette, lighting and motion, and how "beautiful" will be checked. Run `/plan-design-review` on any task that changes the scene or UI.
+- **Done means looks right:** a visual task is not done until a screenshot (or short capture) of the real app has been checked against its target look, and the result is attached to the PR. Passing tests alone is not enough.
+- **Polish is in scope:** lighting, color harmony, edge treatment, easing, readable type and calm motion are part of the task, not follow-ups. Defer polish only with a recorded reason and a TODO.
+- **Coherent style:** reuse the shared palette, materials and motion timings once they exist (step 2.2 onward). No one-off colors or effects.
+- **Never at the cost of the budget:** beauty must fit the performance budget in `docs/PLAN.md`. When the two conflict, find the cheaper way to get the look before cutting the look.
+
 ## Review plans
 
 Every plan review (`/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/plan-devex-review`, `/autoplan`, or any other review that produces a working plan and report) stores its plan file in `docs/plans/`.
