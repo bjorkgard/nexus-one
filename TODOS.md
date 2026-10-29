@@ -200,6 +200,34 @@
 **Priority:** P2
 **Depends on:** Task 2.1 (tokens.ts exists); must land before or with task 5.1
 
+### Give the stage reveal its own fade target
+
+**Issue:** [#136](https://github.com/bjorkgard/nexus-one/issues/136)
+
+**What:** Replace the `.nx-stage > div > *` reveal selector in `src/style.css` with an explicit hook (a class or data attribute set on the canvas and on each drei `Html` overlay root, or one wrapper the app owns) so the 600 ms fade does not depend on React Three Fiber's internal wrapper depth.
+
+**Why:** The selector works today because R3F renders `.nx-stage > div > canvas` and drei mounts `Html` overlays as siblings of the canvas. An R3F or drei update that changes that nesting would silently stop the canvas or the labels from fading in (or leave them hidden). It also fades any future DOM sibling of the canvas, wanted or not. Found by the 2.2 /design-review (deferred polish D-2).
+
+**Context:** Selector and reduced-motion rule: `src/style.css` (reveal rules near the top). Why it is `> div > *`: `.claude/scratch/issue-11-material-palette/DECISIONS.md` (X2 selector correction) and `docs/plans/2.2-material-palette.md` eng `### X2`. Guarding e2e: `e2e/stage.spec.ts` (reveal gating, reduced motion, label opacity 0 before reveal). Task 3.2 adds hover name tags, the next overlay that must fade with the stage. Start by giving the canvas and the overlay roots one shared attribute and switching both CSS rules to it.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (fade selector); must land before task 3.2 (hover name tags)
+
+### Shared overlay label component
+
+**Issue:** [#137](https://github.com/bjorkgard/nexus-one/issues/137)
+
+**What:** Extract one overlay label component (or `.nx-overlay-label` class) for drei `Html` labels, used by `src/debug/ZoneOverlay.tsx`, `src/debug/PaletteBoard.tsx` and `src/debug/PaletteFailure.tsx`, with size from `LOOK.zonesOverlayLabelPx` / `LOOK.overlayHeadingPx` and colour from `TOKENS`.
+
+**Why:** The three overlays repeat the same inline style block (colour, `var(--font-sans)`, font size, `whiteSpace: nowrap`, `pointerEvents: none`). Task 3.2 adds hover name tags, which would be a fourth copy, and labels would drift in size or colour. Found by the 2.2 /design-review (deferred polish D-2); sizes were already unified in FINDING-002 (`5a83b10`).
+
+**Context:** Style blocks: `src/debug/ZoneOverlay.tsx` (pill label), `src/debug/PaletteBoard.tsx` `Label`, `src/debug/PaletteFailure.tsx`. Design system home is task 5.1 / `DESIGN.md` (#131); keep tokens in `src/shared/tokens.ts`. Start by moving the shared block into one component and keeping each caller's extras (ZoneOverlay's pill backdrop) as props.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (palette board labels); must land before task 3.2 (hover name tags)
+
 ## Completed
 
 ### Run the pre-commit full check against the staged index
