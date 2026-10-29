@@ -5,6 +5,20 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-10-29
+
+### Added
+
+- Every surface in the app now draws from one shared set of ten materials: ground, panels, glass, silver, furniture, screens, status lights, cyan and white trim, and vehicle paint. New scenes reuse them instead of inventing their own colours, so the campus keeps one calm, coherent look.
+- The eight vehicle paint colours are checked to stay easy to tell apart, including for people with red-green colour blindness.
+- Developers can open `?palette=1` to see every material on a swatch board, with each name and colour written underneath. The board lives only in development builds and never ships in the app.
+- If the swatch board fails to load or takes longer than 3 seconds, the stage still appears and a short message says what went wrong.
+
+### Changed
+
+- The stage now shares shapes between objects instead of building a copy for each one, which keeps memory use flat as the campus fills up. The default stage looks the same as before.
+- In development builds, the app warns when the scene reaches its budget of 30 materials, so slowdowns are caught early.
+
 ## [0.10.0] - 2026-10-29
 
 ### Added
