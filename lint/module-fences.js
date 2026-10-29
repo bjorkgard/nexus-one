@@ -5,18 +5,95 @@ import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
 // Allow-list: a file in a zone may import only inside its allowed folders; static specifiers only.
 // Resolved: relative (`.`) and root-absolute (`/`) specifiers, with any `?query` or `#hash` removed.
-// A root-absolute path whose first segment is not an entry in the repo root is a Vite publicDir
-// (`public/`) asset URL and is allowed; the folder need not exist.
+// A root-absolute path is fenced when its first segment is an entry in ROOT_ENTRIES (or such an
+// entry without its last extension, as `/vite.config` resolves to vite.config.ts), when it is `/`,
+// or when it resolves outside the repo. Any other root-absolute path is a Vite publicDir
+// (`public/`) asset URL and is allowed; the disk is not read, so the folder need not exist.
 // Bare and `node:` specifiers belong to no-restricted-imports and import/no-nodejs-modules.
 
+// Lower-case root entries: every tracked root entry (`git ls-files`; a unit test guards it) plus
+// the untracked folders git, Claude Code (agent worktrees), a build, an install or a test run creates.
+export const ROOT_ENTRIES = new Set([
+  ".github",
+  ".gitignore",
+  ".gstack",
+  ".vite-hooks",
+  ".vscode",
+  "agents.md",
+  "changelog.md",
+  "claude.md",
+  "readme.md",
+  "todos.md",
+  "collector",
+  "docs",
+  "e2e",
+  "electron",
+  "index.html",
+  "lint",
+  "package-lock.json",
+  "package.json",
+  "playwright.config.ts",
+  "playwright.electron.config.ts",
+  "src",
+  "test",
+  "tsconfig.json",
+  "vite.config.ts",
+  ".git",
+  ".claude",
+  "dist",
+  "dist-electron",
+  "release",
+  "node_modules",
+  "test-results",
+  "playwright-report",
+]);
+
+const FENCED_FIRST_SEGMENTS = new Set(
+  [...ROOT_ENTRIES].flatMap((entry) => [entry, path.parse(entry).name]),
+);
+
+// Vite's default resolve.extensions, in its order.
+const PROBE_EXTENSIONS = [".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"];
+
+// First existing file among `absolute` + extension, then (for a directory) `absolute/index` + extension.
+function probeFile(absolute, withIndex = true) {
+  const candidates = PROBE_EXTENSIONS.map((extension) => `${absolute}${extension}`);
+  if (withIndex) {
+    candidates.push(
+      ...PROBE_EXTENSIONS.map((extension) => path.join(absolute, `index${extension}`)),
+    );
+  }
+  for (const candidate of candidates) {
+    try {
+      const real = fs.realpathSync.native(candidate);
+      // Vite accepts only regular files (following symlinks), never a directory
+      if (fs.statSync(real).isFile()) return real;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
 // Follows symlinks; for a missing file, resolves the deepest existing parent and appends the rest.
-function realPath(absolute) {
+// With `probe`, the extensions a bundler would add are tried first, so an extensionless import of a
+// file symlink resolves through the link. That includes an existing directory: Vite resolves a
+// sibling `absolute` + extension file, then `absolute/index` + extension, before the directory itself.
+function realPath(absolute, probe = false) {
   const rest = [];
   let current = absolute;
   for (;;) {
     try {
+      if (probe && current === absolute && fs.statSync(current).isDirectory()) {
+        const found = probeFile(absolute);
+        if (found !== null) return found;
+      }
       return path.join(fs.realpathSync.native(current), ...rest);
     } catch {
+      if (probe && current === absolute) {
+        const found = probeFile(absolute, false);
+        if (found !== null) return found;
+      }
       const parent = path.dirname(current);
       if (parent === current) return absolute;
       rest.unshift(path.basename(current));
@@ -28,8 +105,13 @@ function realPath(absolute) {
 const repoRoot = realPath(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
 
 // Repo-relative, lower-cased, `/`-separated; lower-case because macOS paths are case-insensitive.
-function toRepoPath(absolute) {
-  return path.relative(repoRoot, realPath(absolute)).split(path.sep).join("/").toLowerCase();
+function toRepoPath(absolute, probe = false) {
+  return path.relative(repoRoot, realPath(absolute, probe)).split(path.sep).join("/").toLowerCase();
+}
+
+// A repo path that climbs out of the root (or, on Windows, sits on another drive).
+function leavesRepo(target) {
+  return target === ".." || target.startsWith("../") || path.isAbsolute(target);
 }
 
 function inside(target, folder) {
@@ -66,14 +148,25 @@ function stringValue(node) {
   return null;
 }
 
-function isImportMeta(node, property) {
+function isImportMetaMember(node) {
   return (
     node.type === "MemberExpression" &&
-    !node.computed &&
-    node.property.name === property &&
     node.object.type === "MetaProperty" &&
     node.object.meta.name === "import"
   );
+}
+
+// Matches `import.meta.x` and `import.meta["x"]`.
+function isImportMeta(node, property) {
+  return (
+    isImportMetaMember(node) &&
+    (node.computed ? stringValue(node.property) : node.property.name) === property
+  );
+}
+
+// `import.meta[key]` with a key the rule cannot read.
+function isDynamicImportMeta(node) {
+  return isImportMetaMember(node) && node.computed && stringValue(node.property) === null;
 }
 
 // Static directory part of a glob: up to the last `/` before the first glob character.
@@ -99,6 +192,8 @@ const noCrossZone = defineRule({
         "Non-static import in a fenced zone; use a string literal so the module fence can check it.",
       glob: "import.meta.glob in a fenced zone must use relative or root-absolute patterns and no `base` option.",
       globOptions: "glob options must be a literal object without `base`.",
+      outsideRepo:
+        "{{file}} is outside the repo root, so the module fence cannot place it in a zone.",
       createRequire: "createRequire is banned in collector/; it would bypass the module fence.",
       electronCreateRequire:
         "createRequire is banned in electron/; it would bypass the module fence.",
@@ -106,17 +201,26 @@ const noCrossZone = defineRule({
   },
   create(context) {
     const importer = toRepoPath(context.filename);
+    if (leavesRepo(importer)) {
+      return {
+        Program: (node) =>
+          context.report({ node, messageId: "outsideRepo", data: { file: context.filename } }),
+      };
+    }
     const zone = zoneOf(importer);
     if (!zone) return {};
-    const dir = path.dirname(context.filename);
+    // Relative specifiers resolve from the real directory, so a symlinked importer dir is seen through.
+    const dir = path.dirname(realPath(context.filename));
 
     // Resolves a relative or root-absolute path; null for anything else.
     function resolveFrom(specifier) {
-      if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier));
+      if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier), true);
       if (specifier.startsWith("/")) {
-        const target = toRepoPath(path.join(repoRoot, specifier));
+        const target = toRepoPath(path.join(repoRoot, specifier), true);
         const [first] = target.split("/");
-        return target === "" || fs.existsSync(path.join(repoRoot, first)) ? target : null;
+        return target === "" || leavesRepo(target) || FENCED_FIRST_SEGMENTS.has(first)
+          ? target
+          : null;
       }
       return null;
     }
@@ -218,6 +322,10 @@ const noCrossZone = defineRule({
           check(node.arguments[0]);
         } else if (isImportMeta(callee, "glob")) {
           checkGlob(node);
+        } else if (isImportMeta(callee, "resolve")) {
+          check(node.arguments[0]);
+        } else if (isDynamicImportMeta(callee)) {
+          context.report({ node: callee, messageId: "nonStatic" });
         } else if (
           zone.createRequireMessageId &&
           callee.type === "MemberExpression" &&
@@ -229,14 +337,9 @@ const noCrossZone = defineRule({
       },
       NewExpression(node) {
         const [specifier, base] = node.arguments;
-        if (
-          node.callee.type === "Identifier" &&
-          node.callee.name === "URL" &&
-          base &&
-          isImportMeta(base, "url")
-        ) {
-          check(specifier);
-        }
+        if (node.callee.type !== "Identifier" || node.callee.name !== "URL" || !base) return;
+        if (isImportMeta(base, "url")) check(specifier);
+        else if (isDynamicImportMeta(base)) context.report({ node: base, messageId: "nonStatic" });
       },
     };
   },

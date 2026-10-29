@@ -128,6 +128,44 @@
 **Priority:** P1
 **Depends on:** Task 4.4
 
+### Give Phase 3 e2e a test target before agents exist
+
+**Issue:** [#97](https://github.com/bjorkgard/nexus-one/issues/97)
+
+**What:** Pick a target for the e2e tests of 3.2 (pick), 3.3 (glide) and 3.4 (follow), for example desks from 2.5 or a test fixture object. Also have 3.1 register the camera-controls target through the `__nexus` registry.
+
+**Why:** Those tasks test against agents, which arrive in 4.5/4.6 after Phase 3. `useThree()`'s camera has no target, so the e2e tests cannot read it without a registered hook.
+
+**Context:** CEO D9 and D11 in `docs/plans/1.3-test-harness-debug-api.md`; `docs/PLAN.md` steps 3.2-3.4.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 2.5; must land before task 3.2
+
+### Close the remaining module-fence resolution gaps
+
+**Issue:** [#116](https://github.com/bjorkgard/nexus-one/issues/116)
+
+**What:** Make `lint/module-fences.js` see these import spellings the way Vite resolves them:
+
+- `/@fs/<absolute path>` specifiers (today the first segment `@fs` is treated as a `public/` asset URL)
+- `import "./x.js"` where only `x.ts` exists (Vite swaps `.js` for `.ts`)
+- a folder whose `package.json` `main` points into another zone (Vite reads it before `index.*`)
+- type-only imports that resolve to `.d.ts`, `.d.mts` or `.d.cts`
+- percent-encoded root paths such as `/%63ollector/x`, `import.meta?.url` as a `new URL` base, `(0, import.meta.resolve)(...)` and a destructured `resolve`
+
+Also run the full pre-commit check when a staged change is a symlink, a deletion or a rename, since those can change the result for importers that are not staged.
+
+**Why:** Each spelling lets `src/` import `collector/` or `electron/` code with the fence silent. All need a planted symlink or an unusual spelling, and CI's full `vp check` still catches the staged-hook case.
+
+**Context:** Found by the /ship reviews of #95/#98/#111 (red team, refuter, adversarial pass); see the review record in `docs/plans/95-fence-and-boot-hardening.md`. Add a RuleTester case per spelling, red first, as the existing `__fence_*` symlink rows do.
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** None
+
+## Completed
+
 ### Add the last two config-fence wiring rows
 
 **Issue:** [#95](https://github.com/bjorkgard/nexus-one/issues/95)
@@ -142,19 +180,7 @@
 **Priority:** P2
 **Depends on:** None
 
-### Give Phase 3 e2e a test target before agents exist
-
-**Issue:** [#97](https://github.com/bjorkgard/nexus-one/issues/97)
-
-**What:** Pick a target for the e2e tests of 3.2 (pick), 3.3 (glide) and 3.4 (follow), for example desks from 2.5 or a test fixture object. Also have 3.1 register the camera-controls target through the `__nexus` registry.
-
-**Why:** Those tasks test against agents, which arrive in 4.5/4.6 after Phase 3. `useThree()`'s camera has no target, so the e2e tests cannot read it without a registered hook.
-
-**Context:** CEO D9 and D11 in `docs/plans/1.3-test-harness-debug-api.md`; `docs/PLAN.md` steps 3.2-3.4.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P2
-**Depends on:** Task 2.5; must land before task 3.2
+**Completed:** v0.9.1 (2026-10-29); review record in `docs/plans/95-fence-and-boot-hardening.md`
 
 ### Harden the module-fence rule and staged hook
 
@@ -179,6 +205,8 @@
 **Priority:** P2
 **Depends on:** None
 
+**Completed:** v0.9.1 (2026-10-29); review record in `docs/plans/95-fence-and-boot-hardening.md`
+
 ### Assert the packaged app shows no WebGL error box
 
 **Issue:** [#111](https://github.com/bjorkgard/nexus-one/issues/111)
@@ -193,7 +221,7 @@
 **Priority:** P2
 **Depends on:** Task 1.7; #106 (lands with 1.9)
 
-## Completed
+**Completed:** v0.9.1 (2026-10-29); review record in `docs/plans/95-fence-and-boot-hardening.md`
 
 ### Package and boot the app in CI
 

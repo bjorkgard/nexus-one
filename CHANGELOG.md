@@ -5,6 +5,22 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-10-29
+
+### Changed
+
+- The module fence now judges a root-absolute import such as `/collector/x` against a fixed list of the repo's root folders and files, without reading the disk. A root file imported without its extension, such as `/vite.config`, is blocked too, and so are `/.git` and `/.claude` paths. Any other root-absolute path is still allowed as a `public/` asset URL. A unit test fails when a tracked root entry is missing from the list.
+- The fence resolves imports the way Vite does. It tries Vite's extensions in Vite's order, accepts only regular files, and prefers a `x.ts` file or an `x/index.ts` over the folder `x/`. A symlink can no longer hide an import from another zone.
+- `import.meta.resolve(...)` and the bracket forms `import.meta["resolve"]`, `import.meta["glob"]` and `import.meta["url"]` are now checked. A computed key the fence cannot read is reported as a non-static import.
+- Staging `tsconfig.json` or `package.json` now runs the full check in the pre-commit hook, since both change what every file is checked against.
+
+### Fixed
+
+- A linted file whose real path is outside the repo now gets its own lint error naming the file instead of passing unchecked.
+- Relative imports in a symlinked folder are resolved from the folder's real location.
+- Leftover scratch files from the fence tests no longer break the type check in `vp run build`.
+- The packaged-app test now fails when the app shows its "WebGL is unavailable" error box, and a second test starts the app with the GPU off to prove the check finds the real box.
+
 ## [0.9.0] - 2026-10-29
 
 ### Added

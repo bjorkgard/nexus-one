@@ -1,11 +1,13 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { RuleTester } from "vite-plus/lint/plugins-dev";
 import config from "../vite.config.ts";
-import plugin from "./module-fences.js";
+import plugin, { ROOT_ENTRIES } from "./module-fences.js";
 
 RuleTester.afterAll = afterAll;
 RuleTester.describe = describe;
@@ -39,20 +41,75 @@ const GLOB_OPTIONS = "glob options must be a literal object without `base`.";
 const CREATE_REQUIRE = "createRequire is banned in collector/; it would bypass the module fence.";
 const ELECTRON_CREATE_REQUIRE =
   "createRequire is banned in electron/; it would bypass the module fence.";
+const outsideRepo = (file) =>
+  `${file} is outside the repo root, so the module fence cannot place it in a zone.`;
 
 const bad = (filename, code, message) => ({ filename, code, errors: [{ message }] });
 const good = (filename, code) => ({ filename, code });
 
-// A symlink inside src/ that points at collector/: the realpath check must see through it.
+// Symlinks the realpath check must see through; all are removed again after the run.
 const linkPath = at("src/ui/__fence_link__");
+const outLinkPath = at("src/ui/__fence_out_link__");
+const fileLinkPath = at("src/ui/__fence_file_link__.ts");
+const dirLinkPath = at("collector/__fence_dir_link__");
+const fileLinkTarget = at("collector/__fence_file_target__.ts");
+const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fence-out-"));
 const cleanup = (...paths) => {
   for (const p of paths) fs.rmSync(p, { force: true, recursive: true });
 };
+const idxDir = at("src/ui/__fence_idx_dir");
+const sibDir = at("src/ui/__fence_sib_dir");
+const sibLink = at("src/ui/__fence_sib_dir.ts");
+const okDir = at("src/ui/__fence_ok_dir");
+const nfDir = at("src/ui/__fence_nf.mjs");
+const nfLink = at("src/ui/__fence_nf.ts");
+const nfiDir = at("src/ui/__fence_nfi");
+const fenceScratch = [
+  nfDir,
+  nfLink,
+  nfiDir,
+  linkPath,
+  outLinkPath,
+  fileLinkPath,
+  dirLinkPath,
+  fileLinkTarget,
+  idxDir,
+  sibDir,
+  sibLink,
+  okDir,
+];
 beforeAll(() => {
-  cleanup(linkPath);
+  cleanup(...fenceScratch);
   fs.symlinkSync("../../collector", linkPath, "dir");
+  fs.symlinkSync(outDir, outLinkPath, "dir");
+  fs.writeFileSync(fileLinkTarget, "export const a = 1;\n");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", fileLinkPath, "file");
+  fs.symlinkSync("../src/ui", dirLinkPath, "dir");
+  // real directories whose index file, or sibling file, is a symlink into collector/
+  fs.mkdirSync(idxDir);
+  fs.symlinkSync(
+    "../../../collector/__fence_file_target__.ts",
+    path.join(idxDir, "index.ts"),
+    "file",
+  );
+  fs.mkdirSync(sibDir);
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", sibLink, "file");
+  // directories named like probe candidates: not files, so the symlink behind them still wins
+  fs.mkdirSync(nfDir);
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", nfLink, "file");
+  fs.mkdirSync(path.join(nfiDir, "index.js"), { recursive: true });
+  fs.symlinkSync(
+    "../../../collector/__fence_file_target__.ts",
+    path.join(nfiDir, "index.ts"),
+    "file",
+  );
+  fs.mkdirSync(okDir);
+  fs.writeFileSync(path.join(okDir, "index.ts"), "export const a = 1;\n");
 });
-afterAll(() => cleanup(linkPath));
+afterAll(() => {
+  cleanup(...fenceScratch);
+  cleanup(outDir);
+});
 
 tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
   valid: [
@@ -83,6 +140,15 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'import logo from "/logo.svg";'),
     good(fromUi, 'import x from "/assets/x.png";'),
     good(fromUi, 'import x from "/assets/x.png?url";'),
+    // a real directory with a same-zone index still passes
+    good(fromUi, 'import x from "./__fence_ok_dir";'),
+    // symlinked importer directory: relative specifiers resolve from the real directory
+    good(at("collector/__fence_dir_link__/a.ts"), 'import x from "../shared/x";'),
+    // import.meta bracket forms and resolve
+    good(fromUi, 'new URL("./x.ts", import.meta["url"]);'),
+    good(fromUi, 'import.meta.resolve("./x.ts");'),
+    good(fromUi, 'import.meta["resolve"]("./x.ts");'),
+    good(fromUi, 'import.meta["glob"]("./*.ts");'),
     good(at("src/data/a.ts"), 'import x from "./collector";'),
     // src/shared
     good(at("src/shared/sub/a.ts"), 'import x from "../x";'),
@@ -121,6 +187,16 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     bad(fromUi, 'import x from "../../collector-utils/x";', SRC),
     bad(fromUi, 'import x from "../../../../outside/x";', SRC),
     bad(fromUi, 'import x from "/collector/x";', SRC),
+    // root-absolute: fixed root entries (case-insensitive), entry stems, `/`, and escapes
+    bad(fromUi, 'import x from "/dist/x";', SRC),
+    bad(fromUi, 'import x from "/Collector/x";', SRC),
+    bad(fromUi, 'import x from "/vite.config";', SRC),
+    bad(fromUi, 'import x from "/playwright.config";', SRC),
+    bad(fromUi, 'import x from "/";', SRC),
+    bad(fromUi, 'import x from "/index";', SRC),
+    bad(fromUi, 'import x from "/readme";', SRC),
+    bad(fromUi, 'import x from "/.claude/worktrees/x/collector/x";', SRC),
+    bad(fromUi, 'import x from "/.git/x";', SRC),
     // bypass 1: query suffix
     bad(fromUi, 'import W from "../../collector?worker&inline";', SRC),
     bad(fromUi, 'import W from "../../collector/x.ts?worker&inline";', SRC),
@@ -152,7 +228,20 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     bad(fromUi, 'const m = import.meta.glob("react/*.ts");', GLOB),
     // bypass 6: non-static specifiers
     bad(fromUi, 'import("../../collector/x" + ".ts");', NON_STATIC),
-    bad(fromUi, 'import(import.meta.resolve("../../collector/x.ts"));', NON_STATIC),
+    {
+      filename: fromUi,
+      code: 'import(import.meta.resolve("../../collector/x.ts"));',
+      errors: [{ message: NON_STATIC }, { message: SRC }],
+    },
+    bad(fromUi, 'import.meta.resolve("../../collector/x.ts");', SRC),
+    bad(fromUi, "import.meta.resolve(name);", NON_STATIC),
+    bad(fromUi, 'import.meta["resolve"]("../../collector/x.ts");', SRC),
+    bad(fromUi, 'import.meta["resolve"](name);', NON_STATIC),
+    bad(fromUi, 'import.meta["glob"]("../../collector/*.ts");', SRC),
+    bad(fromUi, 'import.meta["glob"]("*.ts");', GLOB),
+    bad(fromUi, 'new URL("../../collector/x.ts", import.meta["url"]);', SRC),
+    bad(fromUi, 'import.meta[key]("./x.ts");', NON_STATIC),
+    bad(fromUi, 'new URL("./x.ts", import.meta[key]);', NON_STATIC),
     bad(fromUi, "import(name);", NON_STATIC),
     bad(fromUi, "import(`./${name}`);", NON_STATIC),
     bad(fromUi, "require(name);", NON_STATIC),
@@ -213,6 +302,25 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     ),
     // symlink inside src/ pointing at collector/
     bad(fromUi, 'import x from "./__fence_link__/x";', SRC),
+    // root-absolute import through a symlink that leaves the repo
+    bad(fromUi, 'import x from "/src/ui/__fence_out_link__/x";', SRC),
+    // extensionless import of a file symlink: probes .ts and resolves through the link
+    bad(fromUi, 'import x from "./__fence_file_link__";', SRC),
+    // existing directory whose index file is a symlink into collector/
+    bad(fromUi, 'import x from "./__fence_idx_dir";', SRC),
+    // existing directory with a sibling file symlink: the file wins over the directory
+    bad(fromUi, 'import x from "./__fence_sib_dir";', SRC),
+    // a directory named like a probe candidate is skipped; the later file symlink resolves
+    bad(fromUi, 'import x from "./__fence_nf";', SRC),
+    bad(fromUi, 'import x from "./__fence_nfi";', SRC),
+    // symlinked importer directory: the real directory is src/ui
+    bad(at("collector/__fence_dir_link__/a.ts"), 'import x from "../../collector/x";', SRC),
+    // importer outside the repo root
+    {
+      filename: path.join(repoRoot, "..", "fence-outside.ts"),
+      code: "export const a = 1;",
+      errors: [{ message: outsideRepo(path.join(repoRoot, "..", "fence-outside.ts")) }],
+    },
   ],
 });
 
@@ -221,6 +329,30 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
 describe("module-fences wiring", () => {
   const configRows = [
     ["shared-react.txt", "src/shared/__wiring_react.ts", "eslint(no-restricted-imports)"],
+    [
+      "shared-react.txt",
+      "collector/__wiring_react.ts",
+      "eslint(no-restricted-imports)",
+      "collector/ and src/shared/ must load in plain Node",
+    ],
+    [
+      "collector-electron.txt",
+      "src/ui/__wiring_electron.ts",
+      "eslint(no-restricted-imports)",
+      "src/ runs in the browser",
+    ],
+    [
+      "shared-react-type.txt",
+      "src/shared/__wiring_react_type.ts",
+      "eslint(no-restricted-imports)",
+      "collector/ and src/shared/ must load in plain Node",
+    ],
+    [
+      "shared-react-jsx-runtime.txt",
+      "src/shared/__wiring_react_jsx_runtime.ts",
+      "eslint(no-restricted-imports)",
+      "collector/ and src/shared/ must load in plain Node",
+    ],
     [
       "collector-electron.txt",
       "collector/__wiring_electron.ts",
@@ -287,9 +419,12 @@ describe("module-fences wiring", () => {
       "performance.timeOrigin reads wall-clock time",
     ],
   ];
+  // Pinned semantics: a bare `import("react")` type query is not matched by no-restricted-imports.
+  const importTypePath = "src/shared/__wiring_react_import_type.ts";
   const copies = [
     at("src/ui/__wiring_bad.ts"),
     at("src/ui/__wiring_clean.ts"),
+    at(importTypePath),
     ...configRows.map(([, zonePath]) => at(zonePath)),
   ];
   beforeAll(() => cleanup(...copies));
@@ -323,6 +458,12 @@ describe("module-fences wiring", () => {
   it("exits 0 for a clean file", () => {
     const { status, output } = lint("clean.txt", "src/ui/__wiring_clean.ts");
     expect(output).not.toContain("module-fences");
+    expect(status).toBe(0);
+  }, 60_000);
+
+  it('does not report an import("react") type query in src/shared (pinned semantics)', () => {
+    const { status, output } = lint("shared-react-import-type.txt", importTypePath);
+    expect(output).not.toContain("no-restricted-imports");
     expect(status).toBe(0);
   }, 60_000);
 
@@ -362,11 +503,85 @@ describe("staged function", () => {
   it("runs the full check when lint/module-fences.js is staged", () => {
     expect(staged([at("lint/module-fences.js")])).toBe("vp check");
   });
+  it.each(["tsconfig.json", "collector/tsconfig.json", "package.json"])(
+    "runs the full check when %s is staged",
+    (file) => {
+      expect(staged([at("src/a.ts"), at(file)])).toBe("vp check");
+    },
+  );
   it("double-quotes each path so lint-staged's string-argv gives back the original paths", () => {
     const paths = [at("src/a.ts"), at("src/with space.ts"), at("src/it's.ts")];
     expect(parseArgsStringToArgv(staged(paths))).toEqual(["vp", "check", "--fix", ...paths]);
   });
   it("falls back to the full check for a path with a double quote", () => {
     expect(staged([at("src/a.ts"), at('src/say"hi.ts')])).toBe("vp check");
+  });
+});
+
+// Every root entry, and its name without the last extension, is fenced as a root-absolute first segment;
+// `src` itself is the importer's own zone, so `/src/x` is allowed.
+tester.run("no-cross-zone root entries", plugin.rules["no-cross-zone"], {
+  valid: [],
+  invalid: [
+    ...new Set(
+      [...ROOT_ENTRIES]
+        .filter((entry) => entry !== "src")
+        .flatMap((entry) => [`/${entry}/x`, `/${path.parse(entry).name}/x`]),
+    ),
+  ].map((specifier) => bad(fromUi, `import x from "${specifier}";`, SRC)),
+});
+
+// Value: protects=ROOT_ENTRIES covers every tracked root entry, so a new root folder cannot be reached by a root-absolute import; fails_when=a root entry is added to git without being added to ROOT_ENTRIES; why_new=the set is a fixed list that does not read the disk; seam=none; no_claim=untracked root entries
+describe("ROOT_ENTRIES", () => {
+  it("holds every git ls-files root entry, lower-cased", () => {
+    const result = spawnSync("git", ["ls-files"], { cwd: repoRoot, encoding: "utf8" });
+    if (result.status !== 0) {
+      throw new Error(`git ls-files failed (${result.status}): ${result.stderr}`);
+    }
+    const entries = new Set(
+      result.stdout
+        .split("\n")
+        .filter(Boolean)
+        .map((f) => f.split("/")[0]),
+    );
+    expect(entries.size).toBeGreaterThan(0);
+    const missing = [...entries].filter((entry) => !ROOT_ENTRIES.has(entry.toLowerCase()));
+    expect(missing).toEqual([]);
+  });
+});
+
+// Value: protects=scratch copies and fence links under src/ stay out of tsc (`vp run build`); fails_when=a copy path is no longer matched by a tsconfig exclude; why_new=a leftover copy only breaks the build, not pre-commit; seam=none; no_claim=tsc behaviour itself
+describe("tsconfig exclude", () => {
+  const parsed = ts.parseConfigFileTextToJson(
+    "tsconfig.json",
+    fs.readFileSync(at("tsconfig.json"), "utf8"),
+  );
+  const exclude = parsed.config.exclude;
+  const scratch = [
+    "src/ui/__wiring_bad.ts",
+    "src/ui/__wiring_clean.ts",
+    "src/shared/__wiring_react_import_type.ts",
+    "src/data/mock__wiring_date.ts",
+    "src/ui/__fence_link__",
+    "src/ui/__fence_out_link__",
+    "src/ui/__fence_file_link__.ts",
+  ];
+  it("parses with an exclude list", () => {
+    expect(parsed.error).toBeUndefined();
+    expect(Array.isArray(exclude)).toBe(true);
+  });
+  it.each(scratch)("excludes %s", (file) => {
+    expect(exclude.some((pattern) => path.matchesGlob(file, pattern))).toBe(true);
+  });
+  it("excludes every wiring copy path under src/", () => {
+    const wiringText = fs.readFileSync(new URL(import.meta.url), "utf8");
+    const paths = [...wiringText.matchAll(/"(src\/[\w/]*__wiring_\w+\.tsx?)"/g)].map((m) => m[1]);
+    expect(paths.length).toBeGreaterThan(5);
+    for (const file of paths) {
+      expect(
+        exclude.some((pattern) => path.matchesGlob(file, pattern)),
+        file,
+      ).toBe(true);
+    }
   });
 });

@@ -1,9 +1,12 @@
 import { _electron as electron, expect, test } from "@playwright/test";
-import type { ElectronApplication } from "@playwright/test";
+import type { ElectronApplication, Page } from "@playwright/test";
 
 const executablePath = "release/mac-arm64/Nexus One.app/Contents/MacOS/Nexus One";
 
 let app: ElectronApplication | null = null;
+
+// CanvasErrorBoundary (src/App.tsx) renders its fallback as [role=alert].
+const errorBox = (page: Page) => page.locator("[role=alert]");
 
 test.afterEach(async () => {
   await app?.close();
@@ -28,6 +31,7 @@ test("packaged app boots, renders and survives a reload", async () => {
 
   async function assertBooted() {
     await expect(page.locator("canvas")).toBeVisible();
+    await expect(errorBox(page)).toHaveCount(0);
     await expect(page.getByText("Nexus One").first()).toBeVisible();
     expect(page.url()).toBe("app://nexus/index.html");
     expect(errors, `console/web errors:\n${errors.join("\n")}`).toEqual([]);
@@ -59,4 +63,19 @@ test("main forwards renderer errors and crashes to stderr", async () => {
     BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
   });
   await expect.poll(() => stderr).toMatch(/\[renderer\] render process gone: \w+/);
+});
+
+// Value: protects=the boot test's no-error-box check actually detects a failed renderer; fails_when=the errorBox locator stops matching the CanvasErrorBoundary fallback; why_new=the boot test asserts count 0, which passes vacuously with a wrong selector; seam=none; no_claim=the wording of the WebGL error beyond its prefix
+test("error box locator finds the real box when WebGL is unavailable", async () => {
+  app = await electron.launch({
+    executablePath,
+    args: ["--disable-gpu", "--disable-software-rasterizer"],
+  });
+  const page = await app.firstWindow();
+
+  await expect(errorBox(page)).toBeVisible();
+  await expect(errorBox(page)).toContainText("WebGL is unavailable");
+  await expect(expect(errorBox(page)).toHaveCount(0, { timeout: 1000 })).rejects.toThrow(
+    /toHaveCount/,
+  );
 });
