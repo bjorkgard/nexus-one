@@ -20,6 +20,7 @@ import {
   countMaterials,
   createNexusRegistry,
   installNexus,
+  materialBudgetWarner,
   projectToPage,
   readRendererInfo,
   registerNexusModule,
@@ -288,5 +289,15 @@ describe("countMaterials", () => {
     scene.add(group, new DirectionalLight());
     expect(countMaterials(scene)).toBe(1);
     expect(countMaterials(new Scene())).toBe(0);
+  });
+});
+
+describe("materialBudgetWarner", () => {
+  it("fires once when the count reaches the budget, never below", () => {
+    const shouldWarn = materialBudgetWarner(30);
+    expect(shouldWarn(29)).toBe(false);
+    expect(shouldWarn(30)).toBe(true);
+    expect(shouldWarn(31)).toBe(false);
+    expect(shouldWarn(30)).toBe(false);
   });
 });

@@ -8,7 +8,7 @@ import { PaletteFailure } from "./debug/PaletteFailure";
 import { ErrorPanel } from "./ui/ErrorPanel";
 import { Wordmark } from "./ui/Wordmark";
 import { useRevealHold } from "./world/reveal-hold";
-import { Stage } from "./world/Stage";
+import { Stage, isPaletteBoardOn } from "./world/Stage";
 import { LOOK } from "./world/stage-look";
 
 const NexusBridge = import.meta.env.DEV ? lazy(() => import("./debug/Bridge")) : null;
@@ -23,8 +23,6 @@ function PaletteBoardPending() {
   const status = useSyncExternalStore(hold.subscribe, () => hold.status);
   return status === "timedOut" ? <PaletteFailure message="Palette board timed out" /> : null;
 }
-const paletteBoardOn = () =>
-  import.meta.env.DEV && new URLSearchParams(window.location.search).get("palette") === "1";
 
 interface CanvasErrorBoundaryProps {
   children: ReactNode;
@@ -83,7 +81,7 @@ export function App() {
                 </Suspense>
               </DevBoundary>
             )}
-            {PaletteBoard && paletteBoardOn() && (
+            {PaletteBoard && isPaletteBoardOn() && (
               <DevBoundary
                 name="PaletteBoard"
                 fallback={(error) => (

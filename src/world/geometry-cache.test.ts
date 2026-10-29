@@ -80,13 +80,20 @@ describe("getGeometry", () => {
     expect(a).toBe(first);
   });
 
-  it("never disposes", () => {
-    const g = getGeometry("k", { a: 1 }, box);
-    const spy = vi.spyOn(g, "dispose");
-    getGeometry("k", { a: 1 }, box);
-    __clearGeometryCache(["k"]);
+  it("getGeometry never disposes; clear disposes only what it removes", () => {
+    const kept = getGeometry("keep", { a: 1 }, box);
+    const gone = getGeometry("gone", { a: 1 }, box);
+    const keptSpy = vi.spyOn(kept, "dispose");
+    const goneSpy = vi.spyOn(gone, "dispose");
+    getGeometry("keep", { a: 1 }, box);
+    getGeometry("gone", { a: 1 }, box);
+    expect(keptSpy).not.toHaveBeenCalled();
+    expect(goneSpy).not.toHaveBeenCalled();
+    __clearGeometryCache(["gone"]);
+    expect(goneSpy).toHaveBeenCalledTimes(1);
+    expect(keptSpy).not.toHaveBeenCalled();
     __clearGeometryCache();
-    expect(spy).not.toHaveBeenCalled();
+    expect(keptSpy).toHaveBeenCalledTimes(1);
   });
 
   it("counts hits and misses", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { fitZoom } from "./camera";
+import { LOOK } from "./stage-look";
 import type { Vec3 } from "./zones";
 import {
   PAINT_SLOTS,
@@ -79,6 +80,6 @@ describe("palette layout", () => {
 
   it("lays 9 + 8 swatch slots at a pitch that leaves room for labels at 1440 px", () => {
     const zoom = fitZoom(PALETTE_BOUNDS, { width: 1440, height: 900 })!;
-    expect(PITCH * zoom).toBeGreaterThanOrEqual(115);
+    expect(PITCH * zoom).toBeGreaterThanOrEqual(LOOK.paletteHideSwatchLabelsBelowPx);
   });
 });

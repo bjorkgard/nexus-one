@@ -5,7 +5,7 @@ export type GeometryCacheStats = { size: number; hits: number; misses: number };
 
 const WARN_KEY_COUNT = 256;
 
-// App-lifetime: nothing here disposes. Cached geometry is shared and never edited after build.
+// App-lifetime: the cache never disposes on its own. Cached geometry is shared and never edited after build.
 const cache = new Map<string, { kind: string; geometry: BufferGeometry }>();
 let hits = 0;
 let misses = 0;
@@ -57,9 +57,10 @@ export function geometryCacheStats(): GeometryCacheStats {
   return { size: cache.size, hits, misses };
 }
 
-// Dev and test only: HMR dispose clears the caller's own kinds. Disposes nothing, live meshes remount.
+// Dev and test only: HMR dispose clears the caller's own kinds and disposes the geometries it removes; live meshes remount.
 export function __clearGeometryCache(kinds?: readonly string[]): void {
   if (!kinds) {
+    for (const entry of cache.values()) entry.geometry.dispose();
     cache.clear();
     hits = 0;
     misses = 0;
@@ -67,6 +68,8 @@ export function __clearGeometryCache(kinds?: readonly string[]): void {
     return;
   }
   for (const [key, entry] of cache) {
-    if (kinds.includes(entry.kind)) cache.delete(key);
+    if (!kinds.includes(entry.kind)) continue;
+    entry.geometry.dispose();
+    cache.delete(key);
   }
 }

@@ -3,13 +3,17 @@ import { useEffect } from "react";
 import { Vector3 } from "three";
 import type { Camera } from "three";
 import { geometryCacheStats } from "../world/geometry-cache";
+import { MATERIAL_BUDGET } from "../world/palette";
 import {
   countMaterials,
   installNexus,
+  materialBudgetWarner,
   projectToPage,
   readRendererInfo,
   registerNexus,
 } from "./nexus";
+
+const shouldWarnMaterialBudget = materialBudgetWarner(MATERIAL_BUDGET);
 
 // Stage writes the look-at point to camera.userData.target; null until a camera has one.
 function readTarget(camera: Camera): [number, number, number] | null {
@@ -45,10 +49,13 @@ export default function Bridge() {
         camera.updateMatrixWorld();
         return projectToPage(camera, gl.domElement.getBoundingClientRect(), worldPos);
       }),
-      registerNexus("rendererInfo", () => ({
-        ...readRendererInfo(gl),
-        materials: countMaterials(scene),
-      })),
+      registerNexus("rendererInfo", () => {
+        const materials = countMaterials(scene);
+        if (shouldWarnMaterialBudget(materials)) {
+          console.warn(`material count ${materials} reached the budget of ${MATERIAL_BUDGET}`);
+        }
+        return { ...readRendererInfo(gl), materials };
+      }),
       registerNexus("cacheStats", geometryCacheStats),
     ];
     return () => {

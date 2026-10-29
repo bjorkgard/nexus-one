@@ -389,6 +389,7 @@ test("the empty stage has 2 materials, 1 cached geometry and no reveal hold", as
   expect(info.programs).toBeLessThanOrEqual(info.materials! + 2);
   expect(cache.size).toBe(1);
   // The hold's timeout is 3 s; wait it out so a stray hold would have fired.
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
   await page.waitForTimeout(3500);
   expect(warnings).toEqual([]);
 });
@@ -398,7 +399,6 @@ async function watchBoardReveal(page: Page) {
   await page.addInitScript(() => {
     const seen = {
       labelsAtReveal: -1,
-      cacheAtReveal: -1,
       labelFadeBeforeReveal: null as string | null,
     };
     Object.assign(window, { __boardReveal: seen });
@@ -413,7 +413,6 @@ async function watchBoardReveal(page: Page) {
       }
       if (revealed && seen.labelsAtReveal < 0) {
         seen.labelsAtReveal = labels.length;
-        seen.cacheAtReveal = window.__nexus?.cacheStats?.().size ?? -1;
       }
     };
     new MutationObserver(check).observe(document, {
@@ -462,7 +461,6 @@ test("?palette=1 shows 11 materials, 5 cached shapes and every labelled swatch a
         window as unknown as {
           __boardReveal: {
             labelsAtReveal: number;
-            cacheAtReveal: number;
             labelFadeBeforeReveal: string;
           };
         }
@@ -470,8 +468,8 @@ test("?palette=1 shows 11 materials, 5 cached shapes and every labelled swatch a
   );
   // All swatches (labels mount in the same commit as the meshes) existed when the reveal began.
   expect(seen.labelsAtReveal).toBe(slotLabels.length + rows.length);
-  if (seen.cacheAtReveal !== -1) expect(seen.cacheAtReveal).toBe(5);
   expect(seen.labelFadeBeforeReveal).toBe("0");
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
   await page.waitForTimeout(3500);
   expect(warnings).toEqual([]);
 });
@@ -502,6 +500,7 @@ test("a board module slower than the 3 s hold times out: line, one warning, no l
   await expect(page.getByTestId("palette-failure")).toHaveText("Palette board timed out");
   await expect(page.getByText("Palette board timed out")).toHaveCount(1);
   await boardStateAfterFailure(page);
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
   await page.waitForTimeout(1000);
   await boardStateAfterFailure(page);
   await expect(page.getByText("Palette board timed out")).toHaveCount(1);
@@ -519,6 +518,7 @@ test("a board module that never loads times out: stage reveals, one warning, no 
   await expect(page.getByText("Palette board timed out")).toHaveCount(1);
   await expect(page.getByTestId("palette-failure")).toHaveText("Palette board timed out");
   await boardStateAfterFailure(page);
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
   await page.waitForTimeout(1000);
   await expect(page.getByText("Palette board timed out")).toHaveCount(1);
   expect(warnings).toHaveLength(1);

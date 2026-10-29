@@ -11,7 +11,18 @@ export const SURFACE_SLOTS = 9;
 export const PAINT_SLOTS = 8;
 export const TOGETHER_HALF_U = 6;
 export const TOGETHER_HALF_V = 4;
-export const TOGETHER_WALL = 4.3;
+// Together geometry: tile, back wall and the cyan trim bar on its top edge (an `edge` box scaled by TRIM_SCALE).
+export const TOGETHER_TILE_TOP = 0.3;
+export const TOGETHER_WALL_HEIGHT = 4;
+export const TOGETHER_EDGE_THICKNESS = 0.08;
+export const TOGETHER_TRIM_SCALE = 1.5;
+export const TOGETHER_TRIM_OFFSET = 0.06;
+// Top of the trim bar: wall top, plus the bar's centre offset, plus half its thickness.
+export const TOGETHER_WALL =
+  TOGETHER_TILE_TOP +
+  TOGETHER_WALL_HEIGHT +
+  TOGETHER_TRIM_OFFSET +
+  (TOGETHER_EDGE_THICKNESS * TOGETHER_TRIM_SCALE) / 2;
 
 const LABEL_HALF_WIDTH = 5;
 const LABEL_DROP = (SIZE / 2) * Math.SQRT2 + 1.6;

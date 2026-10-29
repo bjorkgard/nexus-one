@@ -130,3 +130,13 @@ export function projectToPage(
     visible,
   };
 }
+
+// Dev warning helper: true once, the first time the live material count reaches the budget.
+export function materialBudgetWarner(budget: number): (count: number) => boolean {
+  let warned = false;
+  return (count) => {
+    if (warned || count < budget) return false;
+    warned = true;
+    return true;
+  };
+}

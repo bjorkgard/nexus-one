@@ -9,8 +9,13 @@ import { palette } from "../world/palette";
 import {
   PITCH,
   SIZE,
+  TOGETHER_EDGE_THICKNESS,
   TOGETHER_HALF_U,
   TOGETHER_HALF_V,
+  TOGETHER_TILE_TOP,
+  TOGETHER_TRIM_OFFSET,
+  TOGETHER_TRIM_SCALE,
+  TOGETHER_WALL_HEIGHT,
   YAW,
   place,
   rowLabel,
@@ -30,7 +35,17 @@ const KINDS = ["swatch-box", "swatch-pane", "swatch-edge", "swatch-dot"] as cons
 
 const box = () => getGeometry("swatch-box", {}, () => new BoxGeometry(1, 1, 1));
 const pane = () => getGeometry("swatch-pane", {}, () => new BoxGeometry(SIZE, SIZE, 0.2));
-const edge = () => getGeometry("swatch-edge", {}, () => new BoxGeometry(0.08, 0.08, SIZE + 0.08));
+const edge = () =>
+  getGeometry(
+    "swatch-edge",
+    {},
+    () =>
+      new BoxGeometry(
+        TOGETHER_EDGE_THICKNESS,
+        TOGETHER_EDGE_THICKNESS,
+        SIZE + TOGETHER_EDGE_THICKNESS,
+      ),
+  );
 const dot = () => getGeometry("swatch-dot", {}, () => new BoxGeometry(0.25, 0.25, 0.25));
 
 type Instance = { position: Vec3; scale?: Vec3; rotation?: Vec3; color?: string };
@@ -85,8 +100,18 @@ function useSwatchLabelsVisible() {
   return zoom * PITCH >= LOOK.paletteHideSwatchLabelsBelowPx;
 }
 
-function Label({ position, text, large }: { position: Vec3; text: string; large?: boolean }) {
-  const swatchLabelsVisible = useSwatchLabelsVisible();
+// Large labels ignore `swatchLabelsVisible`; the board reads it once so only one frame subscriber runs.
+function Label({
+  position,
+  text,
+  large,
+  swatchLabelsVisible = true,
+}: {
+  position: Vec3;
+  text: string;
+  large?: boolean;
+  swatchLabelsVisible?: boolean;
+}) {
   if (!large && !swatchLabelsVisible) return null;
   return (
     <Html position={position} center zIndexRange={[10, 0]}>
@@ -130,7 +155,7 @@ const SCREEN_ACTIVE = TOKENS.surface.screenActive;
 // Thin standing monitors, faced to the camera (local x along u, local z along v).
 const SCREEN_SCALE: Vec3 = [3, 2, 0.25];
 
-function Surfaces() {
+function Surfaces({ labelsVisible }: { labelsVisible: boolean }) {
   const at = (i: number) => swatchCentre("surfaces", i);
   const u = (i: number) => slotU("surfaces", i);
   const row = rowV("surfaces");
@@ -199,14 +224,19 @@ function Surfaces() {
       <Instances geometry={unit} material={palette.panel} items={cube(at(8))} />
       <Instances geometry={dot()} material={palette.led} items={ledDots} />
       {labels.map((text, i) => (
-        <Label key={text} position={swatchLabel("surfaces", i)} text={text} />
+        <Label
+          key={text}
+          position={swatchLabel("surfaces", i)}
+          text={text}
+          swatchLabelsVisible={labelsVisible}
+        />
       ))}
       <Label position={rowLabel("surfaces")} text="Surfaces" large />
     </group>
   );
 }
 
-function Paints() {
+function Paints({ labelsVisible }: { labelsVisible: boolean }) {
   const names = Object.keys(TOKENS.paint) as (keyof typeof TOKENS.paint)[];
   const items: Instance[] = names.map((name, i) => ({
     position: [swatchCentre("paints", i)[0], SIZE / 2, swatchCentre("paints", i)[2]],
@@ -217,7 +247,12 @@ function Paints() {
     <group>
       <Instances geometry={box()} material={palette.paint} items={items} />
       {names.map((name, i) => (
-        <Label key={name} position={swatchLabel("paints", i)} text={labelOf(`paint.${name}`)} />
+        <Label
+          key={name}
+          position={swatchLabel("paints", i)}
+          text={labelOf(`paint.${name}`)}
+          swatchLabelsVisible={labelsVisible}
+        />
       ))}
       <Label position={rowLabel("paints")} text="Vehicle paints" large />
     </group>
@@ -226,7 +261,7 @@ function Paints() {
 
 function Together() {
   const row = rowV("together");
-  const tileTop = 0.3;
+  const tileTop = TOGETHER_TILE_TOP;
   const unit = box();
   const yaw: Vec3 = [0, YAW, 0];
   return (
@@ -241,16 +276,24 @@ function Together() {
       <mesh
         geometry={unit}
         material={palette.panel}
-        position={place(0, row - TOGETHER_HALF_V + 0.15, tileTop + 2)}
+        position={place(0, row - TOGETHER_HALF_V + 0.15, tileTop + TOGETHER_WALL_HEIGHT / 2)}
         rotation={yaw}
-        scale={[2 * TOGETHER_HALF_U, 4, 0.3]}
+        scale={[2 * TOGETHER_HALF_U, TOGETHER_WALL_HEIGHT, 0.3]}
       />
       <mesh
         geometry={edge()}
         material={palette.trimCyan}
-        position={place(0, row - TOGETHER_HALF_V + 0.15, tileTop + 4 + 0.06)}
+        position={place(
+          0,
+          row - TOGETHER_HALF_V + 0.15,
+          tileTop + TOGETHER_WALL_HEIGHT + TOGETHER_TRIM_OFFSET,
+        )}
         rotation={[0, 3 * YAW, 0]}
-        scale={[1.5, 1.5, (2 * TOGETHER_HALF_U) / (SIZE + 0.08)]}
+        scale={[
+          TOGETHER_TRIM_SCALE,
+          TOGETHER_TRIM_SCALE,
+          (2 * TOGETHER_HALF_U) / (SIZE + TOGETHER_EDGE_THICKNESS),
+        ]}
       />
       <Instances
         geometry={unit}
@@ -288,6 +331,7 @@ if (import.meta.hot) {
 
 export default function PaletteBoard() {
   const hold = useRevealHold();
+  const labelsVisible = useSwatchLabelsVisible();
   // Read from the store so a timeout between render and commit re-renders before paint (X1).
   const status = useSyncExternalStore(hold.subscribe, () => hold.status);
   useLayoutEffect(() => {
@@ -296,8 +340,8 @@ export default function PaletteBoard() {
   if (status === "timedOut") return <PaletteFailure message="Palette board timed out" />;
   return (
     <group name="nexus-palette-board">
-      <Surfaces />
-      <Paints />
+      <Surfaces labelsVisible={labelsVisible} />
+      <Paints labelsVisible={labelsVisible} />
       <Together />
       <Label position={title()} text="Material palette" large />
     </group>

@@ -39,6 +39,10 @@ export function useZones(): ZonesValue {
   return zones;
 }
 
+// `?palette=1`: dev only, exact "1". App mounts the board and Stage frames it from this one reader.
+export const isPaletteBoardOn = () =>
+  import.meta.env.DEV && new URLSearchParams(window.location.search).get("palette") === "1";
+
 // Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?zones=1` frames the campus box, `?palette=1` frames the palette board.
 function readDevParams(): { floors: number; zonesOverlay: boolean; palette: boolean } {
   if (!import.meta.env.DEV) return { floors: DEFAULT_FLOORS, zonesOverlay: false, palette: false };
@@ -47,7 +51,7 @@ function readDevParams(): { floors: number; zonesOverlay: boolean; palette: bool
   return {
     floors: floors === null ? DEFAULT_FLOORS : Number(floors),
     zonesOverlay: params.get("zones") === "1",
-    palette: params.get("palette") === "1",
+    palette: isPaletteBoardOn(),
   };
 }
 
