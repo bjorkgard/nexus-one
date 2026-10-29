@@ -6,6 +6,9 @@
 // only when baked in at build time with the colour data in the geometry cache key (the slab pattern).
 // A deliberate different material goes through `variant(name, overrides)`, which caches clones and
 // counts them against MATERIAL_BUDGET. In dev, `color` and `emissive` throw on write (D11).
+// `furniture`, `screen`, `paint` and `led` have a WHITE base: every mesh using them must set an instance
+// colour (their token lives in `TOKENS`), or it renders white. `panel`, `floor`, `glass` and the trims carry
+// their token colour in the material itself.
 import { MeshBasicMaterial, MeshStandardMaterial } from "three";
 import { canonicalKey, type GeometryParams } from "./geometry-cache";
 import { TOKENS } from "../shared/tokens";
