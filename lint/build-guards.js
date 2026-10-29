@@ -8,6 +8,7 @@ import { builtinModules } from "node:module";
 // output chunk; the test asserts the source still contains it, so a rename cannot silently disarm the guard.
 export const DEV_MARKERS = [
   { marker: "__nexus", source: "src/debug/nexus.ts" },
+  { marker: "nexus-palette-board", source: "src/debug/PaletteBoard.tsx" },
   { marker: "nexus-perf-overlay", source: "src/debug/PerfPanel.tsx" },
   { marker: "nexus-probe", source: "src/debug/PerfStats.tsx" },
   { marker: "nexus-zone-overlay", source: "src/debug/ZoneOverlay.tsx" },

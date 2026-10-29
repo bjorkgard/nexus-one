@@ -1,18 +1,28 @@
 import { Canvas } from "@react-three/fiber";
-import { Component, Suspense, lazy, useState } from "react";
+import { Component, Suspense, lazy, useState, useSyncExternalStore } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { AgXToneMapping, SRGBColorSpace } from "three";
 
 import { DevBoundary } from "./debug/DevBoundary";
+import { PaletteFailure } from "./debug/PaletteFailure";
 import { ErrorPanel } from "./ui/ErrorPanel";
 import { Wordmark } from "./ui/Wordmark";
-import { Stage } from "./world/Stage";
+import { useRevealHold } from "./world/reveal-hold";
+import { Stage, isPaletteBoardOn } from "./world/Stage";
 import { LOOK } from "./world/stage-look";
 
 const NexusBridge = import.meta.env.DEV ? lazy(() => import("./debug/Bridge")) : null;
 const PerfStats = import.meta.env.DEV ? lazy(() => import("./debug/PerfStats")) : null;
 const PerfPanel = import.meta.env.DEV ? lazy(() => import("./debug/PerfPanel")) : null;
 const ZoneOverlay = import.meta.env.DEV ? lazy(() => import("./debug/ZoneOverlay")) : null;
+const PaletteBoard = import.meta.env.DEV ? lazy(() => import("./debug/PaletteBoard")) : null;
+// Suspense fallback while the board module loads: silent until the hold times out, then the one failure line.
+// When the module arrives late the fallback unmounts and the board shows its own line.
+function PaletteBoardPending() {
+  const hold = useRevealHold();
+  const status = useSyncExternalStore(hold.subscribe, () => hold.status);
+  return status === "timedOut" ? <PaletteFailure message="Palette board timed out" /> : null;
+}
 
 interface CanvasErrorBoundaryProps {
   children: ReactNode;
@@ -68,6 +78,18 @@ export function App() {
               <DevBoundary name="ZoneOverlay">
                 <Suspense fallback={null}>
                   <ZoneOverlay />
+                </Suspense>
+              </DevBoundary>
+            )}
+            {PaletteBoard && isPaletteBoardOn() && (
+              <DevBoundary
+                name="PaletteBoard"
+                fallback={(error) => (
+                  <PaletteFailure message={`Palette board failed: ${error.message}`} />
+                )}
+              >
+                <Suspense fallback={<PaletteBoardPending />}>
+                  <PaletteBoard />
                 </Suspense>
               </DevBoundary>
             )}

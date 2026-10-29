@@ -4,6 +4,8 @@ import { createZoneRegistry, DEFAULT_FLOORS } from "../src/world/zones";
 import type { Vec3 } from "../src/world/zones";
 import { boundsCentre, framingBounds, ISO_PITCH, ISO_YAW } from "../src/world/camera";
 import { TOKENS, cssVarName, flattenTokens } from "../src/shared/tokens";
+import { hexDeltaE, hexToLab } from "../src/shared/color-metrics";
+import { SIZE, place, rowV, slotU, swatchCentre } from "../src/world/palette-layout";
 import { nexus, waitForHook } from "./nexus";
 
 let errors: string[] = [];
@@ -355,4 +357,527 @@ test("saves the 1440p screenshot", async ({ page }) => {
   await page.goto("/");
   await ready(page, { width: 2560, height: 1440 });
   await page.screenshot({ path: "test-results/stage-1440p.png" });
+});
+
+// ---- Task 2.2: material palette, geometry cache and the ?palette=1 board ----
+
+const HOLD_WARNING = /reveal hold/i;
+
+function watchHoldWarnings(page: Page): string[] {
+  const warnings: string[] = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "warning" && HOLD_WARNING.test(msg.text())) warnings.push(msg.text());
+  });
+  return warnings;
+}
+
+async function materialsAndCache(page: Page) {
+  // Bridge mounts after the stage; wait for the scene to hold its materials before reading counts.
+  await waitForHook(page, "rendererInfo");
+  await waitForHook(page, "cacheStats");
+  const info = await nexus(page, "rendererInfo");
+  return { info, cache: await nexus(page, "cacheStats") };
+}
+
+test("the empty stage has 2 materials, 1 cached geometry and no reveal hold", async ({ page }) => {
+  const warnings = watchHoldWarnings(page);
+  await page.goto("/");
+  await ready(page, { width: 1280, height: 720 });
+  const { info, cache } = await materialsAndCache(page);
+  expect(info.materials).toBe(2);
+  expect(info.programs).toBeGreaterThanOrEqual(1);
+  expect(info.programs).toBeLessThanOrEqual(info.materials! + 2);
+  expect(cache.size).toBe(1);
+  // The hold's timeout is 3 s; wait it out so a stray hold would have fired.
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
+  await page.waitForTimeout(3500);
+  expect(warnings).toEqual([]);
+});
+
+// Rendered state recorded at the moment data-revealed first turns true (no late mount, X2 fade).
+async function watchBoardReveal(page: Page) {
+  await page.addInitScript(() => {
+    const seen = {
+      labelsAtReveal: -1,
+      labelFadeBeforeReveal: null as string | null,
+    };
+    Object.assign(window, { __boardReveal: seen });
+    const check = () => {
+      const scene = document.querySelector("[data-testid=scene]");
+      if (!scene) return;
+      const labels = document.querySelectorAll("[data-testid=palette-label]");
+      const revealed = scene.getAttribute("data-revealed") === "true";
+      if (!revealed && labels.length > 0 && seen.labelFadeBeforeReveal === null) {
+        const root = labels[0]!.closest(".nx-stage > div > *");
+        seen.labelFadeBeforeReveal = root ? getComputedStyle(root).opacity : "no fade root";
+      }
+      if (revealed && seen.labelsAtReveal < 0) {
+        seen.labelsAtReveal = labels.length;
+      }
+    };
+    new MutationObserver(check).observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-revealed"],
+    });
+  });
+}
+
+test("?palette=1 shows 11 materials, 5 cached shapes and every labelled swatch at reveal", async ({
+  page,
+}) => {
+  const warnings = watchHoldWarnings(page);
+  await watchBoardReveal(page);
+  await page.goto("/?palette=1");
+  await ready(page, { width: 1440, height: 900 });
+  const { info, cache } = await materialsAndCache(page);
+  expect(info.materials).toBe(11);
+  expect(cache.size).toBe(5);
+
+  // Token names come from the token module, hex values from the app's --nx-* variables.
+  const tokens = flattenTokens(TOKENS);
+  const live = await page.evaluate(
+    (names) => names.map((n) => document.documentElement.style.getPropertyValue(n)),
+    tokens.map(([name]) => cssVarName(name)),
+  );
+  const hexOf = new Map(tokens.map(([name], i) => [name, live[i]!]));
+  const slotLabels = [
+    ...tokens
+      .filter(([name]) => name.startsWith("surface.") || name.startsWith("paint."))
+      .map(([name]) => `${name.replace(/^surface\./, "")} ${hexOf.get(name)}`),
+    `led ${hexOf.get("surface.trimCyan")}`,
+  ];
+  expect(slotLabels).toHaveLength(8 + 8 + 1);
+  const rows = ["Material palette", "Surfaces", "Vehicle paints", "Together"];
+  const shown = await page
+    .locator("[data-testid=palette-label]")
+    .evaluateAll((els) => els.map((el) => el.textContent ?? ""));
+  expect(shown.sort()).toEqual([...slotLabels, ...rows].sort());
+
+  const seen = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __boardReveal: {
+            labelsAtReveal: number;
+            labelFadeBeforeReveal: string;
+          };
+        }
+      ).__boardReveal,
+  );
+  // All swatches (labels mount in the same commit as the meshes) existed when the reveal began.
+  expect(seen.labelsAtReveal).toBe(slotLabels.length + rows.length);
+  expect(seen.labelFadeBeforeReveal).toBe("0");
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
+  await page.waitForTimeout(3500);
+  expect(warnings).toEqual([]);
+});
+
+async function boardStateAfterFailure(page: Page) {
+  const { info, cache } = await materialsAndCache(page);
+  expect(info.calls).toBeGreaterThanOrEqual(1);
+  expect(info.materials).toBe(2);
+  expect(cache.size).toBe(1);
+  await expect(page.locator("[data-testid=palette-label]")).toHaveCount(0);
+}
+
+test("a board module slower than the 3 s hold times out: line, one warning, no late swatches", async ({
+  page,
+}) => {
+  const warnings = watchHoldWarnings(page);
+  let arrive!: () => void;
+  const gate = new Promise<void>((resolve) => (arrive = resolve));
+  await page.route("**/src/debug/PaletteBoard.tsx*", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.goto("/?palette=1");
+  await ready(page, { width: 1280, height: 720 });
+  // Revealed while the module is still held back, so the 3 s timeout (not the board) released the hold.
+  await expect.poll(() => warnings.length).toBe(1);
+  arrive();
+  await expect(page.getByTestId("palette-failure")).toHaveText("Palette board timed out");
+  await expect(page.getByText("Palette board timed out")).toHaveCount(1);
+  await boardStateAfterFailure(page);
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
+  await page.waitForTimeout(1000);
+  await boardStateAfterFailure(page);
+  await expect(page.getByText("Palette board timed out")).toHaveCount(1);
+  expect(warnings).toHaveLength(1);
+});
+
+test("a board module that never loads times out: stage reveals, one warning, no swatches", async ({
+  page,
+}) => {
+  const warnings = watchHoldWarnings(page);
+  await page.route("**/src/debug/PaletteBoard.tsx*", () => new Promise<void>(() => {}));
+  await page.goto("/?palette=1");
+  await ready(page, { width: 1280, height: 720 });
+  await expect.poll(() => warnings.length).toBe(1);
+  await expect(page.getByText("Palette board timed out")).toHaveCount(1);
+  await expect(page.getByTestId("palette-failure")).toHaveText("Palette board timed out");
+  await boardStateAfterFailure(page);
+  // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
+  await page.waitForTimeout(1000);
+  await expect(page.getByText("Palette board timed out")).toHaveCount(1);
+  expect(warnings).toHaveLength(1);
+});
+
+test("a board that throws on render shows the failure line and the stage still runs", async ({
+  page,
+}) => {
+  const warnings = watchHoldWarnings(page);
+  await page.route("**/src/debug/PaletteBoard.tsx*", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: 'export default function PaletteBoard() { throw new Error("forced palette failure"); }',
+    }),
+  );
+  await page.goto("/?palette=1");
+  await ready(page, { width: 1280, height: 720 });
+  await expect(page.getByTestId("palette-failure")).toHaveText(
+    "Palette board failed: forced palette failure",
+  );
+  await boardStateAfterFailure(page);
+  expect(warnings).toEqual([]);
+  // Only the injected error (React's and DevBoundary's logs of it) may reach the console.
+  expect(errors.length).toBeGreaterThan(0);
+  for (const line of errors) expect(line, line).toMatch(/forced palette failure/);
+  errors = [];
+});
+
+test("?palette=1&zones=1 frames the campus and still renders the board", async ({ page }) => {
+  await page.goto("/?palette=1&zones=1");
+  await ready(page, { width: 1280, height: 720 });
+  const cam = await nexus(page, "getCamera");
+  const centre = boundsCentre(framingBounds({ zonesOverlay: true }));
+  centre.forEach((v, i) => expect(Math.abs(cam.target![i]! - v)).toBeLessThan(0.01));
+  expect(await page.locator("[data-testid=palette-label]").count()).toBeGreaterThan(0);
+});
+
+test("?palette=1 hides swatch labels when small and keeps them apart when large", async ({
+  page,
+}) => {
+  const rows = ["Material palette", "Surfaces", "Vehicle paints", "Together"];
+  const boxes = async () =>
+    page.locator("[data-testid=palette-label]").evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { text: el.textContent ?? "", x: r.x, y: r.y, w: r.width, h: r.height };
+      }),
+    );
+  await page.goto("/?palette=1");
+  await ready(page, { width: 375, height: 812 });
+  expect((await boxes()).map((b) => b.text).sort()).toEqual([...rows].sort());
+  for (const text of rows) await expect(page.getByText(text, { exact: true })).toBeVisible();
+
+  await ready(page, { width: 1440, height: 900 });
+  await expect
+    .poll(async () => (await boxes()).length, SETUP_TIMEOUT)
+    .toBe(8 + 8 + 1 + rows.length);
+  const all = await boxes();
+  for (const [i, a] of all.entries())
+    for (const b of all.slice(i + 1))
+      expect(
+        a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h,
+        `${a.text} overlaps ${b.text}`,
+      ).toBe(false);
+});
+
+// ---- Rendered-pixel checks (eng E2): decode a screenshot inside the page, no Node PNG decoder ----
+
+type Rgb = [number, number, number];
+
+async function readPatches(
+  page: Page,
+  png: Buffer,
+  patches: { x: number; y: number; r: number }[],
+): Promise<Rgb[][]> {
+  return page.evaluate(
+    async ({ b64, list }) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+      const surface = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = surface.getContext("2d")!;
+      ctx.drawImage(bitmap, 0, 0);
+      return list.map((p) => {
+        const n = 2 * p.r + 1;
+        const data = ctx.getImageData(Math.round(p.x) - p.r, Math.round(p.y) - p.r, n, n).data;
+        const out: [number, number, number][] = [];
+        for (let i = 0; i < data.length; i += 4) out.push([data[i]!, data[i + 1]!, data[i + 2]!]);
+        return out;
+      });
+    },
+    { b64: png.toString("base64"), list: patches },
+  );
+}
+
+const parseHexRgb = (hex: string): Rgb => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16),
+];
+const toHex = ([r, g, b]: Rgb) =>
+  `#${[r, g, b].map((c) => Math.round(c).toString(16).padStart(2, "0")).join("")}`;
+const meanRgb = (pixels: Rgb[]): Rgb => [
+  pixels.reduce((a, p) => a + p[0], 0) / pixels.length,
+  pixels.reduce((a, p) => a + p[1], 0) / pixels.length,
+  pixels.reduce((a, p) => a + p[2], 0) / pixels.length,
+];
+const lightness = (rgb: Rgb) => hexToLab(toHex(rgb))[0];
+
+function hsv([r, g, b]: Rgb) {
+  const max = Math.max(r, g, b) / 255;
+  const min = Math.min(r, g, b) / 255;
+  const d = max - min;
+  const [rn, gn, bn] = [r / 255, g / 255, b / 255];
+  let hue = 0;
+  if (d > 0) {
+    if (max === rn) hue = ((gn - bn) / d) % 6;
+    else if (max === gn) hue = (bn - rn) / d + 2;
+    else hue = (rn - gn) / d + 4;
+    hue *= 60;
+    if (hue < 0) hue += 360;
+  }
+  return { hue, saturation: max === 0 ? 0 : d / max, value: max };
+}
+
+const hueGap = (a: number, b: number) => {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+};
+
+const SURFACE_NAMES = [
+  "panel",
+  "trimCyan",
+  "trimWhite",
+  "glass",
+  "floor",
+  "furniture",
+  "screenIdle",
+  "screenActive",
+  "led",
+] as const;
+const PAINT_NAMES = Object.keys(TOKENS.paint) as (keyof typeof TOKENS.paint)[];
+
+function inside(poly: { x: number; y: number }[], p: { x: number; y: number }) {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x)
+      hit = !hit;
+  }
+  return hit;
+}
+
+function edgeDistance(poly: { x: number; y: number }[], p: { x: number; y: number }) {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+    const t = Math.max(
+      0,
+      Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / len2),
+    );
+    best = Math.min(best, Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))));
+  }
+  return best;
+}
+
+function hull(points: { x: number; y: number }[]) {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (
+    o: { x: number; y: number },
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+  ) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const build = (list: typeof pts) => {
+    const out: typeof pts = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(out.at(-2)!, out.at(-1)!, p) <= 0) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...build(pts), ...build([...pts].reverse())];
+}
+
+test("rendered board pixels: trim hue, lightness ceiling, glass lift, paint separation", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await page.goto("/?palette=1");
+  await ready(page, { width: 2560, height: 1440 });
+  const half = SIZE / 2;
+  const surface = (name: (typeof SURFACE_NAMES)[number]) =>
+    swatchCentre("surfaces", SURFACE_NAMES.indexOf(name));
+  const at = (name: (typeof SURFACE_NAMES)[number], dx: number, y: number, dz: number): Vec3 => {
+    const [x, , z] = surface(name);
+    return [x + dx, y, z + dz];
+  };
+
+  // Probe points, one projection round trip.
+  const probes: { key: string; world: Vec3 }[] = [];
+  const add = (key: string, world: Vec3) => probes.push({ key, world });
+  // Trim edge: the top edge of the +x face, midpoint.
+  add("trimCyan-edge", at("trimCyan", half, SIZE, 0));
+  add("trimWhite-edge", at("trimWhite", half, SIZE, 0));
+  // Lit faces: top, +x and +z face centres of every cube swatch.
+  const cubes: { label: string; centre: Vec3 }[] = [
+    ...(["panel", "trimCyan", "trimWhite", "floor", "furniture"] as const).map((n) => ({
+      label: n,
+      centre: surface(n),
+    })),
+    ...PAINT_NAMES.map((n, i) => ({ label: `paint.${n}`, centre: swatchCentre("paints", i) })),
+  ];
+  for (const { label, centre } of cubes) {
+    const [x, , z] = centre;
+    add(`${label}|top`, [x, SIZE, z]);
+    add(`${label}|+x`, [x + half, half, z]);
+    add(`${label}|+z`, [x, half, z + half]);
+  }
+  // Glass: pane quad corners and a grid on the backer's visible faces.
+  const row = rowV("surfaces");
+  const u3 = slotU("surfaces", SURFACE_NAMES.indexOf("glass"));
+  for (const du of [-half, half])
+    for (const dv of [-0.1, 0.1])
+      for (const y of [0, SIZE])
+        add(`pane|${du}|${dv}|${y}`, place(u3 - 0.6 + du, row + 0.8 + dv, y));
+  const [bx, , bz] = place(u3 + 0.2, row - 2.2);
+  const GRID = 9;
+  for (const face of ["+x", "+z"] as const) {
+    for (let i = 0; i < GRID; i++)
+      for (let j = 0; j < GRID; j++) {
+        const t = -half + 0.2 + ((SIZE - 0.4) * i) / (GRID - 1);
+        const y = 0.2 + ((SIZE - 0.4) * j) / (GRID - 1);
+        add(
+          `backer|${face}|${i}|${j}`,
+          face === "+x" ? [bx + half, y, bz + t] : [bx + t, y, bz + half],
+        );
+      }
+  }
+  const projected = await projectAll(
+    page,
+    probes.map((p) => p.world),
+  );
+  const screen = new Map(probes.map((p, i) => [p.key, projected[i]!]));
+  const point = (key: string) => screen.get(key)!;
+
+  const png = await page.screenshot();
+  const radius = (key: string) => (key.endsWith("-edge") ? 5 : key.startsWith("backer") ? 1 : 2);
+  const patches = await readPatches(
+    page,
+    png,
+    probes.map((p) => ({ x: point(p.key).x, y: point(p.key).y, r: radius(p.key) })),
+  );
+  const patchOf = new Map(probes.map((p, i) => [p.key, patches[i]!]));
+  const mean = (key: string) => meanRgb(patchOf.get(key)!);
+  const report = (what: string, value: string) => console.log(`MEASURED ${what}: ${value}`);
+
+  // Trim edges: the brightest pixel of the window around the edge midpoint is the bar's core.
+  const core = (key: string) =>
+    patchOf.get(key)!.reduce((best, px) => (hsv(px).value > hsv(best).value ? px : best));
+  const cyanToken = hsv(parseHexRgb(TOKENS.surface.trimCyan));
+  const cyan = hsv(core("trimCyan-edge"));
+  report(
+    "trimCyan edge",
+    `hue ${cyan.hue.toFixed(1)} (token ${cyanToken.hue.toFixed(1)}), saturation ${cyan.saturation.toFixed(2)}`,
+  );
+  expect(hueGap(cyan.hue, cyanToken.hue)).toBeLessThanOrEqual(10);
+  expect(cyan.saturation).toBeGreaterThan(0.3);
+  // trimWhite is near-neutral, so hue is meaningless: its core must be light (L* >= 60) and
+  // keep the token's cool tint (HSV saturation below 0.2, blue the strongest channel).
+  const whiteRgb = core("trimWhite-edge");
+  const white = hsv(whiteRgb);
+  report(
+    "trimWhite edge",
+    `L* ${lightness(whiteRgb).toFixed(1)}, saturation ${white.saturation.toFixed(2)}, rgb ${whiteRgb.join(",")}`,
+  );
+  expect(lightness(whiteRgb)).toBeGreaterThanOrEqual(60);
+  expect(white.saturation).toBeLessThan(0.2);
+  expect(whiteRgb[2]).toBeGreaterThanOrEqual(Math.max(whiteRgb[0], whiteRgb[1]));
+
+  // No lit surface face above L* 90 except silver.
+  const faces = cubes.flatMap(({ label }) =>
+    ["top", "+x", "+z"].map((f) => ({ key: `${label}|${f}`, silver: label === "paint.silver" })),
+  );
+  const lit = faces.filter((f) => !f.silver).map((f) => [f.key, lightness(mean(f.key))] as const);
+  const brightest = lit.reduce((a, b) => (b[1] > a[1] ? b : a));
+  report("brightest non-silver face", `${brightest[0]} L* ${brightest[1].toFixed(1)}`);
+  report(
+    "silver faces L*",
+    ["top", "+x", "+z"].map((f) => lightness(mean(`paint.silver|${f}`)).toFixed(1)).join(", "),
+  );
+  for (const [key, l] of lit) expect(l, key).toBeLessThanOrEqual(90);
+
+  // Glass: backer samples under the pane's screen quad against the same face outside it.
+  const pane = hull(
+    probes
+      .filter((p) => p.key.startsWith("pane|"))
+      .map((p) => ({ x: point(p.key).x, y: point(p.key).y })),
+  );
+  const MARGIN = 8;
+  const deltas: number[] = [];
+  for (const face of ["+x", "+z"]) {
+    const covered: number[] = [];
+    const open: number[] = [];
+    for (const p of probes.filter((q) => q.key.startsWith(`backer|${face}|`))) {
+      const pt = point(p.key);
+      const l = lightness(meanRgb(patchOf.get(p.key)!));
+      const d = edgeDistance(pane, pt);
+      if (d < MARGIN) continue;
+      (inside(pane, pt) ? covered : open).push(l);
+    }
+    report(`glass backer ${face}`, `${covered.length} covered, ${open.length} open`);
+    if (covered.length < 3 || open.length < 3) continue;
+    const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const delta = avg(covered) - avg(open);
+    report(
+      `glass lift ${face}`,
+      `+${delta.toFixed(2)} L* (covered ${avg(covered).toFixed(1)}, open ${avg(open).toFixed(1)})`,
+    );
+    deltas.push(delta);
+  }
+  expect(deltas.length).toBeGreaterThan(0);
+  for (const delta of deltas) {
+    expect(delta).toBeGreaterThanOrEqual(4);
+    expect(delta).toBeLessThanOrEqual(10);
+  }
+
+  // Paint separation as rendered: top-face centres.
+  const paints = PAINT_NAMES.map((n) => toHex(mean(`paint.${n}|top`)));
+  const minima = { normal: Infinity, deutan: Infinity, protan: Infinity };
+  for (let a = 0; a < paints.length; a++)
+    for (let b = a + 1; b < paints.length; b++) {
+      for (const kind of ["normal", "deutan", "protan"] as const) {
+        const de = hexDeltaE(paints[a]!, paints[b]!, kind === "normal" ? undefined : kind);
+        if (de < minima[kind]) minima[kind] = de;
+        const floor = kind === "normal" ? 10 : 5;
+        expect(de, `${PAINT_NAMES[a]} vs ${PAINT_NAMES[b]} (${kind})`).toBeGreaterThanOrEqual(
+          floor,
+        );
+      }
+    }
+  report("paint rendered hexes", paints.join(" "));
+  report(
+    "paint min dE2000",
+    `normal ${minima.normal.toFixed(1)}, deutan ${minima.deutan.toFixed(1)}, protan ${minima.protan.toFixed(1)}`,
+  );
+  await page.screenshot({ path: "test-results/palette-board-2560x1440.png" });
+});
+
+test("saves the palette board 1440x900 screenshot", async ({ page }) => {
+  await page.goto("/?palette=1");
+  await ready(page, { width: 1440, height: 900 });
+  await page.screenshot({ path: "test-results/palette-board-1440x900.png" });
+});
+
+test("saves the palette board campus-zoom screenshot", async ({ page }) => {
+  await page.goto("/?palette=1&zones=1");
+  await ready(page, { width: 2560, height: 1440 });
+  await page.screenshot({ path: "test-results/palette-board-campus.png" });
 });

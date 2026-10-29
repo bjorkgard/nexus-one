@@ -20,18 +20,18 @@ html {
   color-scheme: dark;
 }
 
-/* The canvas is transparent so the html gradient shows through; it fades in once Stage is ready. */
-.nx-stage canvas {
+/* The canvas is transparent so the html gradient shows through; the canvas and drei Html overlays (its siblings) fade in once Stage is ready. */
+.nx-stage > div > * {
   opacity: 0;
   transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.nx-stage[data-revealed="true"] canvas {
+.nx-stage[data-revealed="true"] > div > * {
   opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nx-stage canvas {
+  .nx-stage > div > * {
     transition: none;
   }
 }

@@ -16,6 +16,34 @@
 **Priority:** P2
 **Depends on:** Task 2.1 (light baseline); lands with task 2.3 (first casters)
 
+### Precompile palette shaders before the stage reveal
+
+**Issue:** [#134](https://github.com/bjorkgard/nexus-one/issues/134)
+
+**What:** Compile the shader programs for every palette material (and its variants) with `gl.compileAsync` before the stage fades in, so the first appearance of glass, trims or paints does not stall a frame.
+
+**Why:** Each new material program compiles on first use and stalls that frame. Task 2.2 ships the palette before any scene uses most of it, so warming it then would only move the 2.1 reveal timing for unused samples (CEO D7 in `docs/plans/2.2-material-palette.md`).
+
+**Context:** Deferred in the task 2.2 CEO review (E4, decision D7). The palette lives in `src/world/palette.ts`; `__nexus.rendererInfo().programs` (added in 2.2) shows the compiled count, so an e2e can assert the count does not grow after reveal while the camera moves. The stage signals ready in `src/world/Stage.tsx` (`onReady` after the first fitted frame) and the 2.1 reveal e2e depends on that timing (`e2e/stage.spec.ts`). Start by measuring frame times the first time each 2.3-2.8 surface appears.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (palette, program count); lands with task 2.10 (geometry performance check)
+
+### Status LED colour tokens for racks and server load
+
+**Issue:** [#135](https://github.com/bjorkgard/nexus-one/issues/135)
+
+**What:** Add `led.ok`, `led.busy` and `led.err` colour tokens (or the states 2.8 and 4.16 actually need), tested with the 2.2 paint machinery (ΔE2000 and deutan/protan simulation), plus a non-colour cue such as blink rate or position for each state.
+
+**Why:** Task 2.2 gives the `led` material only one neutral colour (`trimCyan`), because LEDs have no meaning until racks exist. Without shared status tokens, 2.8 and 4.16 will each pick their own greens and reds, which clash with the paints and fail red/green colour blindness (design review Q13 in `docs/plans/2.2-material-palette.md`).
+
+**Context:** Deferred in the task 2.2 design review (Q13). LED colour is per instance (`setColorAt`) on the unlit `led` material (`toneMapped: false`); the glow order is trimCyan edges > LEDs > idle screens > lit surfaces, with `LOOK.emissiveCeiling` (design Q5). The paint test in `src/shared/tokens.test.ts` already computes ΔE2000 under Machado CVD matrices; reuse it. Start from the states 4.16 server-room load needs.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (led material, CVD test); lands with task 2.8 (server racks)
+
 ### Recover from WebGL context loss
 
 **Issue:** [#89](https://github.com/bjorkgard/nexus-one/issues/89)
@@ -171,6 +199,34 @@
 **Effort:** M (human) / S (CC+gstack)
 **Priority:** P2
 **Depends on:** Task 2.1 (tokens.ts exists); must land before or with task 5.1
+
+### Give the stage reveal its own fade target
+
+**Issue:** [#136](https://github.com/bjorkgard/nexus-one/issues/136)
+
+**What:** Replace the `.nx-stage > div > *` reveal selector in `src/style.css` with an explicit hook (a class or data attribute set on the canvas and on each drei `Html` overlay root, or one wrapper the app owns) so the 600 ms fade does not depend on React Three Fiber's internal wrapper depth.
+
+**Why:** The selector works today because R3F renders `.nx-stage > div > canvas` and drei mounts `Html` overlays as siblings of the canvas. An R3F or drei update that changes that nesting would silently stop the canvas or the labels from fading in (or leave them hidden). It also fades any future DOM sibling of the canvas, wanted or not. Found by the 2.2 /design-review (deferred polish D-2).
+
+**Context:** Selector and reduced-motion rule: `src/style.css` (reveal rules near the top). Why it is `> div > *`: `.claude/scratch/issue-11-material-palette/DECISIONS.md` (X2 selector correction) and `docs/plans/2.2-material-palette.md` eng `### X2`. Guarding e2e: `e2e/stage.spec.ts` (reveal gating, reduced motion, label opacity 0 before reveal). Task 3.2 adds hover name tags, the next overlay that must fade with the stage. Start by giving the canvas and the overlay roots one shared attribute and switching both CSS rules to it.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (fade selector); must land before task 3.2 (hover name tags)
+
+### Shared overlay label component
+
+**Issue:** [#137](https://github.com/bjorkgard/nexus-one/issues/137)
+
+**What:** Extract one overlay label component (or `.nx-overlay-label` class) for drei `Html` labels, used by `src/debug/ZoneOverlay.tsx`, `src/debug/PaletteBoard.tsx` and `src/debug/PaletteFailure.tsx`, with size from `LOOK.zonesOverlayLabelPx` / `LOOK.overlayHeadingPx` and colour from `TOKENS`.
+
+**Why:** The three overlays repeat the same inline style block (colour, `var(--font-sans)`, font size, `whiteSpace: nowrap`, `pointerEvents: none`). Task 3.2 adds hover name tags, which would be a fourth copy, and labels would drift in size or colour. Found by the 2.2 /design-review (deferred polish D-2); sizes were already unified in FINDING-002 (`5a83b10`).
+
+**Context:** Style blocks: `src/debug/ZoneOverlay.tsx` (pill label), `src/debug/PaletteBoard.tsx` `Label`, `src/debug/PaletteFailure.tsx`. Design system home is task 5.1 / `DESIGN.md` (#131); keep tokens in `src/shared/tokens.ts`. Start by moving the shared block into one component and keeping each caller's extras (ZoneOverlay's pill backdrop) as props.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P3
+**Depends on:** Task 2.2 (palette board labels); must land before task 3.2 (hover name tags)
 
 ## Completed
 

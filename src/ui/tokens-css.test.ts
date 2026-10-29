@@ -32,6 +32,15 @@ describe("style.css fallbacks", () => {
     expect([...css.matchAll(/var\(--nx-/g)].length).toBe(uses.length);
   });
 
+  it("exposes --nx-surface-* and --nx-paint-* variables for the material tokens", () => {
+    const vars = flattenTokens(TOKENS).map(([name]) => cssVarName(name));
+    for (const name of Object.keys(TOKENS.surface)) {
+      expect(vars, name).toContain(`--nx-surface-${name}`);
+    }
+    for (const name of Object.keys(TOKENS.paint))
+      expect(vars, name).toContain(`--nx-paint-${name}`);
+  });
+
   it("uses the gradient tokens on html", () => {
     for (const name of ["bg.top", "bg.bottom"]) {
       expect(css, name).toContain(`var(${cssVarName(name)}, `);

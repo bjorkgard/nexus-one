@@ -1,3 +1,4 @@
+import { PALETTE_BOUNDS } from "./palette-layout";
 import { LOOK } from "./stage-look";
 import { DEFAULT_FLOORS, createZoneRegistry, type Box, type Vec3 } from "./zones";
 
@@ -26,15 +27,19 @@ export function boundsCentre(bounds: Box): Vec3 {
   ];
 }
 
-// What the camera frames: the slab, or the campus box when the dev zone overlay is on.
+// What the camera frames: the slab, the campus box when the dev zone overlay is on, or the palette
+// board box when `?palette=1` is on (zones wins over palette).
 export function framingBounds({
   zonesOverlay,
   floors = DEFAULT_FLOORS,
+  palette = false,
 }: {
   zonesOverlay: boolean;
   floors?: number;
+  palette?: boolean;
 }): Box {
   if (zonesOverlay) return createZoneRegistry({ floors }).byId("campus")!.box;
+  if (palette) return PALETTE_BOUNDS;
   const half = LOOK.slabSize / 2;
   return { min: [-half, -LOOK.slabThickness, -half], max: [half, 0, half] };
 }

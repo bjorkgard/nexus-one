@@ -29,7 +29,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp test` — Run the unit test suite.
 - `npx playwright test` — Run the Playwright tests (smoke, data source, performance overlay and isometric stage) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
-- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus`, a performance overlay marker or the zone overlay marker reaches the browser bundle.
+- `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus`, a performance overlay marker, the zone overlay marker or the palette board marker reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
 - `vp run pack` — Build the UI and the Electron main process, then package an unsigned macOS app into `release/mac-arm64/Nexus One.app` (about 1 minute). It never publishes.
 - `vp run start` — Build, then launch the Electron app from source.
@@ -43,12 +43,16 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 
 - `index.html` — HTML entry point.
 - `src/main.tsx` — Application entry; writes the colour tokens as `--nx-*` CSS variables, then mounts React into `#app`.
-- `src/App.tsx` — Root component with the 3D canvas, the stage, the wordmark and the canvas error boundary (which shows `ErrorPanel`); in dev it also mounts the performance overlay and the zone overlay.
+- `src/App.tsx` — Root component with the 3D canvas, the stage, the wordmark and the canvas error boundary (which shows `ErrorPanel`); in dev it also mounts the performance overlay, the zone overlay and (with `?palette=1`) the palette board.
 - `src/style.css` — Tailwind import, the bundled Instrument Sans font, base layout styles, the stage fade-in and the wordmark and error panel styles.
 - `src/world/` — Geometry.
   - `zones.ts` — `createZoneRegistry({ floors })`: the named campus zones (lobby, office floors, garage, loading bay, break room, server room, roof) as boxes, with `byId(id)` and `at(point)` lookups. `floors` counts the lobby and must be an integer from 2 to 40 (default 6).
   - `camera.ts` — Isometric camera maths: view direction, framing bounds, camera rig and `fitZoom`, plus the grid fade.
   - `Stage.tsx` — The ground slab, grid, lights and orthographic camera; refits on resize and calls `onReady` after the first fitted frame. In dev, `?floors=<n>` overrides the floor count (an invalid value shows the error panel) and `?zones=1` frames the whole campus box and turns on the zone overlay.
+  - `palette.ts` — `palette` (the 10 shared materials), `variant(name, overrides)` and `MATERIAL_BUDGET`; see [Material palette and geometry cache](#material-palette-and-geometry-cache).
+  - `geometry-cache.ts` — `getGeometry(kind, params, build)`: one shared geometry per kind and params, with cache stats.
+  - `palette-layout.ts` — Layout constants and slot positions for the `?palette=1` board, also used for its camera framing bounds.
+  - `reveal-hold.ts` — `createRevealHold`: holds the stage reveal until the palette board mounts or a 3 s timeout, plus its React context and hook.
   - `stage-look.ts` — `LOOK`: the stage's size, grid, light and overlay constants (surface colours come from `src/shared/tokens.ts`).
 - `src/sim/` — Simulation and animation state.
 - `src/ui/` — Dashboard.
@@ -60,12 +64,13 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `live-source.ts` — `liveTransport(port)`: WebSocket transport to `127.0.0.1` with backoff and a hello+snapshot deadline.
   - `mock-source.ts` — `mockTransport()`: plays the mock stream with a movable clock; a backward seek rebuilds state in a new epoch.
   - `boot.ts` — `startDataSource()`: picks the transport, starts the client and registers the dev hooks; called once from `src/main.tsx`.
-- `src/debug/` — Dev-only `window.__nexus` test hooks, the performance overlay and the zone overlay (`ZoneOverlay.tsx`: zone box edges and name labels, shown with `?zones=1`).
+- `src/debug/` — Dev-only `window.__nexus` test hooks, the performance overlay and the zone overlay (`ZoneOverlay.tsx`: zone box edges and name labels, shown with `?zones=1`) and the palette board (`PaletteBoard.tsx`: swatches, shown with `?palette=1`; `PaletteFailure.tsx`: the one-line failure message).
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws); `check-stream.ts` exports `checkStream(events, { complete })`, which validates any event stream and returns named problems instead of throwing.
   - `protocol.ts` — Wire messages (`hello`, `snapshot`, `event`) and `parseServerMessage`.
   - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.
   - `apply-once.ts` — `applyOnce`, the dedup entry: bounded recent-id ring plus reducer.
-  - `tokens.ts` — `TOKENS`, the shared colour tokens (background, slab, grid, text, danger, zone kinds), as data only; `flattenTokens` and `cssVarName` map them to `--nx-*` names.
+  - `color-metrics.ts` — Pure colour maths (hex to Lab, ΔE2000, colour-vision-deficiency simulation) for token tests.
+  - `tokens.ts` — `TOKENS`, the shared colour tokens (background, slab, grid, text, danger, zone kinds, material surfaces and vehicle paints), as data only; `flattenTokens` and `cssVarName` map them to `--nx-*` names.
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main process. `main.ts` is start-up and the window; `resolve.ts` is the `app://` file policy. Imports only `electron/` and `src/shared/`; no browser libraries (React, Three, zustand, three-stdlib); no `createRequire` or CommonJS.
 - `package.json` `dependencies` is empty on purpose: it means "loaded by Electron main at run time". Everything else is bundled (Vite for the renderer, `vp pack` for main) and goes in `devDependencies`.
@@ -86,6 +91,16 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `CLAUDE.md` — Project rules for Claude Code, including where plan reviews are stored.
 - `docs/PLAN.md` — Phased build plan.
 - `docs/plans/` — Per-task plan and review files.
+
+## Material palette and geometry cache
+
+- `src/world/palette.ts` exports `palette`: 10 shared materials (`ground`, `panel`, `trimCyan`, `trimWhite`, `glass`, `floor`, `furniture`, `screen`, `paint`, `led`) built once. They are read-only: never edit `.color`, `.opacity` or any other property on `palette.*` from a mesh. In dev, writing `color` or `emissive` throws `palette.<name>.<prop> is shared and read-only; tint per object with instance or vertex colour (src/world/palette.ts)`.
+- Tint one object with instance colour (`InstancedMesh.setColorAt`). Vertex colours are allowed only when baked into the geometry at build time with the colour data in the geometry cache key (the slab does this). `screen` and `led` are unlit, white-based and take their colour per instance.
+- A deliberate different material goes through `variant(name, overrides)`. Allowed keys: `color` (hex), `opacity` (glass only), `roughness` and `metalness` (lit materials only), `emissiveIntensity` (materials with an emissive colour, at most `LOOK.emissiveCeiling`). Unknown keys, bad values and keys that cannot take effect throw. The cache key is the material name plus the overrides, normalised like geometry keys (hex lower-cased, floats rounded to 4 places), so equal overrides share one clone.
+- Material budget: palette + variants + the drei Grid must stay under `MATERIAL_BUDGET` (30); `variant()` throws when it would reach it.
+- `src/world/geometry-cache.ts`: `getGeometry(kind, params, build)` returns one shared geometry per kind and params. The cache never disposes (app lifetime). On HMR each module clears only its own kinds with `__clearGeometryCache(kinds)`. `__nexus.cacheStats()` returns `{ size, hits, misses }`; `__nexus.rendererInfo()` also reports `materials` and `programs`.
+- `?palette=1` (dev only) shows the swatch board: surfaces, vehicle paints and a "Together" vignette, each swatch labelled with its token name and hex. The stage reveal waits for the board (3 s timeout, one console warning). If the board throws, a "Palette board failed: <message>" line replaces it; if it arrives after the timeout, "Palette board timed out". `?zones=1` wins the framing when both are set.
+- The board exists only in dev; the build fails if its marker (`nexus-palette-board`) reaches the production bundle.
 
 ## Data source
 

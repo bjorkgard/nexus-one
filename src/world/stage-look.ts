@@ -6,7 +6,8 @@ export const LOOK = {
   exposure: 1,
   slabSize: 120,
   slabThickness: 1.4,
-  slabRoughness: 0.9,
+  // No palette or variant emissiveIntensity above this: AgX pushes brighter emissive toward white.
+  emissiveCeiling: 1.5,
   gridLift: 0.01,
   gridCellSize: 1,
   gridSectionSize: 10,
@@ -17,7 +18,11 @@ export const LOOK = {
   gridFadeToPx: 6,
   hemisphere: { sky: "#9ab8ff", ground: "#0a0e14", intensity: 3.5 },
   key: { color: "#ffd9a8", intensity: 3.4, direction: [-0.5, 2, 1.5] as const },
+  // Dev overlay type: labels (zone overlay, palette board swatches) and headings (board title, rows, failure line).
   zonesOverlayLabelPx: 11,
+  overlayHeadingPx: 13,
   zonesOverlayPillPx: 18,
   zonesOverlayHideFloorsBelowPx: 22,
+  // Palette board swatch labels hide below this projected slot pitch; widest label is 119.3 px at 11 px type.
+  paletteHideSwatchLabelsBelowPx: 120,
 } as const;

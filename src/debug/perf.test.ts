@@ -237,7 +237,11 @@ describe("clearStatsEntries", () => {
 
 describe("createInfoSampler", () => {
   const gl = {
-    info: { render: { calls: 3, triangles: 12 }, memory: { geometries: 2, textures: 1 } },
+    info: {
+      render: { calls: 3, triangles: 12 },
+      memory: { geometries: 2, textures: 1 },
+      programs: null,
+    },
   };
 
   it("writes at most 4 times per second", () => {
@@ -257,6 +261,7 @@ describe("createInfoSampler", () => {
       triangles: 12,
       geometries: 2,
       textures: 1,
+      programs: 0,
       heapMB: 5,
     });
     usePerfStore.setState({ info: null });
@@ -282,7 +287,11 @@ describe("createInfoSampler", () => {
   it("reads heap from performance.memory by default, null when absent", () => {
     // Value: protects=default heap reader converts usedJSHeapSize to MB or null; fails_when=the byte-to-MB divisor or the missing-memory guard breaks; why_new=other sampler tests inject heap(); seam=none; no_claim=real Chrome heap numbers (stubbed performance)
     const gl2 = {
-      info: { render: { calls: 1, triangles: 1 }, memory: { geometries: 1, textures: 1 } },
+      info: {
+        render: { calls: 1, triangles: 1 },
+        memory: { geometries: 1, textures: 1 },
+        programs: null,
+      },
     };
     vi.stubGlobal("performance", { memory: { usedJSHeapSize: 3 * 1024 * 1024 }, now: () => 0 });
     createInfoSampler(gl2, () => 1000)();

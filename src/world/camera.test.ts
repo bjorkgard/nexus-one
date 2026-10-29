@@ -8,6 +8,7 @@ import {
   framingBounds,
   isoDirection,
 } from "./camera";
+import { PALETTE_BOUNDS } from "./palette-layout";
 import { createZoneRegistry, DEFAULT_FLOORS, type Vec3 } from "./zones";
 
 const bounds = framingBounds({ zonesOverlay: false });
@@ -43,6 +44,12 @@ describe("framingBounds", () => {
     expect(bounds.max).toEqual([60, 0, 60]);
     const campus = createZoneRegistry({ floors: DEFAULT_FLOORS }).byId("campus")!.box;
     expect(framingBounds({ zonesOverlay: true })).toEqual(campus);
+  });
+
+  it("frames the palette board box with palette, and zones wins over palette", () => {
+    expect(framingBounds({ zonesOverlay: false, palette: true })).toEqual(PALETTE_BOUNDS);
+    const campus = createZoneRegistry({ floors: DEFAULT_FLOORS }).byId("campus")!.box;
+    expect(framingBounds({ zonesOverlay: true, palette: true })).toEqual(campus);
   });
 });
 

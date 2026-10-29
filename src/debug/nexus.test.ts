@@ -1,8 +1,26 @@
-import { OrthographicCamera, PerspectiveCamera } from "three";
+import {
+  BoxGeometry,
+  DirectionalLight,
+  Group,
+  Line,
+  LineBasicMaterial,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  OrthographicCamera,
+  PerspectiveCamera,
+  Points,
+  PointsMaterial,
+  Scene,
+  Sprite,
+  SpriteMaterial,
+} from "three";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
+  countMaterials,
   createNexusRegistry,
   installNexus,
+  materialBudgetWarner,
   projectToPage,
   readRendererInfo,
   registerNexusModule,
@@ -95,7 +113,7 @@ describe("installNexus", () => {
 });
 
 describe("registerNexusModule", () => {
-  const rendererInfo = () => ({ calls: 0, triangles: 0, geometries: 0, textures: 0 });
+  const rendererInfo = () => ({ calls: 0, triangles: 0, geometries: 0, textures: 0, programs: 0 });
 
   it("unregisters when the hot dispose callback runs, then allows re-registering", () => {
     let dispose: (() => void) | undefined;
@@ -198,10 +216,88 @@ describe("projectToPage", () => {
 });
 
 describe("readRendererInfo", () => {
-  it("reads the four counters from gl.info", () => {
+  it("reads the counters and the program count from gl.info", () => {
     const gl = {
-      info: { render: { calls: 3, triangles: 12 }, memory: { geometries: 2, textures: 1 } },
+      info: {
+        render: { calls: 3, triangles: 12 },
+        memory: { geometries: 2, textures: 1 },
+        programs: [{}, {}],
+      },
     };
-    expect(readRendererInfo(gl)).toEqual({ calls: 3, triangles: 12, geometries: 2, textures: 1 });
+    expect(readRendererInfo(gl)).toEqual({
+      calls: 3,
+      triangles: 12,
+      geometries: 2,
+      textures: 1,
+      programs: 2,
+    });
+  });
+
+  it("reports 0 programs while gl.info.programs is null", () => {
+    const gl = {
+      info: {
+        render: { calls: 0, triangles: 0 },
+        memory: { geometries: 0, textures: 0 },
+        programs: null,
+      },
+    };
+    expect(readRendererInfo(gl).programs).toBe(0);
+  });
+});
+
+describe("countMaterials", () => {
+  const geometry = new BoxGeometry();
+
+  it("counts a shared material once", () => {
+    // Value: protects=materials count is by identity; fails_when=meshes sharing a material are counted per mesh; why_new=countMaterials is new; seam=none; no_claim=renderer program count
+    const scene = new Scene();
+    const m = new MeshBasicMaterial();
+    scene.add(new Mesh(geometry, m), new Mesh(geometry, m));
+    expect(countMaterials(scene)).toBe(1);
+  });
+
+  it("flattens material arrays", () => {
+    const scene = new Scene();
+    const a = new MeshBasicMaterial();
+    const b = new MeshBasicMaterial();
+    scene.add(new Mesh(geometry, [a, b]), new Mesh(geometry, a));
+    expect(countMaterials(scene)).toBe(2);
+  });
+
+  it("counts Line, Points and Sprite materials", () => {
+    const scene = new Scene();
+    scene.add(
+      new Line(geometry, new LineBasicMaterial()),
+      new Points(geometry, new PointsMaterial()),
+      new Sprite(new SpriteMaterial()),
+    );
+    expect(countMaterials(scene)).toBe(3);
+  });
+
+  it("does not count a non-renderable object that has a material property", () => {
+    const scene = new Scene();
+    const plain = new Object3D();
+    (plain as unknown as { material: unknown }).material = new MeshBasicMaterial();
+    scene.add(plain);
+    expect(countMaterials(scene)).toBe(0);
+  });
+
+  it("skips Group and Light, and finds nested meshes", () => {
+    const scene = new Scene();
+    const group = new Group();
+    group.add(new Mesh(geometry, new MeshBasicMaterial()));
+    scene.add(group, new DirectionalLight());
+    expect(countMaterials(scene)).toBe(1);
+    expect(countMaterials(new Scene())).toBe(0);
+  });
+});
+
+describe("materialBudgetWarner", () => {
+  it("fires once when the count reaches the budget, never below", () => {
+    const shouldWarn = materialBudgetWarner(30);
+    expect(shouldWarn(29)).toBe(false);
+    expect(shouldWarn(30)).toBe(true);
+    expect(shouldWarn(31)).toBe(false);
+    expect(shouldWarn(30)).toBe(false);
   });
 });

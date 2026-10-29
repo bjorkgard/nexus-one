@@ -1,5 +1,5 @@
 import { Vector3 } from "three";
-import type { Camera } from "three";
+import type { Camera, Material, Object3D } from "three";
 import type { DataStats } from "../data/source";
 import type { Vec3 } from "../world/zones";
 
@@ -21,12 +21,15 @@ export type RendererInfo = {
   triangles: number;
   geometries: number;
   textures: number;
+  programs: number;
+  materials?: number;
 };
 
 export type RendererInfoSource = {
   info: {
     render: { calls: number; triangles: number };
     memory: { geometries: number; textures: number };
+    programs: readonly unknown[] | null;
   };
 };
 
@@ -40,6 +43,7 @@ export interface NexusHooks {
   setClock(ts: number): void;
   pauseClock(paused: boolean): void;
   dataState(): DataState;
+  cacheStats(): { size: number; hits: number; misses: number };
 }
 
 export type NexusApi = Partial<NexusHooks>;
@@ -91,7 +95,21 @@ export function readRendererInfo(gl: RendererInfoSource): RendererInfo {
     triangles: gl.info.render.triangles,
     geometries: gl.info.memory.geometries,
     textures: gl.info.memory.textures,
+    programs: gl.info.programs?.length ?? 0,
   };
+}
+
+type Renderable = Object3D & { material?: Material | Material[] };
+
+// Distinct materials by identity over everything the renderer draws. On demand only, never in the 4 Hz overlay.
+export function countMaterials(scene: Object3D): number {
+  const seen = new Set<Material>();
+  scene.traverse((object) => {
+    const o = object as Renderable & Record<string, unknown>;
+    if (!(o.isMesh || o.isLine || o.isPoints || o.isSprite) || !o.material) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) seen.add(m);
+  });
+  return seen.size;
 }
 
 export function projectToPage(
@@ -110,5 +128,15 @@ export function projectToPage(
     x: rect.left + ((ndc.x + 1) / 2) * rect.width,
     y: rect.top + ((1 - ndc.y) / 2) * rect.height,
     visible,
+  };
+}
+
+// Dev warning helper: true once, the first time the live material count reaches the budget.
+export function materialBudgetWarner(budget: number): (count: number) => boolean {
+  let warned = false;
+  return (count) => {
+    if (warned || count < budget) return false;
+    warned = true;
+    return true;
   };
 }
