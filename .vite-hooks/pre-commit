@@ -1,1 +1,12 @@
-vp staged
+# lint-staged lists ACMR files and drops symlink (120000) and submodule (160000) entries, so a commit that
+# stages only deletions, renames, type changes or such entries would run no check. Decide here, from git:
+# any of those, or a git failure, runs the full check; everything else stays partial.
+if ! raw=$(git diff --cached --raw -M) ||
+  printf '%s\n' "$raw" | grep -Eq '^:(120000|160000) |^:[0-7]+ (120000|160000) |^:[0-7]+ [0-7]+ [0-9a-f]+ [0-9a-f]+ [DRT]'; then
+  vp check
+else
+  # D stays in the filter harmlessly: D, R, T, 120000 and 160000 entries and git failures took the full
+  # branch above, so only A, C and M reach here. The full `vp check` reads the working tree, not the
+  # index, so an unstaged edit can mask a staged break; CI's full check covers that.
+  vp staged --diff-filter=ACDMR
+fi

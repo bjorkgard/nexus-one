@@ -1,10 +1,19 @@
-import { spawnSync } from "node:child_process";
+import childProcess, { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 import { RuleTester } from "vite-plus/lint/plugins-dev";
 import config from "../vite.config.ts";
 import plugin, { ROOT_ENTRIES } from "./module-fences.js";
@@ -71,7 +80,67 @@ const globInIdx = at("src/ui/__fence_glob_in_idx");
 const globInAny = at("src/ui/__fence_glob_in_any");
 const globMixDir = at("src/ui/__fence_glob_mix");
 const globWalkDir = at("src/ui/__fence_glob_walk");
+// Resolution-gap fixtures: .js -> .ts swap, declaration files, package.json entry fields.
+const swapJsLink = at("src/ui/__fence_swap_js.ts");
+const swapMjsLink = at("src/ui/__fence_swap_mjs.mts");
+const dtsLink = at("src/ui/__fence_dts.d.ts");
+const dtsWinFile = at("src/ui/__fence_dts_win.ts");
+const dtsWinLink = at("src/ui/__fence_dts_win.d.ts");
+const pkgMainDir = at("src/ui/__fence_pkg_main");
+const pkgExportsDir = at("src/ui/__fence_pkg_exports");
+const pkgBrowserDir = at("src/ui/__fence_pkg_browser");
+const pkgBadDir = at("src/ui/__fence_pkg_bad");
+const pkgOkDir = at("src/ui/__fence_pkg_ok");
+const pkgNestDir = at("src/ui/__fence_pkg_nest");
+const pkgMapDir = at("src/ui/__fence_pkg_map");
+const pkgCycleDir = at("src/ui/__fence_pkg_cycle");
+const pkgExpStrDir = at("src/ui/__fence_pkg_expstr");
+const pkgExpCondDir = at("src/ui/__fence_pkg_expcond");
+const pkgModuleDir = at("src/ui/__fence_pkg_module");
+const pkgTypesDir = at("src/ui/__fence_pkg_types");
+const pkgTypingsDir = at("src/ui/__fence_pkg_typings");
+const pkgBomDir = at("src/ui/__fence_pkg_bom");
+const pkgBomOkDir = at("src/ui/__fence_pkg_bomok");
+const pkgJsnextMainDir = at("src/ui/__fence_pkg_jsnextmain");
+const pkgJsnextDir = at("src/ui/__fence_pkg_jsnext");
+const swapJsxLink = at("src/ui/__fence_swap_jsx.tsx");
+const swapCjsLink = at("src/ui/__fence_swap_cjs.cts");
+const dmtsLink = at("src/ui/__fence_dmts.d.mts");
+const dctsLink = at("src/ui/__fence_dcts.d.cts");
+// the .js -> .ts swap wins over a file named x.js.ts
+const swapRealFile = at("src/ui/__fence_swapreal.js.ts");
+const swapRealLink = at("src/ui/__fence_swapreal.ts");
+const swapOkFile = at("src/ui/__fence_swapok.ts");
 const fenceScratch = [
+  pkgNestDir,
+  pkgMapDir,
+  pkgCycleDir,
+  pkgExpStrDir,
+  pkgExpCondDir,
+  pkgModuleDir,
+  pkgTypesDir,
+  pkgTypingsDir,
+  pkgBomDir,
+  pkgBomOkDir,
+  pkgJsnextMainDir,
+  pkgJsnextDir,
+  swapJsxLink,
+  swapCjsLink,
+  dmtsLink,
+  dctsLink,
+  swapRealFile,
+  swapRealLink,
+  swapOkFile,
+  swapJsLink,
+  swapMjsLink,
+  dtsLink,
+  dtsWinFile,
+  dtsWinLink,
+  pkgMainDir,
+  pkgExportsDir,
+  pkgBrowserDir,
+  pkgBadDir,
+  pkgOkDir,
   globMixDir,
   globWalkDir,
   globInIdx,
@@ -147,6 +216,53 @@ beforeAll(() => {
   fs.symlinkSync("./__fence_nowhere__.ts", path.join(globMixDir, "dead.ts"), "file");
   fs.mkdirSync(globWalkDir);
   fs.symlinkSync("../../../collector", path.join(globWalkDir, "linkdir"), "dir");
+  // src/ui files that exist only as .ts/.mts/.d.ts links into collector/; the import names .js/.mjs or nothing
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", swapJsLink, "file");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", swapMjsLink, "file");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", dtsLink, "file");
+  // a runtime file wins over the declaration file next to it
+  fs.writeFileSync(dtsWinFile, "export const a = 1;\n");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", dtsWinLink, "file");
+  // folders whose package.json entry field leads out of src/
+  const outEntry = "../../../collector/__fence_file_target__.ts";
+  const writePackage = (dir, content) => {
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, "package.json"), content);
+  };
+  writePackage(pkgMainDir, JSON.stringify({ main: outEntry }));
+  writePackage(pkgExportsDir, JSON.stringify({ exports: { ".": { import: outEntry } } }));
+  writePackage(pkgBrowserDir, JSON.stringify({ main: "./a.ts", browser: outEntry }));
+  writePackage(pkgBadDir, "{ not json");
+  writePackage(pkgOkDir, JSON.stringify({ main: "./a.ts", module: "./a.ts" }));
+  fs.writeFileSync(path.join(pkgOkDir, "a.ts"), "export const a = 1;\n");
+  // R2: Vite tries the swap first, so x.js reaches the link x.ts although a real x.js.ts exists
+  fs.writeFileSync(swapRealFile, "export const a = 1;\n");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", swapRealLink, "file");
+  fs.writeFileSync(swapOkFile, "export const a = 1;\n");
+  // R4: main names a folder whose own package.json leads out of src/; a browser map; a self-referencing main
+  writePackage(pkgNestDir, JSON.stringify({ main: "./inner" }));
+  writePackage(path.join(pkgNestDir, "inner"), JSON.stringify({ main: `../${outEntry}` }));
+  writePackage(pkgMapDir, JSON.stringify({ main: "./a.ts", browser: { "./a.ts": outEntry } }));
+  writePackage(pkgCycleDir, JSON.stringify({ main: "." }));
+  // Value: protects=exports given as a string or as top-level conditions, and the module field, are followed out of src/; fails_when=packageEntries reads only exports["."] or drops module; why_new=pkg_exports uses the "." map form only; seam=none; no_claim=Vite's real entry choice (superset)
+  writePackage(pkgExpStrDir, JSON.stringify({ exports: outEntry }));
+  writePackage(pkgExpCondDir, JSON.stringify({ exports: { import: outEntry } }));
+  writePackage(pkgModuleDir, JSON.stringify({ module: outEntry }));
+  // Value: protects=the types and typings fields are followed out of src/; fails_when=packageEntries drops types or typings; why_new=no other row has a package.json with only a types field; seam=none; no_claim=TypeScript's typesVersions
+  writePackage(pkgTypesDir, JSON.stringify({ types: outEntry }));
+  writePackage(pkgTypingsDir, JSON.stringify({ typings: outEntry }));
+  // Value: protects=a package.json with a UTF-8 BOM is still read, and an unparsable one fails closed; fails_when=packageEntries lets JSON.parse throw into an empty entry list; why_new=Vite strips the BOM and follows main, but no row had one; seam=none; no_claim=other encodings
+  writePackage(pkgBomDir, `\uFEFF${JSON.stringify({ main: outEntry })}`);
+  writePackage(pkgBomOkDir, `\uFEFF${JSON.stringify({ main: "./a.ts" })}`);
+  fs.writeFileSync(path.join(pkgBomOkDir, "a.ts"), "export const a = 1;\n");
+  // Value: protects=the jsnext:main and jsnext fields (Vite mainFields) are followed out of src/; fails_when=packageEntries drops either field; why_new=no row has a package.json with only a jsnext field; seam=none; no_claim=Vite's real entry choice (superset)
+  writePackage(pkgJsnextMainDir, JSON.stringify({ "jsnext:main": outEntry }));
+  writePackage(pkgJsnextDir, JSON.stringify({ jsnext: outEntry }));
+  // Value: protects=every SOURCE_SWAPS and DECLARATION_SWAPS entry reaches the file Vite picks; fails_when=a swap entry is missing or misspelled; why_new=only .js/.mjs -> .ts/.mts and .d.ts were covered; seam=none; no_claim=Vite's own resolver
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", swapJsxLink, "file");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", swapCjsLink, "file");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", dmtsLink, "file");
+  fs.symlinkSync("../../collector/__fence_file_target__.ts", dctsLink, "file");
 });
 afterAll(() => {
   cleanup(...fenceScratch);
@@ -194,6 +310,28 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     good(fromUi, 'import x from "./__fence_ok_dir";'),
     // symlinked importer directory: relative specifiers resolve from the real directory
     good(at("collector/__fence_dir_link__/a.ts"), 'import x from "../shared/x";'),
+    // resolution gaps: allowed targets stay allowed
+    good(fromUi, `import x from "/@fs${at("src/ui/__fence_ok_dir/index.ts")}";`),
+    good(fromUi, 'import x from "./__fence_ok_dir/index.js";'),
+    good(fromUi, 'import x from "/%73rc/data/z";'),
+    good(fromUi, 'import x from "/%E0%A4%A";'),
+    good(fromUi, 'import type { T } from "./__fence_dts_win";'),
+    good(fromUi, 'import x from "./__fence_pkg_ok";'),
+    good(fromUi, 'import x from "./__fence_pkg_bomok";'),
+    good(fromUi, 'new URL("./x.ts", import.meta?.url);'),
+    good(fromUi, 'new URL("./b.ts", import.meta.url as string);'),
+    good(fromUi, "(0, import.meta.resolve)(`./x.ts`);"),
+    good(fromUi, 'const { env } = import.meta; const u = import.meta.resolve("./x.ts");'),
+    good(fromUi, "const { url, env } = import.meta;"),
+    // R1: plain member reads of import.meta stay allowed
+    good(fromUi, "const u = import.meta.url; const d = import.meta.dirname;"),
+    good(fromUi, "const m = import.meta.env.MODE; const e = import.meta.env;"),
+    good(fromUi, "if (import.meta.hot) { import.meta.hot.accept(() => {}); }"),
+    good(fromUi, "import.meta.hot?.dispose(() => {}); const t = typeof import.meta.env;"),
+    good(fromUi, "import.meta.resolve?.('./x.ts'); (import.meta.resolve)('./x.ts');"),
+    // R2: an in-zone x.js -> x.ts swap passes; R4: a self-referencing main does not loop
+    good(fromUi, 'import x from "./__fence_swapok.js";'),
+    good(fromUi, 'import x from "./__fence_pkg_cycle";'),
     // import.meta bracket forms and resolve
     good(fromUi, 'new URL("./x.ts", import.meta["url"]);'),
     good(fromUi, 'import.meta.resolve("./x.ts");'),
@@ -388,6 +526,100 @@ tester.run("no-cross-zone", plugin.rules["no-cross-zone"], {
     bad(fromUi, 'const m = import.meta.glob("./__fence_glob_walk/**/*.ts");', SRC),
     // symlinked importer directory: the real directory is src/ui
     bad(at("collector/__fence_dir_link__/a.ts"), 'import x from "../../collector/x";', SRC),
+    // G1: /@fs/ serves any absolute path, never public/
+    bad(fromUi, `import x from "/@fs${at("collector/x")}";`, SRC),
+    bad(fromUi, `import x from "/@fs${at("electron/x")}?raw";`, SRC),
+    bad(fromUi, `import x from "/%40fs${at("collector/x")}";`, SRC),
+    bad(fromUi, 'import x from "/@fs/etc/passwd";', SRC),
+    // G2: Vite swaps .js/.jsx to .ts/.tsx and .mjs to .mts
+    bad(fromUi, 'import x from "./__fence_swap_js.js";', SRC),
+    bad(fromUi, 'import x from "./__fence_swap_mjs.mjs";', SRC),
+    // G3: a folder's package.json entry field is followed
+    bad(fromUi, 'import x from "./__fence_pkg_main";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_bad";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_bom";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_jsnextmain";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_jsnext";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_exports";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_browser";', SRC),
+    // G4: declaration files are a fallback after the runtime extensions
+    bad(fromUi, 'import type { T } from "./__fence_dts";', SRC),
+    bad(fromUi, 'import type { T } from "./__fence_dts.js";', SRC),
+    // G5: a percent-encoded first segment
+    bad(fromUi, 'import x from "/%63ollector/x";', SRC),
+    bad(fromUi, 'import x from "/%2e%2e/outside/x";', SRC),
+    // G6: optional-chained import.meta base
+    bad(fromUi, 'new URL("../../collector/x.ts", import.meta?.url);', SRC),
+    bad(fromUi, "new URL(name, import.meta?.url);", NON_STATIC),
+    // G7: sequence-expression callee
+    bad(fromUi, '(0, import.meta.resolve)("../../collector/x.ts");', SRC),
+    bad(fromUi, "(0, import.meta.resolve)(name);", NON_STATIC),
+    bad(fromUi, '(0, import.meta.glob)("../../collector/*.ts");', SRC),
+    // G8: import.meta.resolve behind a destructuring or an alias cannot be read
+    bad(fromUi, 'const { resolve } = import.meta; resolve("../../collector/x.ts");', NON_STATIC),
+    bad(fromUi, 'const { resolve: r } = import.meta; r("./x.ts");', NON_STATIC),
+    bad(fromUi, 'const { glob } = import.meta; glob("./*.ts");', NON_STATIC),
+    bad(fromUi, 'const { ...rest } = import.meta; rest.resolve("./x.ts");', NON_STATIC),
+    bad(fromUi, 'const { [key]: r } = import.meta; r("./x.ts");', NON_STATIC),
+    bad(fromUi, 'const meta = import.meta; meta.resolve("./x.ts");', NON_STATIC),
+    bad(fromUi, 'const r = import.meta.resolve; r("./x.ts");', NON_STATIC),
+    bad(fromUi, 'let r; r = import.meta.resolve; r("./x.ts");', NON_STATIC),
+    // R1 (D4): a resolve/glob reference that is not a direct callee, or a bare import.meta, is reported
+    bad(fromUi, "function f({ resolve } = import.meta) {}", NON_STATIC),
+    bad(fromUi, "function f(r = import.meta.resolve) {}", NON_STATIC),
+    bad(fromUi, "function f(r = import.meta.glob) {}", NON_STATIC),
+    bad(fromUi, "const { resolve } = import.meta ?? {};", NON_STATIC),
+    bad(fromUi, "const { env } = import.meta || {};", NON_STATIC),
+    bad(fromUi, "const a = [import.meta.resolve];", NON_STATIC),
+    bad(fromUi, "const o = { r: import.meta.resolve };", NON_STATIC),
+    bad(fromUi, "f(import.meta);", NON_STATIC),
+    bad(fromUi, "f(import.meta.glob);", NON_STATIC),
+    bad(fromUi, "class C { static r = import.meta.resolve; }", NON_STATIC),
+    bad(fromUi, "for (const { resolve } of [import.meta]) {}", NON_STATIC),
+    bad(fromUi, "const r = (import.meta.resolve ?? f); r('./x.ts');", NON_STATIC),
+    bad(fromUi, "(import.meta.resolve || f)('./x.ts');", NON_STATIC),
+    bad(fromUi, "const r = import.meta[key];", NON_STATIC),
+    {
+      filename: fromUi,
+      code: 'import.meta.resolve.bind(import.meta)("./x.ts");',
+      errors: [{ message: NON_STATIC }, { message: NON_STATIC }],
+    },
+    {
+      filename: fromUi,
+      code: 'import.meta.resolve.call(import.meta, "./x.ts");',
+      errors: [{ message: NON_STATIC }, { message: NON_STATIC }],
+    },
+    // R2: the swap is tried before the plain extensions
+    bad(fromUi, 'import x from "./__fence_swapreal.js";', SRC),
+    // R4: a nested package.json, a browser map and a `?? ""` base
+    bad(fromUi, 'import x from "./__fence_pkg_nest";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_map";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_expstr";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_expcond";', SRC),
+    bad(fromUi, 'import x from "./__fence_pkg_module";', SRC),
+    bad(fromUi, 'import type { x } from "./__fence_pkg_types";', SRC),
+    bad(fromUi, 'import type { x } from "./__fence_pkg_typings";', SRC),
+    bad(fromUi, 'import x from "./__fence_swap_jsx.jsx";', SRC),
+    bad(fromUi, 'import x from "./__fence_swap_cjs.cjs";', SRC),
+    bad(fromUi, 'import type { T } from "./__fence_dmts.mjs";', SRC),
+    bad(fromUi, 'import type { T } from "./__fence_dcts.cjs";', SRC),
+    // Value: protects=package.json entries are followed for /@fs/ and root-absolute folder specifiers; fails_when=packageTargets drops either branch; why_new=only the relative branch had a row; seam=none; no_claim=none
+    bad(fromUi, `import x from "/@fs${at("src/ui/__fence_pkg_main")}";`, SRC),
+    bad(fromUi, 'import x from "/src/ui/__fence_pkg_main";', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", import.meta.url ?? "");', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", import.meta.url || "");', SRC),
+    bad(fromUi, 'new URL(name, import.meta.url ?? "");', NON_STATIC),
+    bad(fromUi, 'new URL("../../collector/x.ts", "" || import.meta.url);', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", import.meta.url as string);', SRC),
+    // Value: protects=a satisfies or non-null wrapper around import.meta.url still gives the importer URL; fails_when=hasImportMetaUrl stops unwrapping TSSatisfiesExpression or TSNonNullExpression; why_new=only the as wrapper had a row; seam=none; no_claim=none beyond protects
+    bad(fromUi, 'new URL("../../collector/x.ts", import.meta.url satisfies string);', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", import.meta.url!);', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", (import.meta.url ?? "") || "");', SRC),
+    // Value: protects=an import.meta.url read anywhere in the new URL base still gives the importer URL; fails_when=hasImportMetaUrl goes back to unwrapping only listed wrappers; why_new=template, ternary, call and cast bases were unchecked; seam=none; no_claim=a base that reaches import.meta.url through a variable
+    bad(fromUi, 'new URL("../../collector/x.ts", `${import.meta.url}`);', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", c ? import.meta.url : "");', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", String(import.meta.url));', SRC),
+    bad(fromUi, 'new URL("../../collector/x.ts", <string>import.meta.url);', SRC),
     // importer outside the repo root
     {
       filename: path.join(repoRoot, "..", "fence-outside.ts"),
@@ -570,6 +802,14 @@ function parseArgsStringToArgv(value) {
 // Value: protects=pre-commit runs the full check when the config or fence plugin is staged, and quotes paths safely; fails_when=the staged function stops escalating or stops escaping quotes; why_new=staged function had no test; seam=none; no_claim=lint-staged invocation itself
 describe("staged function", () => {
   const staged = config.staged["*"];
+  // `git diff --cached --raw -z` output: ":old new oldsha newsha STATUS\0path\0" (a rename lists two paths).
+  const entry = (oldMode, newMode, status, ...paths) =>
+    `:${oldMode} ${newMode} 1111111 2222222 ${status}\0${paths.join("\0")}\0`;
+  let git;
+  beforeEach(() => {
+    git = vi.spyOn(childProcess, "execFileSync").mockReturnValue("");
+  });
+  afterEach(() => vi.restoreAllMocks());
   it("runs the full check when vite.config.ts is staged", () => {
     expect(staged([at("src/a.ts"), at("vite.config.ts")])).toBe("vp check");
   });
@@ -588,6 +828,168 @@ describe("staged function", () => {
   });
   it("falls back to the full check for a path with a double quote", () => {
     expect(staged([at("src/a.ts"), at('src/say"hi.ts')])).toBe("vp check");
+  });
+  it("keeps the partial check for an ordinary modified file", () => {
+    git.mockReturnValue(entry("100644", "100644", "M", "src/a.ts"));
+    expect(staged([at("src/a.ts")])).toBe(`vp check --fix "${at("src/a.ts")}"`);
+    expect(git.mock.calls[0].slice(0, 2)).toEqual([
+      "git",
+      ["diff", "--cached", "--raw", "-z", "-M"],
+    ]);
+  });
+  it.each([
+    ["a deletion", entry("100644", "000000", "D", "src/a.ts")],
+    ["a rename", entry("100644", "100644", "R100", "src/a.ts", "src/b.ts")],
+    ["a new symlink", entry("000000", "120000", "A", "src/link")],
+    ["a changed symlink", entry("120000", "120000", "M", "src/link")],
+    ["a symlink turned into a file", entry("120000", "100644", "T", "src/link")],
+    ["a new submodule", entry("000000", "160000", "A", "sub")],
+    ["a changed submodule", entry("160000", "160000", "M", "sub")],
+    ["a removed submodule", entry("160000", "000000", "D", "sub")],
+    ["a file turned into a submodule", entry("100644", "160000", "T", "sub")],
+    ["a type change between regular modes", entry("100644", "100755", "T", "src/a.ts")],
+    [
+      "a deletion after a modified file and a rename",
+      entry("100644", "100644", "M", "src/m.ts") +
+        entry("100644", "100644", "R090", "src/a.ts", "src/:b.ts") +
+        entry("100644", "000000", "D", "src/gone.ts"),
+    ],
+  ])("runs the full check for %s", (_name, raw) => {
+    git.mockReturnValue(raw);
+    expect(staged([at("src/a.ts")])).toBe("vp check");
+  });
+  it("runs the full check when git fails", () => {
+    git.mockImplementation(() => {
+      throw new Error("git failed");
+    });
+    expect(staged([at("src/a.ts")])).toBe("vp check");
+  });
+});
+
+// R3/H1: lint-staged lists only ACMR files and drops symlink and submodule entries, so a commit of only
+// deletions, renames, type changes or symlinks would skip every task. The hook decides from git itself;
+// a stub `vp` on PATH makes the choice observable.
+// Value: protects=a commit with a staged deletion, rename, type change or symlink runs the full `vp check`, a plain edit stays partial; fails_when=the hook hands those commits to `vp staged`; why_new=the staged function tests never run the hook or lint-staged; seam=none; no_claim=this repo's real vite.config.ts under lint-staged
+describe("pre-commit hook", () => {
+  const hook = fs.readFileSync(at(".vite-hooks/pre-commit"), "utf8");
+  // Commits `before`, applies `change` (a list of git args or functions), runs the hook, returns its output.
+  // `stubGit` puts a `git` that exits 1 ahead of the real one for the hook only.
+  function runHook(before, change, stubGit = false) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fence-hook-"));
+    try {
+      // No user or system git config, and every git call must succeed.
+      const env = {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_SYSTEM: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+      };
+      const git = (...args) => {
+        const result = spawnSync("git", args, { cwd: dir, encoding: "utf8", env });
+        expect(result.status, `git ${args.join(" ")}: ${result.stderr}`).toBe(0);
+      };
+      git("init", "-q");
+      git("config", "user.email", "t@example.com");
+      git("config", "user.name", "t");
+      before(dir);
+      git("add", "-A");
+      git("-c", "commit.gpgsign=false", "commit", "-qm", "init");
+      change(dir, git);
+      git("add", "-A");
+      const bin = path.join(dir, "__bin");
+      fs.mkdirSync(bin);
+      fs.writeFileSync(path.join(bin, "vp"), '#!/bin/sh\necho "VP_RAN $*"\n', { mode: 0o755 });
+      if (stubGit) fs.writeFileSync(path.join(bin, "git"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+      const run = spawnSync("sh", ["-c", hook], {
+        cwd: dir,
+        encoding: "utf8",
+        env: { ...env, PATH: `${bin}:${process.env.PATH}` },
+      });
+      expect(run.status).toBe(0);
+      return run.stdout.trim();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  const write = (dir, name, text) => fs.writeFileSync(path.join(dir, name), text);
+  const link = (dir, name, target) => fs.symlinkSync(target, path.join(dir, name));
+  const unlink = (dir, name) => fs.rmSync(path.join(dir, name));
+  const base = (dir) => {
+    write(dir, "a.txt", "x\n");
+    write(dir, "gone.txt", "x\n");
+  };
+
+  it("runs the full check for a deletion-only commit", () => {
+    expect(runHook(base, (dir) => unlink(dir, "gone.txt"))).toBe("VP_RAN check");
+  });
+  it("runs the full check for a rename-only commit", () => {
+    const out = runHook(base, (dir) =>
+      fs.renameSync(path.join(dir, "gone.txt"), path.join(dir, "moved.txt")),
+    );
+    expect(out).toBe("VP_RAN check");
+  });
+  it("runs the full check for a symlink add only", () => {
+    expect(runHook(base, (dir) => link(dir, "l", "a.txt"))).toBe("VP_RAN check");
+  });
+  it("runs the full check for a symlink retarget only", () => {
+    const before = (dir) => {
+      base(dir);
+      link(dir, "l", "a.txt");
+    };
+    const change = (dir) => {
+      unlink(dir, "l");
+      link(dir, "l", "gone.txt");
+    };
+    expect(runHook(before, change)).toBe("VP_RAN check");
+  });
+  it("runs the full check when a file becomes a symlink", () => {
+    const change = (dir) => {
+      unlink(dir, "gone.txt");
+      link(dir, "gone.txt", "a.txt");
+    };
+    expect(runHook(base, change)).toBe("VP_RAN check");
+  });
+  it("runs the full check when a symlink becomes a file", () => {
+    const before = (dir) => {
+      base(dir);
+      link(dir, "l", "a.txt");
+    };
+    const change = (dir) => {
+      unlink(dir, "l");
+      write(dir, "l", 'import "../../collector/x";\n');
+    };
+    expect(runHook(before, change)).toBe("VP_RAN check");
+  });
+  it("runs the full check for a staged submodule (gitlink)", () => {
+    // `git add -A` stages a nested repository as a gitlink.
+    const change = (dir, git) => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      git("-C", "sub", "init", "-q");
+      git(
+        "-C",
+        "sub",
+        "-c",
+        "user.email=t@example.com",
+        "-c",
+        "user.name=t",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "x",
+      );
+    };
+    expect(runHook(base, change)).toBe("VP_RAN check");
+  });
+  it("runs the full check when git fails", () => {
+    expect(runHook(base, (dir) => write(dir, "a.txt", "y\n"), true)).toBe("VP_RAN check");
+  });
+  it("keeps the partial path for a modify-only commit", () => {
+    expect(runHook(base, (dir) => write(dir, "a.txt", "y\n"))).toBe(
+      "VP_RAN staged --diff-filter=ACDMR",
+    );
   });
 });
 

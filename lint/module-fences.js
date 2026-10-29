@@ -56,14 +56,40 @@ const FENCED_FIRST_SEGMENTS = new Set(
 // Vite's default resolve.extensions, in its order.
 const PROBE_EXTENSIONS = [".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"];
 
-// First existing file among `absolute` + extension, then (for a directory) `absolute/index` + extension.
+// Vite resolves an import of `x.js` to an existing `x.ts` (and `.mjs` to `.mts`, `.cjs` to `.cts`),
+// and tries that swap before the plain extensions.
+const SOURCE_SWAPS = {
+  ".js": [".ts", ".tsx"],
+  ".jsx": [".tsx"],
+  ".mjs": [".mts"],
+  ".cjs": [".cts"],
+};
+
+// A type-only import may resolve to a declaration file. They come after every runtime file, so they
+// never change which file wins when a runtime file exists.
+const DECLARATION_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
+const DECLARATION_SWAPS = { ".js": ".d.ts", ".jsx": ".d.ts", ".mjs": ".d.mts", ".cjs": ".d.cts" };
+
+// First existing file among the `.js` -> `.ts` swap of `absolute`, `absolute` + extension, then (for a
+// directory) `absolute/index` + extension; declaration files last.
 function probeFile(absolute, withIndex = true) {
-  const candidates = PROBE_EXTENSIONS.map((extension) => `${absolute}${extension}`);
+  const extension = path.extname(absolute);
+  const stem = absolute.slice(0, absolute.length - extension.length);
+  const candidates = [
+    ...(SOURCE_SWAPS[extension] ?? []).map((swap) => `${stem}${swap}`),
+    ...PROBE_EXTENSIONS.map((probe) => `${absolute}${probe}`),
+  ];
+  const declarations = [
+    ...DECLARATION_EXTENSIONS.map((probe) => `${absolute}${probe}`),
+    ...(DECLARATION_SWAPS[extension] ? [`${stem}${DECLARATION_SWAPS[extension]}`] : []),
+  ];
   if (withIndex) {
-    candidates.push(
-      ...PROBE_EXTENSIONS.map((extension) => path.join(absolute, `index${extension}`)),
+    candidates.push(...PROBE_EXTENSIONS.map((probe) => path.join(absolute, `index${probe}`)));
+    declarations.push(
+      ...DECLARATION_EXTENSIONS.map((probe) => path.join(absolute, `index${probe}`)),
     );
   }
+  candidates.push(...declarations);
   for (const candidate of candidates) {
     try {
       const real = fs.realpathSync.native(candidate);
@@ -170,6 +196,89 @@ function isDynamicImportMeta(node) {
   return isImportMetaMember(node) && node.computed && stringValue(node.property) === null;
 }
 
+// Looks through the wrappers around an expression: `a?.b`, `(0, a.b)` and parentheses.
+function unwrap(node) {
+  let current = node;
+  for (;;) {
+    if (current.type === "ChainExpression" || current.type === "ParenthesizedExpression") {
+      current = current.expression;
+    } else if (current.type === "SequenceExpression") {
+      current = current.expressions[current.expressions.length - 1];
+    } else {
+      return current;
+    }
+  }
+}
+
+// Whether `import.meta.url` is read anywhere in the expression (under `as`, `!`, `?? ""`, a template,
+// a ternary, `String(...)`, a `<string>` cast and the like): it still gives the importer's URL.
+function hasImportMetaUrl(node) {
+  if (isImportMeta(node, "url")) return true;
+  return Object.entries(node).some(
+    ([key, value]) =>
+      key !== "parent" &&
+      (Array.isArray(value) ? value : [value]).some(
+        (child) =>
+          child !== null &&
+          typeof child === "object" &&
+          typeof child.type === "string" &&
+          hasImportMetaUrl(child),
+      ),
+  );
+}
+
+// Every string in a package.json entry value (`exports` may nest conditions and arrays).
+function collectStrings(value) {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(collectStrings);
+  if (value !== null && typeof value === "object")
+    return Object.values(value).flatMap(collectStrings);
+  return [];
+}
+
+// Files a folder's package.json can name as its entry: `exports` (its `.` entry), `browser` (a string
+// or every value of a map), `module`, `jsnext:main`, `jsnext`, `main`, `types` and `typings`. An entry
+// that is itself a folder with a package.json is followed the same way; `seen` stops a cycle. A superset
+// of what Vite picks. A missing or non-file package.json names nothing; a file that is not valid JSON
+// (after Vite's BOM strip) fails closed: it names the filesystem root, which lies outside every zone,
+// so the importing specifier is reported with the zone's message.
+function packageEntries(folder, seen = new Set()) {
+  const real = realPath(folder);
+  if (seen.has(real)) return [];
+  seen.add(real);
+  const file = path.join(real, "package.json");
+  if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) return [];
+  let entries;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+    const exported =
+      manifest.exports && typeof manifest.exports === "object" && "." in manifest.exports
+        ? manifest.exports["."]
+        : manifest.exports;
+    entries = [
+      ...collectStrings(exported),
+      ...collectStrings(manifest.browser),
+      ...collectStrings(manifest.module),
+      ...collectStrings(manifest["jsnext:main"]),
+      ...collectStrings(manifest.jsnext),
+      ...collectStrings(manifest.main),
+      ...collectStrings(manifest.types),
+      ...collectStrings(manifest.typings),
+    ].map((entry) => path.resolve(real, entry));
+  } catch {
+    return [path.parse(real).root];
+  }
+  return entries.flatMap((entry) => [entry, ...packageEntries(entry, seen)]);
+}
+
+function decodePath(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 // Static directory part of a glob: up to the last `/` before the first glob character.
 // Every `?` counts as a wildcard in a glob (never as a query), so the prefix stops there.
 function globPrefix(pattern) {
@@ -215,10 +324,14 @@ const noCrossZone = defineRule({
 
     // Resolves a relative or root-absolute path; null for anything else. `probe` adds the
     // extension/index probing of a module specifier; a glob prefix is the directory searched.
+    // A module specifier is percent-decoded first, as Vite does; a glob prefix is read literally.
     function resolveFrom(specifier, probe = true) {
       if (specifier.startsWith(".")) return toRepoPath(path.resolve(dir, specifier), probe);
       if (specifier.startsWith("/")) {
-        const target = toRepoPath(path.join(repoRoot, specifier), probe);
+        const decoded = probe ? decodePath(specifier) : specifier;
+        // `/@fs/<absolute path>` serves any file on disk, so it is never a public/ URL
+        if (decoded.startsWith("/@fs/")) return toRepoPath(path.resolve(decoded.slice(4)), probe);
+        const target = toRepoPath(path.join(repoRoot, decoded), probe);
         const [first] = target.split("/");
         return target === "" || leavesRepo(target) || FENCED_FIRST_SEGMENTS.has(first)
           ? target
@@ -227,18 +340,29 @@ const noCrossZone = defineRule({
       return null;
     }
 
+    // Repo paths of the package.json entries of a specifier that names a folder.
+    function packageTargets(specifier) {
+      const decoded = decodePath(specifier);
+      const absolute = specifier.startsWith(".")
+        ? path.resolve(dir, specifier)
+        : decoded.startsWith("/@fs/")
+          ? path.resolve(decoded.slice(4))
+          : path.join(repoRoot, decoded);
+      return packageEntries(absolute).map((entry) => toRepoPath(entry, true));
+    }
+
     function isAllowed(target) {
       // The root package.json is JSON only, so every zone may read it.
       return target === "package.json" || zone.allowed.some((folder) => inside(target, folder));
     }
 
-    function checkTarget(target, node) {
-      if (!isAllowed(target)) context.report({ node, messageId: zone.messageId });
-    }
-
     function checkSpecifier(specifier, node) {
-      const target = resolveFrom(specifier.replace(/[?#][\s\S]*$/, ""));
-      if (target !== null) checkTarget(target, node);
+      const clean = specifier.replace(/[?#][\s\S]*$/, "");
+      const target = resolveFrom(clean);
+      if (target === null) return;
+      if ([target, ...packageTargets(clean)].some((candidate) => !isAllowed(candidate))) {
+        context.report({ node, messageId: zone.messageId });
+      }
     }
 
     // For import(), require() and new URL(): the specifier must be a static string.
@@ -320,7 +444,71 @@ const noCrossZone = defineRule({
       checkGlobOptions(options);
     }
 
+    // The key name of a destructuring property; null when it cannot be read.
+    function patternKey(property) {
+      const key = property.type === "Property" ? property.key : null;
+      return key && (key.type === "Identifier" && !property.computed ? key.name : stringValue(key));
+    }
+
+    // Climbs out of the wrappers `unwrap` looks through; returns the outermost node still holding `node`.
+    function outermost(node) {
+      let current = node;
+      for (;;) {
+        const parent = current.parent;
+        if (
+          parent &&
+          (parent.type === "ChainExpression" ||
+            parent.type === "ParenthesizedExpression" ||
+            (parent.type === "SequenceExpression" &&
+              parent.expressions[parent.expressions.length - 1] === current))
+        ) {
+          current = parent;
+        } else {
+          return current;
+        }
+      }
+    }
+
+    // `import.meta.resolve` and `import.meta.glob` are read only as the direct callee of a call, and a
+    // bare `import.meta` only as a member object or as the source of a destructuring that names other
+    // keys. Any other use (an alias, an argument, a default, a `??` operand) hides the call from the
+    // rule, so it is reported. `import.meta.url`, `.env`, `.hot` and the like stay plain reads.
+    function checkMetaUse(node) {
+      if (node.meta.name !== "import") return;
+      const member = node.parent;
+      if (member && member.type === "MemberExpression" && member.object === node) {
+        const name = member.computed ? stringValue(member.property) : member.property.name;
+        const whole = outermost(member);
+        const parent = whole.parent;
+        // a call reports an unreadable key (`name === null`) at its callee
+        if (name === "resolve" || name === "glob" || name === null) {
+          if (!(parent && parent.type === "CallExpression" && parent.callee === whole)) {
+            context.report({ node: member, messageId: "nonStatic" });
+          }
+        }
+        return;
+      }
+      const whole = outermost(node);
+      const parent = whole.parent;
+      const target =
+        parent &&
+        ((parent.type === "VariableDeclarator" && parent.init === whole && parent.id) ||
+          (parent.type === "AssignmentExpression" && parent.right === whole && parent.left) ||
+          (parent.type === "AssignmentPattern" && parent.right === whole && parent.left));
+      if (target && target.type === "ObjectPattern") {
+        for (const property of target.properties) {
+          const name = patternKey(property);
+          if (name === null || name === "resolve" || name === "glob") {
+            context.report({ node: property, messageId: "nonStatic" });
+          }
+        }
+      } else {
+        context.report({ node, messageId: "nonStatic" });
+      }
+    }
+
     return {
+      MetaProperty: checkMetaUse,
       ImportDeclaration: (node) => check(node.source),
       ExportNamedDeclaration: (node) => check(node.source),
       ExportAllDeclaration: (node) => check(node.source),
@@ -338,13 +526,14 @@ const noCrossZone = defineRule({
       },
       CallExpression(node) {
         const callee = node.callee;
+        const target = unwrap(callee);
         if (callee.type === "Identifier" && callee.name === "require") {
           check(node.arguments[0]);
-        } else if (isImportMeta(callee, "glob")) {
+        } else if (isImportMeta(target, "glob")) {
           checkGlob(node);
-        } else if (isImportMeta(callee, "resolve")) {
+        } else if (isImportMeta(target, "resolve")) {
           check(node.arguments[0]);
-        } else if (isDynamicImportMeta(callee)) {
+        } else if (isDynamicImportMeta(target)) {
           context.report({ node: callee, messageId: "nonStatic" });
         } else if (
           zone.createRequireMessageId &&
@@ -356,10 +545,9 @@ const noCrossZone = defineRule({
         }
       },
       NewExpression(node) {
-        const [specifier, base] = node.arguments;
-        if (node.callee.type !== "Identifier" || node.callee.name !== "URL" || !base) return;
-        if (isImportMeta(base, "url")) check(specifier);
-        else if (isDynamicImportMeta(base)) context.report({ node: base, messageId: "nonStatic" });
+        const [specifier, argument] = node.arguments;
+        if (node.callee.type !== "Identifier" || node.callee.name !== "URL" || !argument) return;
+        if (hasImportMetaUrl(argument)) check(specifier);
       },
     };
   },
