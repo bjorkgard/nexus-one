@@ -37,12 +37,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), buildGuards()],
   staged: {
     // One entry, so the tasks never run concurrently. Function form: lint-staged would otherwise
-    // append the paths and check only those files. Staging the config or the fence plugin changes
-    // what every file is checked against, so those run the full check.
+    // append the paths and check only those files. Staging the config, the fence plugin or a tsconfig.json
+    // or package.json changes what every file is checked against, so those run the full check.
     "*": (files) => {
       // Paths are absolute; a same-named nested file only costs an unneeded full check.
       const fullCheck = files.some((file) =>
-        ["/vite.config.ts", "/lint/module-fences.js"].some((suffix) => file.endsWith(suffix)),
+        ["/vite.config.ts", "/lint/module-fences.js", "/tsconfig.json", "/package.json"].some(
+          (suffix) => file.endsWith(suffix),
+        ),
       );
       // No shell runs this: lint-staged splits it with string-argv, which has no escapes inside
       // quotes. Double-quote each path; a path holding `"` cannot be quoted, so check everything.
