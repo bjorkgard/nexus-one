@@ -18,16 +18,19 @@ import {
   boundsCentre,
   cameraRig,
   cellOpacity,
-  fitZoom,
+  fitPointsZoom,
   framingBounds,
-  isoDirection,
+  framingPoints,
+  readDevInt,
+  viewBasis,
+  viewYaw,
 } from "./camera";
 import { __clearGeometryCache, getGeometry } from "./geometry-cache";
 import { palette } from "./palette";
 import { RevealHoldContext, createRevealHold } from "./reveal-hold";
 import { LOOK } from "./stage-look";
-import { DEFAULT_FLOORS, createZoneRegistry } from "./zones";
-import type { ZoneRegistry } from "./zones";
+import { DEFAULT_FLOORS, MAX_FLOORS, MIN_FLOORS, createZoneRegistry } from "./zones";
+import type { Box, ZoneRegistry } from "./zones";
 
 export type ZonesValue = { registry: ZoneRegistry; zonesOverlay: boolean };
 
@@ -43,13 +46,20 @@ export function useZones(): ZonesValue {
 export const isPaletteBoardOn = () =>
   import.meta.env.DEV && new URLSearchParams(window.location.search).get("palette") === "1";
 
-// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?zones=1` frames the campus box, `?palette=1` frames the palette board.
-function readDevParams(): { floors: number; zonesOverlay: boolean; palette: boolean } {
-  if (!import.meta.env.DEV) return { floors: DEFAULT_FLOORS, zonesOverlay: false, palette: false };
+// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?view=0..3` turns the camera in 90 degree steps, `?zones=1` frames the campus box, `?palette=1` frames the palette board.
+function readDevParams(): {
+  floors: number;
+  view: number;
+  zonesOverlay: boolean;
+  palette: boolean;
+} {
+  if (!import.meta.env.DEV) {
+    return { floors: DEFAULT_FLOORS, view: 0, zonesOverlay: false, palette: false };
+  }
   const params = new URLSearchParams(location.search);
-  const floors = params.get("floors");
   return {
-    floors: floors === null ? DEFAULT_FLOORS : Number(floors),
+    floors: readDevInt(params, "floors", MIN_FLOORS, MAX_FLOORS, DEFAULT_FLOORS),
+    view: readDevInt(params, "view", 0, 3, 0),
     zonesOverlay: params.get("zones") === "1",
     palette: isPaletteBoardOn(),
   };
@@ -82,7 +92,7 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
   const signalled = useRef(false);
 
   // Built in render, not at import: a bad `?floors` throws into CanvasErrorBoundary instead of a blank page.
-  const { floors, zonesOverlay, palette: paletteBoard } = useMemo(() => readDevParams(), []);
+  const { floors, view, zonesOverlay, palette: paletteBoard } = useMemo(() => readDevParams(), []);
   const zones = useMemo(() => createZoneRegistry({ floors }), [floors]);
   const zonesValue = useMemo(() => ({ registry: zones, zonesOverlay }), [zones, zonesOverlay]);
   const bounds = useMemo(
@@ -90,7 +100,18 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
     [zonesOverlay, floors, paletteBoard],
   );
   // Derived in render (zero-size viewport keeps the previous zoom); the effect below applies it to the camera.
-  const nextZoom = fitZoom(bounds, size);
+  const yaw = viewYaw(view);
+  const fit = useMemo(
+    () => framingPoints({ zonesOverlay, floors, palette: paletteBoard }),
+    [zonesOverlay, floors, paletteBoard],
+  );
+  // Depth range covers everything fitted (a tall tower reaches toward the camera), not only the slab.
+  const rigBounds = useMemo((): Box => {
+    const lo = (a: 0 | 1 | 2) => Math.min(...fit.points.map((p) => p[a]));
+    const hi = (a: 0 | 1 | 2) => Math.max(...fit.points.map((p) => p[a]));
+    return { min: [lo(0), lo(1), lo(2)], max: [hi(0), hi(1), hi(2)] };
+  }, [fit]);
+  const nextZoom = fitPointsZoom(fit.points, fit.centre, size, 0.15, yaw);
   if (nextZoom !== null && nextZoom !== zoom) setZoom(nextZoom);
   const slab = useMemo(
     () =>
@@ -122,8 +143,8 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
     const camera = cameraRef.current;
     if (!camera) return;
     const target = boundsCentre(bounds);
-    const { distance, near, far } = cameraRig(bounds);
-    const direction = isoDirection();
+    const { distance, near, far } = cameraRig(rigBounds);
+    const { direction } = viewBasis(yaw);
     camera.position.set(
       target[0] - direction[0] * distance,
       target[1] - direction[1] * distance,
@@ -139,7 +160,7 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
     }
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
-  }, [bounds, zoom]);
+  }, [bounds, rigBounds, yaw, zoom]);
 
   // Ready once the ortho camera is the active one, the fitted zoom is applied and a frame has been drawn.
   useFrame(() => {
