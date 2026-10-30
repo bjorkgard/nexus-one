@@ -41,6 +41,13 @@ describe("style.css fallbacks", () => {
       expect(vars, name).toContain(`--nx-paint-${name}`);
   });
 
+  it("exposes --nx-slab-* variables including the tower interior top", () => {
+    const vars = flattenTokens(TOKENS).map(([name]) => cssVarName(name));
+    expect(vars).toEqual(
+      expect.arrayContaining(["--nx-slab-top", "--nx-slab-side", "--nx-slab-interiorTop"]),
+    );
+  });
+
   it("uses the gradient tokens on html", () => {
     for (const name of ["bg.top", "bg.bottom"]) {
       expect(css, name).toContain(`var(${cssVarName(name)}, `);

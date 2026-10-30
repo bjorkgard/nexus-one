@@ -163,7 +163,10 @@ describe("validateZones", () => {
 
   it("accepts siblings that overlap in x/z on different floors", () => {
     const a = zone("a");
-    const b = zone("b", { floor: 1, box: box([0, 4, 0], [10, 8, 10]) });
+    const b = zone("b", {
+      floor: 1,
+      box: box([0, FLOOR_HEIGHT, 0], [10, 2 * FLOOR_HEIGHT, 10]),
+    });
     expect(() => validateZones([campus, a, b])).not.toThrow();
   });
 });

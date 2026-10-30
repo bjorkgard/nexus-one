@@ -17,7 +17,30 @@ export const LOOK = {
   gridFadeFromPx: 10,
   gridFadeToPx: 6,
   hemisphere: { sky: "#9ab8ff", ground: "#0a0e14", intensity: 3.5 },
-  key: { color: "#ffd9a8", intensity: 3.4, direction: [-0.5, 2, 1.5] as const },
+  key: {
+    color: "#ffd9a8",
+    intensity: 3.4,
+    direction: [-0.5, 2, 1.5] as const,
+    shadow: { radius: 3, bias: -0.0005, normalBias: 0.02 },
+  },
+  // Tower shell sizes in metres (task 2.3). The slab covers the tower footprint and sticks out past the glass by `glassInset`.
+  tower: {
+    slabThickness: 0.5,
+    glassInset: 0.3,
+    columnSize: 0.35,
+    mullionSpacing: 6,
+    parapetHeight: 0.6,
+    parapetThickness: 0.3,
+    parapetEdgeWidth: 0.1,
+    parapetEdgeHeight: 0.04,
+    glowWidth: 0.18,
+    glowInset: 0.15,
+    // Smallest gap between two faces that could z-fight; every offset below must be at least this.
+    minGap: 0.01,
+    // Every slab top sits this far above its floor level, so the lobby slab clears the ground top (y = 0) and the grid (`gridLift`).
+    slabTopLift: 0.02,
+    glowLift: 0.02,
+  },
   // Dev overlay type: labels (zone overlay, palette board swatches) and headings (board title, rows, failure line).
   zonesOverlayLabelPx: 11,
   overlayHeadingPx: 13,
