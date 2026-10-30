@@ -9,6 +9,7 @@ import { ErrorPanel } from "./ui/ErrorPanel";
 import { Wordmark } from "./ui/Wordmark";
 import { useRevealHold } from "./world/reveal-hold";
 import { Stage, isPaletteBoardOn } from "./world/Stage";
+import type { FloorsReport } from "./world/Stage";
 import { LOOK } from "./world/stage-look";
 
 const NexusBridge = import.meta.env.DEV ? lazy(() => import("./debug/Bridge")) : null;
@@ -52,8 +53,17 @@ export class CanvasErrorBoundary extends Component<
   }
 }
 
+const GENERIC_LABEL = "Nexus One campus, isometric view";
+
+// The name follows what is drawn: the tower's floor count once Stage has validated it, generic otherwise.
+export const canvasLabel = (report: FloorsReport | null) =>
+  report?.towerVisible
+    ? `Nexus One campus: glass office tower, ${report.floors} floors, isometric view`
+    : GENERIC_LABEL;
+
 export function App() {
   const [revealed, setRevealed] = useState(false);
+  const [report, setReport] = useState<FloorsReport | null>(null);
   return (
     <div className="relative h-full w-full">
       <CanvasErrorBoundary>
@@ -61,9 +71,10 @@ export function App() {
           data-testid="scene"
           className="nx-stage"
           role="img"
-          aria-label="Nexus One campus, isometric view"
+          aria-label={canvasLabel(report)}
           data-revealed={revealed}
           dpr={LOOK.dpr}
+          shadows="percentage"
           gl={{
             antialias: true,
             alpha: true,
@@ -73,7 +84,7 @@ export function App() {
           }}
           fallback={<p className="nx-error-text p-4">This browser does not support canvas.</p>}
         >
-          <Stage onReady={() => setRevealed(true)}>
+          <Stage onReady={() => setRevealed(true)} onFloors={setReport}>
             {ZoneOverlay && (
               <DevBoundary name="ZoneOverlay">
                 <Suspense fallback={null}>

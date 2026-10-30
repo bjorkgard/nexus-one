@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { OrthographicCamera, Vector3 } from "three";
 import {
   ISO_PITCH,
   ISO_YAW,
@@ -10,11 +11,14 @@ import {
   framingBounds,
   framingPoints,
   isoDirection,
+  keyLightDirection,
+  keyShadowFrustum,
   nearestCorner,
   readDevInt,
   viewBasis,
   viewYaw,
 } from "./camera";
+import { LOOK } from "./stage-look";
 import { PALETTE_BOUNDS } from "./palette-layout";
 import { createZoneRegistry, DEFAULT_FLOORS, MAX_FLOORS, type Box, type Vec3 } from "./zones";
 
@@ -224,5 +228,73 @@ describe("readDevInt", () => {
     expect(() => readDevInt(new URLSearchParams("floors=2.5"), "floors", 2, 40, 6)).toThrow(
       "floors must be an integer in [2, 40], got 2.5",
     );
+  });
+});
+
+describe("key light turns with the view", () => {
+  it("is LOOK.key.direction, normalised, at view 0", () => {
+    const d = new Vector3(...LOOK.key.direction).normalize();
+    const got = keyLightDirection(viewYaw(0));
+    expect(got[0]).toBeCloseTo(d.x, 12);
+    expect(got[1]).toBeCloseTo(d.y, 12);
+    expect(got[2]).toBeCloseTo(d.z, 12);
+  });
+
+  it.each([1, 2, 3])("view %i keeps elevation and the angle to the camera", (view) => {
+    const base = keyLightDirection(viewYaw(0));
+    const turned = keyLightDirection(viewYaw(view));
+    expect(turned[1]).toBeCloseTo(base[1], 12);
+    expect(Math.hypot(...turned)).toBeCloseTo(1, 12);
+    // Camera and light turn together: the light's right/forward components in the camera frame do not change.
+    const a = viewBasis(viewYaw(0));
+    const b = viewBasis(viewYaw(view));
+    expect(dot(turned, b.right)).toBeCloseTo(dot(base, a.right), 12);
+    expect(dot(turned, b.direction)).toBeCloseTo(dot(base, a.direction), 12);
+  });
+});
+
+describe("keyShadowFrustum", () => {
+  const towerRoofCorners = (floors: number): Vec3[] =>
+    corners(framingBounds({ zonesOverlay: true, floors })).filter((c) => c[1] > 0);
+
+  it.each([2, 6, 40])(
+    "floors %i: campus box and roof lie inside the frustum in every view",
+    (floors) => {
+      for (const view of [0, 1, 2, 3]) {
+        const yaw = viewYaw(view);
+        const f = keyShadowFrustum(floors, yaw);
+        const dir = keyLightDirection(yaw);
+        const cam = new OrthographicCamera(f.left, f.right, f.top, f.bottom, f.near, f.far);
+        cam.position.set(dir[0] * f.distance, dir[1] * f.distance, dir[2] * f.distance);
+        cam.lookAt(0, 0, 0);
+        cam.updateMatrixWorld();
+        cam.updateProjectionMatrix();
+        const box = framingBounds({ zonesOverlay: true, floors });
+        for (const c of [...corners(box), ...towerRoofCorners(floors)]) {
+          const ndc = new Vector3(...c).project(cam);
+          for (const v of [ndc.x, ndc.y, ndc.z]) {
+            expect(v).toBeGreaterThanOrEqual(-1);
+            expect(v).toBeLessThanOrEqual(1);
+          }
+        }
+      }
+    },
+  );
+
+  it("is fitted to the current floors, not MAX_FLOORS", () => {
+    const small = keyShadowFrustum(2, ISO_YAW);
+    const big = keyShadowFrustum(MAX_FLOORS, ISO_YAW);
+    expect(small.far - small.near).toBeLessThan(big.far - big.near);
+    expect(small.top - small.bottom).toBeLessThan(big.top - big.bottom);
+  });
+
+  it("keeps the near plane in front of the light", () => {
+    for (const floors of [2, 6, 40]) {
+      for (const view of [0, 1, 2, 3]) {
+        const f = keyShadowFrustum(floors, viewYaw(view));
+        expect(f.near).toBeGreaterThan(0);
+        expect(f.far).toBeGreaterThan(f.near);
+      }
+    }
   });
 });

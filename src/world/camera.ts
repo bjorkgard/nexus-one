@@ -169,3 +169,70 @@ export function readDevInt(
   }
   return value;
 }
+
+// Key light direction (unit, from the scene towards the light) for the view at `yaw`: `LOOK.key.direction`
+// turned about the vertical axis by the same angle as the camera, so every view is lit the same way.
+export function keyLightDirection(yaw: number): Vec3 {
+  const [x, y, z] = LOOK.key.direction;
+  const turn = yaw - ISO_YAW;
+  const [s, c] = [Math.sin(turn), Math.cos(turn)];
+  const v: Vec3 = [x * c + z * s, y, -x * s + z * c];
+  const length = Math.hypot(...v);
+  return [v[0] / length, v[1] / length, v[2] / length];
+}
+
+// Directional-light shadow camera for the campus box at `floors` (tower height included), as seen from the
+// light at `distance` along `keyLightDirection(yaw)` and looking at the origin. Tight to the box, so texels
+// are not spent on floors that do not exist. `margin` pads every side in metres.
+export function keyShadowFrustum(
+  floors: number,
+  yaw: number,
+  margin = 1,
+): {
+  distance: number;
+  near: number;
+  far: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+} {
+  const dir = keyLightDirection(yaw);
+  // Same basis three's lookAt builds for a light at +dir looking at the origin: x = Y cross dir, y = dir cross x.
+  const xLen = Math.hypot(dir[2], dir[0]);
+  const lx: Vec3 = [dir[2] / xLen, 0, -dir[0] / xLen];
+  const ly: Vec3 = [
+    dir[1] * lx[2] - dir[2] * lx[1],
+    dir[2] * lx[0] - dir[0] * lx[2],
+    dir[0] * lx[1] - dir[1] * lx[0],
+  ];
+  const box = framingBounds({ zonesOverlay: true, floors });
+  const points = boxCorners(box);
+  const distance = Math.max(...points.map((p) => Math.hypot(...p))) + margin;
+  let [left, right, bottom, top, near, far] = [
+    Infinity,
+    -Infinity,
+    Infinity,
+    -Infinity,
+    Infinity,
+    -Infinity,
+  ];
+  for (const p of points) {
+    const depth = distance - dot(p, dir);
+    left = Math.min(left, dot(p, lx));
+    right = Math.max(right, dot(p, lx));
+    bottom = Math.min(bottom, dot(p, ly));
+    top = Math.max(top, dot(p, ly));
+    near = Math.min(near, depth);
+    far = Math.max(far, depth);
+  }
+  return {
+    distance,
+    near: Math.max(0.1, near - margin),
+    far: far + margin,
+    left: left - margin,
+    right: right + margin,
+    top: top + margin,
+    bottom: bottom - margin,
+  };
+}
