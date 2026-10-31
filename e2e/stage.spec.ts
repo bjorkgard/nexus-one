@@ -369,17 +369,17 @@ async function materialsAndCache(page: Page) {
   return { info, cache: await nexus(page, "cacheStats") };
 }
 
-test("the tower stage has 6 materials, 6 bound programs, 6 cached geometries and no reveal hold", async ({
+test("the tower stage has 5 materials, 6 bound programs, 7 cached geometries and no reveal hold", async ({
   page,
 }) => {
   const warnings = watchHoldWarnings(page);
   await page.goto("/");
   await ready(page, { width: 1280, height: 720 });
   const { info, cache } = await materialsAndCache(page);
-  // ground, grid, panel, glass, trimWhite, trimCyan
-  expect(info.materials).toBe(6);
+  // ground, grid, glass, trimWhite, trimCyan (panel is no longer used: the frame parts are vertex-coloured ground)
+  expect(info.materials).toBe(5);
   expect(info.programs).toBe(6);
-  expect(cache.size).toBe(6);
+  expect(cache.size).toBe(7);
   // The hold's timeout is 3 s; wait it out so a stray hold would have fired.
   // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
   await page.waitForTimeout(3500);

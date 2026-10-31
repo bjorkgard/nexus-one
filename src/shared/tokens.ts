@@ -1,8 +1,8 @@
 // Colour tokens as data only: src/shared has no DOM lib, so applyCssTokens lives in src/ui.
 export const TOKENS = {
   bg: { top: "#0b1220", bottom: "#05070c" },
-  // interiorTop: tower slab tops inside the glass line, lighter than the panel ring so the floor reads through the glass.
-  slab: { top: "#021520", side: "#8a7a6e", interiorTop: "#2a3646" },
+  // frame: tower frame (slab ring and sides, roof deck, columns, parapet, AC), dark like the reference. interiorTop: tower slab tops inside the glass line, lighter than the frame ring so the floor reads through the glass.
+  slab: { top: "#021520", side: "#8a7a6e", interiorTop: "#2a3646", frame: "#121925" },
   grid: { cell: "#1e2a3a", section: "#2b6f8a" },
   text: { brand: "#9fb0c8", body: "#c7d2e0", muted: "#7d8ba1" },
   danger: "#e2725b",

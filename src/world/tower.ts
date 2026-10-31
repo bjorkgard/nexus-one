@@ -149,13 +149,27 @@ function buildGlowGeometry(): BufferGeometry {
 const unitBox = { kind: "tower-box", params: {} } as const;
 const buildUnitBox = () => new BoxGeometry(1, 1, 1);
 
+// Unit box with one baked vertex colour, for the `ground` material: dark frame parts without a new material.
+const frameBoxKey = { kind: "tower-frame-box", params: { color: TOKENS.slab.frame } } as const;
+function buildFrameBox(): BufferGeometry {
+  const geometry = new BoxGeometry(1, 1, 1);
+  const c = new Color(TOKENS.slab.frame);
+  const colors = Array.from({ length: geometry.getAttribute("position").count }, () => [
+    c.r,
+    c.g,
+    c.b,
+  ]).flat();
+  geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
+  return geometry;
+}
+
 function slabKey(kind: string, outerTop: string, innerTop: string) {
   return {
     kind,
     params: {
       outerTop,
       innerTop,
-      side: TOKENS.surface.panel,
+      side: TOKENS.slab.frame,
       inset: T.glassInset,
       thickness: T.slabThickness,
     },
@@ -282,19 +296,19 @@ export function buildTower({ floors }: { floors: number }): Tower {
     matrices,
   });
   const interior = TOKENS.slab.interiorTop;
-  const panel = TOKENS.surface.panel;
+  const frame = TOKENS.slab.frame;
   const caster = { cast: true, receive: false };
   const none = { cast: false, receive: false };
   const parts: TowerPart[] = [
     part(
       "slab",
       "ground",
-      { cast: true, receive: true },
-      slabKey("tower-slab", panel, interior),
-      () => buildSlabGeometry(panel, interior, panel),
+      caster,
+      slabKey("tower-slab", frame, interior),
+      () => buildSlabGeometry(frame, interior, frame),
       slabs,
     ),
-    part("column", "panel", caster, unitBox, buildUnitBox, columns),
+    part("column", "ground", caster, frameBoxKey, buildFrameBox, columns),
     part(
       "glass",
       "glass",
@@ -317,14 +331,14 @@ export function buildTower({ floors }: { floors: number }): Tower {
     part(
       "roofDeck",
       "ground",
-      { cast: true, receive: true },
-      slabKey("tower-roof", panel, panel),
-      () => buildSlabGeometry(panel, panel, panel),
+      caster,
+      slabKey("tower-roof", frame, frame),
+      () => buildSlabGeometry(frame, frame, frame),
       [new Matrix4().makeTranslation(0, roofY, 0)],
     ),
-    part("parapet", "panel", caster, unitBox, buildUnitBox, parapet),
+    part("parapet", "ground", caster, frameBoxKey, buildFrameBox, parapet),
     part("parapetEdge", "trimCyan", none, unitBox, buildUnitBox, parapetEdge),
-    part("ac", "panel", caster, unitBox, buildUnitBox, ac),
+    part("ac", "ground", caster, frameBoxKey, buildFrameBox, ac),
   ];
   return { parts, acUnits };
 }

@@ -232,8 +232,8 @@ describe("slab tops", () => {
   }
   const same = (a: Color, b: Color) => a.getHex() === b.getHex();
 
-  it("colours the ring outside the glass line panel and the inside interiorTop, per triangle", () => {
-    const ring = new Color(TOKENS.surface.panel);
+  it("colours the ring outside the glass line frame and the inside interiorTop, per triangle", () => {
+    const ring = new Color(TOKENS.slab.frame);
     const inner = new Color(TOKENS.slab.interiorTop);
     const tops = topTriangles(part(6, "slab"));
     expect(tops.length).toBe(10);
@@ -249,14 +249,14 @@ describe("slab tops", () => {
     expect([innerCount, ringCount]).toEqual([2, 8]);
   });
 
-  it("colours the sides and bottom panel", () => {
+  it("colours the sides and bottom frame", () => {
     const geometry = part(6, "slab").buildGeometry();
     const normal = geometry.getAttribute("normal");
     const color = geometry.getAttribute("color");
-    const panel = new Color(TOKENS.surface.panel);
+    const frame = new Color(TOKENS.slab.frame);
     for (let i = 0; i < normal.count; i++) {
       if (normal.getY(i) > 0.5) continue;
-      expect(same(new Color().fromBufferAttribute(color, i), panel)).toBe(true);
+      expect(same(new Color().fromBufferAttribute(color, i), frame)).toBe(true);
     }
   });
 
@@ -270,7 +270,7 @@ describe("slab tops", () => {
   it("keys the slab geometry on both colours and the inset", () => {
     const key = part(6, "slab").geometryKey;
     expect(key.params).toMatchObject({
-      outerTop: TOKENS.surface.panel,
+      outerTop: TOKENS.slab.frame,
       innerTop: TOKENS.slab.interiorTop,
       inset: T.glassInset,
     });
@@ -278,8 +278,8 @@ describe("slab tops", () => {
     expect(part(6, "roofDeck").geometryKey).not.toEqual(key);
   });
 
-  it("makes the roof deck top one dark panel colour on every top triangle", () => {
-    const panel = new Color(TOKENS.surface.panel);
+  it("makes the roof deck top one dark frame colour on every top triangle", () => {
+    const panel = new Color(TOKENS.slab.frame);
     const tops = topTriangles(part(6, "roofDeck"));
     expect(tops.length).toBeGreaterThan(0);
     for (const { colors } of tops) for (const c of colors) expect(same(c, panel)).toBe(true);
@@ -288,14 +288,14 @@ describe("slab tops", () => {
 
 describe("parts: materials and shadows", () => {
   const table: Record<TowerPartKind, [string, boolean, boolean]> = {
-    slab: ["ground", true, true],
-    column: ["panel", true, false],
+    slab: ["ground", true, false],
+    column: ["ground", true, false],
     glass: ["glass", false, false],
     glow: ["trimWhite", false, false],
-    roofDeck: ["ground", true, true],
-    parapet: ["panel", true, false],
+    roofDeck: ["ground", true, false],
+    parapet: ["ground", true, false],
     parapetEdge: ["trimCyan", false, false],
-    ac: ["panel", true, false],
+    ac: ["ground", true, false],
   };
 
   it("assigns material, cast and receive per part kind", () => {
@@ -304,9 +304,25 @@ describe("parts: materials and shadows", () => {
     }
   });
 
-  it("uses five palette materials in the tower", () => {
+  it("uses four palette materials in the tower", () => {
     const names = new Set(buildTower({ floors: 6 }).parts.map((p) => p.material));
-    expect([...names].sort()).toEqual(["glass", "ground", "panel", "trimCyan", "trimWhite"].sort());
+    expect([...names].sort()).toEqual(["glass", "ground", "trimCyan", "trimWhite"].sort());
+  });
+
+  it("bakes the frame colour into the column, parapet and AC boxes", () => {
+    const frame = new Color(TOKENS.slab.frame);
+    for (const kind of ["column", "parapet", "ac"] as const) {
+      const p = part(6, kind);
+      expect(p.geometryKey.params, kind).toMatchObject({ color: TOKENS.slab.frame });
+      const color = p.buildGeometry().getAttribute("color");
+      for (let i = 0; i < color.count; i++) {
+        expect(new Color().fromBufferAttribute(color, i).getHex(), kind).toBe(frame.getHex());
+      }
+    }
+  });
+
+  it("keeps the cyan parapet bar at 0.25 x 0.06 m", () => {
+    expect([T.parapetEdgeWidth, T.parapetEdgeHeight]).toEqual([0.25, 0.06]);
   });
 
   it("places the roof set on the roof deck", () => {
@@ -355,7 +371,7 @@ describe("shell sizes", () => {
     expect(T.slabThickness).toBe(0.5);
     expect(T.glassInset).toBe(0.3);
     expect(T.parapetHeight).toBe(0.6);
-    expect(T.glowWidth).toBe(0.18);
+    expect(T.glowWidth).toBe(0.4);
     expect(T.glowInset).toBe(0.15);
     expect(LOOK.key.shadow).toEqual({ radius: 3, bias: -0.0005, normalBias: 0.02 });
   });

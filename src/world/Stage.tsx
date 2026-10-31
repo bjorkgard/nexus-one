@@ -100,7 +100,14 @@ function buildSlabGeometry(): BoxGeometry {
   return geometry;
 }
 
-const TOWER_GEOMETRY_KINDS = ["tower-slab", "tower-roof", "tower-box", "tower-glass", "tower-glow"];
+const TOWER_GEOMETRY_KINDS = [
+  "tower-slab",
+  "tower-roof",
+  "tower-box",
+  "tower-frame-box",
+  "tower-glass",
+  "tower-glow",
+];
 import.meta.hot?.dispose(() => __clearGeometryCache(["slab", ...TOWER_GEOMETRY_KINDS]));
 
 export function Stage({

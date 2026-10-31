@@ -44,7 +44,12 @@ describe("style.css fallbacks", () => {
   it("exposes --nx-slab-* variables including the tower interior top", () => {
     const vars = flattenTokens(TOKENS).map(([name]) => cssVarName(name));
     expect(vars).toEqual(
-      expect.arrayContaining(["--nx-slab-top", "--nx-slab-side", "--nx-slab-interiorTop"]),
+      expect.arrayContaining([
+        "--nx-slab-top",
+        "--nx-slab-side",
+        "--nx-slab-interiorTop",
+        "--nx-slab-frame",
+      ]),
     );
   });
 

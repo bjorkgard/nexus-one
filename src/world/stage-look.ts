@@ -31,9 +31,9 @@ export const LOOK = {
     mullionSpacing: 6,
     parapetHeight: 0.6,
     parapetThickness: 0.3,
-    parapetEdgeWidth: 0.1,
-    parapetEdgeHeight: 0.04,
-    glowWidth: 0.18,
+    parapetEdgeWidth: 0.25,
+    parapetEdgeHeight: 0.06,
+    glowWidth: 0.4,
     glowInset: 0.15,
     // Smallest gap between two faces that could z-fight; every offset below must be at least this.
     minGap: 0.01,
