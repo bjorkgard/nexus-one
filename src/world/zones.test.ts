@@ -18,7 +18,7 @@ function zone(id: string, patch: Partial<Zone> = {}): Zone {
     kind: "floor",
     floor: 0,
     parentId: "campus",
-    box: { min: [0, 0, 0], max: [10, 4, 10] },
+    box: { min: [0, 0, 0], max: [10, FLOOR_HEIGHT, 10] },
     ...patch,
   };
 }

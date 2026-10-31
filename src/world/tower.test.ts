@@ -57,7 +57,7 @@ describe("buildTower counts", () => {
       ["ac", "column", "glass", "glow", "parapet", "parapetEdge", "roofDeck", "slab"].sort(),
     );
     expect(count("slab")).toBe(n);
-    expect(count("glass")).toBe(4 * n);
+    expect(count("glass")).toBe(["+x", "-x", "+z", "-z"].length * n);
     expect(count("glow")).toBe(n);
     expect(count("column")).toBe(20 * n);
     expect(count("roofDeck")).toBe(1);

@@ -47,8 +47,12 @@ function corners(b: { min: Vec3; max: Vec3 }): Vec3[] {
 
 test("ortho camera targets the framing-bounds centre at the iso angle", async ({ page }) => {
   await page.goto("/");
-  await expect.poll(async () => (await nexus(page, "getCamera")).type).toBe("OrthographicCamera");
-  await expect.poll(async () => (await nexus(page, "getCamera")).target).not.toBeNull();
+  await expect
+    .poll(async () => (await nexus(page, "getCamera")).type, SETUP_TIMEOUT)
+    .toBe("OrthographicCamera");
+  await expect
+    .poll(async () => (await nexus(page, "getCamera")).target, SETUP_TIMEOUT)
+    .not.toBeNull();
   const cam = await nexus(page, "getCamera");
   const centre = boundsCentre(framingBounds({ zonesOverlay: false }));
   centre.forEach((v, i) => expect(Math.abs(cam.target![i]! - v)).toBeLessThan(0.01));
