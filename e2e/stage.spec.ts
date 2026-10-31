@@ -7,6 +7,15 @@ import { TOKENS, cssVarName, flattenTokens } from "../src/shared/tokens";
 import { hexDeltaE, hexToLab } from "../src/shared/color-metrics";
 import { SIZE, place, rowV, slotU, swatchCentre } from "../src/world/palette-layout";
 import { nexus, waitForHook } from "./nexus";
+import {
+  canvasBox,
+  meanRgb,
+  projectAll,
+  readPatches,
+  ready,
+  SETUP_TIMEOUT,
+  type Rgb,
+} from "./helpers";
 
 let errors: string[] = [];
 
@@ -29,51 +38,11 @@ test.afterEach(() => {
   expect(errors, `console/page errors:\n${errors.join("\n")}`).toEqual([]);
 });
 
-const canvas = (page: Page) => page.locator("[data-testid=scene] canvas");
-
-async function canvasBox(page: Page) {
-  const box = await canvas(page).boundingBox();
-  if (!box) throw new Error("canvas has no bounding box");
-  return box;
-}
-
-// Setup waits only: the first software-WebGL frame at 2560x1440 can take well over 5 s when other
-// specs run beside this one. These waits decide when to start checking, not what is checked.
-const SETUP_TIMEOUT = { timeout: 20_000 };
-
-async function ready(page: Page, size: { width: number; height: number }) {
-  await page.setViewportSize(size);
-  await expect
-    .poll(async () => (await nexus(page, "getCamera")).type, SETUP_TIMEOUT)
-    .toBe("OrthographicCamera");
-  await expect(page.locator("[data-testid=scene]")).toHaveAttribute(
-    "data-revealed",
-    "true",
-    SETUP_TIMEOUT,
-  );
-  await expect
-    .poll(async () => {
-      const { width, height } = await canvasBox(page);
-      return [width, height];
-    }, SETUP_TIMEOUT)
-    .toEqual([size.width, size.height]);
-  // Let R3F finish the resize frame so the projection matrix matches the fitted zoom.
-  await page.evaluate(
-    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
-  );
-}
-
 function corners(b: { min: Vec3; max: Vec3 }): Vec3[] {
   const out: Vec3[] = [];
   for (const x of [b.min[0], b.max[0]])
     for (const y of [b.min[1], b.max[1]]) for (const z of [b.min[2], b.max[2]]) out.push([x, y, z]);
   return out;
-}
-
-// One round trip: at 1440p the software-GL render loop keeps the page busy, so each evaluate can take ~1 s.
-async function projectAll(page: Page, points: Vec3[]) {
-  await waitForHook(page, "project");
-  return page.evaluate((pts) => pts.map((p) => window.__nexus!.project!(p)), points);
 }
 
 test("ortho camera targets the framing-bounds centre at the iso angle", async ({ page }) => {
@@ -128,12 +97,11 @@ test("resizing refits the stage", async ({ page }) => {
   await expect.poll(async () => (await nexus(page, "getCamera")).zoom).toBeLessThan(before);
 });
 
-test("the empty stage is one or two draw calls", async ({ page }) => {
+test("the tower stage is 10 draw calls in a steady frame", async ({ page }) => {
   await page.goto("/");
   await ready(page, { width: 1280, height: 720 });
-  const { calls } = await nexus(page, "rendererInfo");
-  expect(calls).toBeGreaterThanOrEqual(1);
-  expect(calls).toBeLessThanOrEqual(2);
+  // The static shadow map is drawn once; a later frame has no shadow pass, so the count settles.
+  await expect.poll(async () => (await nexus(page, "rendererInfo")).calls).toBe(10);
 });
 
 test("zone overlay is off by default", async ({ page }) => {
@@ -194,7 +162,7 @@ test("?zones=1 labels every zone and frames the campus box", async ({ page }) =>
 });
 
 test.describe("bad floors", () => {
-  for (const floors of ["1", "2.5"]) {
+  for (const floors of ["1", "2.5", "6.0", "0x6", "06"]) {
     test(`/?floors=${floors} shows the error panel, not a blank page`, async ({ page }) => {
       await page.goto(`/?floors=${floors}`);
       const alert = page.getByRole("alert");
@@ -205,6 +173,22 @@ test.describe("bad floors", () => {
       // Only the injected RangeError may reach the console (React's boundary log included).
       expect(errors.length).toBeGreaterThan(0);
       for (const line of errors) expect(line, line).toMatch(/RangeError|floors must be an integer/);
+      errors = [];
+    });
+  }
+});
+
+test.describe("bad view", () => {
+  for (const view of ["", "4", "1.5"]) {
+    test(`/?view=${view} shows the error panel, not a blank page`, async ({ page }) => {
+      await page.goto(`/?view=${view}`);
+      const alert = page.getByRole("alert");
+      await expect(alert).toBeVisible();
+      await expect(alert).toContainText("The 3D view could not start");
+      await expect(page.getByTestId("error-detail")).toContainText(`got ${view}`);
+      await expect(page.getByText("Nexus One")).toBeVisible();
+      expect(errors.length).toBeGreaterThan(0);
+      for (const line of errors) expect(line, line).toMatch(/RangeError|view must be an integer/);
       errors = [];
     });
   }
@@ -328,10 +312,16 @@ for (const reduced of [false, true]) {
   });
 }
 
-test("the canvas has an accessible name", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByRole("img", { name: "Nexus One campus, isometric view" })).toBeVisible();
-});
+for (const [query, name] of [
+  ["", "Nexus One campus: glass office tower, 6 floors, isometric view"],
+  ["?floors=3", "Nexus One campus: glass office tower, 3 floors, isometric view"],
+  ["?palette=1", "Nexus One campus, isometric view"],
+] as const) {
+  test(`the canvas is named "${name}" at /${query}`, async ({ page }) => {
+    await page.goto(`/${query}`);
+    await expect(page.getByRole("img", { name, exact: true })).toBeVisible();
+  });
+}
 
 test("the wordmark uses the brand colour and Instrument Sans", async ({ page }) => {
   await page.goto("/");
@@ -379,15 +369,17 @@ async function materialsAndCache(page: Page) {
   return { info, cache: await nexus(page, "cacheStats") };
 }
 
-test("the empty stage has 2 materials, 1 cached geometry and no reveal hold", async ({ page }) => {
+test("the tower stage has 6 materials, 6 bound programs, 6 cached geometries and no reveal hold", async ({
+  page,
+}) => {
   const warnings = watchHoldWarnings(page);
   await page.goto("/");
   await ready(page, { width: 1280, height: 720 });
   const { info, cache } = await materialsAndCache(page);
-  expect(info.materials).toBe(2);
-  expect(info.programs).toBeGreaterThanOrEqual(1);
-  expect(info.programs).toBeLessThanOrEqual(info.materials! + 2);
-  expect(cache.size).toBe(1);
+  // ground, grid, panel, glass, trimWhite, trimCyan
+  expect(info.materials).toBe(6);
+  expect(info.programs).toBe(6);
+  expect(cache.size).toBe(6);
   // The hold's timeout is 3 s; wait it out so a stray hold would have fired.
   // gstack-timing-ok: waits out the 3 s hold timer / settle window so a stray warning or late mount would have fired; negative assertion follows.
   await page.waitForTimeout(3500);
@@ -587,32 +579,6 @@ test("?palette=1 hides swatch labels when small and keeps them apart when large"
 
 // ---- Rendered-pixel checks (eng E2): decode a screenshot inside the page, no Node PNG decoder ----
 
-type Rgb = [number, number, number];
-
-async function readPatches(
-  page: Page,
-  png: Buffer,
-  patches: { x: number; y: number; r: number }[],
-): Promise<Rgb[][]> {
-  return page.evaluate(
-    async ({ b64, list }) => {
-      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
-      const surface = new OffscreenCanvas(bitmap.width, bitmap.height);
-      const ctx = surface.getContext("2d")!;
-      ctx.drawImage(bitmap, 0, 0);
-      return list.map((p) => {
-        const n = 2 * p.r + 1;
-        const data = ctx.getImageData(Math.round(p.x) - p.r, Math.round(p.y) - p.r, n, n).data;
-        const out: [number, number, number][] = [];
-        for (let i = 0; i < data.length; i += 4) out.push([data[i]!, data[i + 1]!, data[i + 2]!]);
-        return out;
-      });
-    },
-    { b64: png.toString("base64"), list: patches },
-  );
-}
-
 const parseHexRgb = (hex: string): Rgb => [
   parseInt(hex.slice(1, 3), 16),
   parseInt(hex.slice(3, 5), 16),
@@ -620,11 +586,6 @@ const parseHexRgb = (hex: string): Rgb => [
 ];
 const toHex = ([r, g, b]: Rgb) =>
   `#${[r, g, b].map((c) => Math.round(c).toString(16).padStart(2, "0")).join("")}`;
-const meanRgb = (pixels: Rgb[]): Rgb => [
-  pixels.reduce((a, p) => a + p[0], 0) / pixels.length,
-  pixels.reduce((a, p) => a + p[1], 0) / pixels.length,
-  pixels.reduce((a, p) => a + p[2], 0) / pixels.length,
-];
 const lightness = (rgb: Rgb) => hexToLab(toHex(rgb))[0];
 
 function hsv([r, g, b]: Rgb) {

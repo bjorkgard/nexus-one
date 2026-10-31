@@ -48,7 +48,9 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/world/` — Geometry.
   - `zones.ts` — `createZoneRegistry({ floors })`: the named campus zones (lobby, office floors, garage, loading bay, break room, server room, roof) as boxes, with `byId(id)` and `at(point)` lookups. `floors` counts the lobby and must be an integer from 2 to 40 (default 6).
   - `camera.ts` — Isometric camera maths: view direction, framing bounds, camera rig and `fitZoom`, plus the grid fade.
-  - `Stage.tsx` — The ground slab, grid, lights and orthographic camera; refits on resize and calls `onReady` after the first fitted frame. In dev, `?floors=<n>` overrides the floor count (an invalid value shows the error panel) and `?zones=1` frames the whole campus box and turns on the zone overlay.
+  - `tower.ts` — `buildTower({ floors })`: the glass office tower as instanced parts (slabs, columns, glass walls, floor glow, roof deck, parapet, AC units) plus the AC unit list, in metres, with no three.js scene objects.
+  - `Tower.tsx` — Renders the tower parts, one `instancedMesh` per part, with the shared palette materials.
+  - `Stage.tsx` — The ground slab, grid, lights and orthographic camera; refits on resize and calls `onReady` after the first fitted frame. In dev, `?floors=<n>` overrides the floor count and `?view=0..3` turns the camera in 90 degree steps (an invalid value shows the error panel), `?glow=0` hides the floor glow and `?zones=1` frames the whole campus box and turns on the zone overlay.
   - `palette.ts` — `palette` (the 10 shared materials), `variant(name, overrides)` and `MATERIAL_BUDGET`; see [Material palette and geometry cache](#material-palette-and-geometry-cache).
   - `geometry-cache.ts` — `getGeometry(kind, params, build)`: one shared geometry per kind and params, with cache stats.
   - `palette-layout.ts` — Layout constants and slot positions for the `?palette=1` board, also used for its camera framing bounds.
