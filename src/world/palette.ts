@@ -28,17 +28,17 @@ export const palette = {
     roughness: 0.55,
     metalness: 0.1,
   }),
-  // Above trimWhite (0.5), within LOOK.emissiveCeiling. AgX desaturates bright emissive, so the edge keeps the token hue but reads paler (HSV saturation > 0.3).
+  // Above trimWhite (0.35), within LOOK.emissiveCeiling. AgX desaturates bright emissive, so the edge keeps the token hue but reads paler (HSV saturation > 0.3).
   trimCyan: new MeshStandardMaterial({
     color: TOKENS.surface.panel,
     emissive: TOKENS.surface.trimCyan,
     emissiveIntensity: 0.8,
   }),
-  // Subordinate to trimCyan (Q5).
+  // Subordinate to trimCyan (Q5): intensity x linear luminance is at most 75% of trimCyan's (tested in tower.test.ts).
   trimWhite: new MeshStandardMaterial({
     color: TOKENS.surface.panel,
     emissive: TOKENS.surface.trimWhite,
-    emissiveIntensity: 0.5,
+    emissiveIntensity: 0.35,
   }),
   // No environment map until 6.1, so the pane tints itself a little to read at all (Q8).
   glass: new MeshStandardMaterial({

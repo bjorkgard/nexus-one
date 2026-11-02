@@ -59,7 +59,7 @@ describe("palette", () => {
   });
 
   it("follows the Q5, Q9, Q10 numbers", () => {
-    expect(palette.trimWhite.emissiveIntensity).toBe(0.5);
+    expect(palette.trimWhite.emissiveIntensity).toBe(0.35);
     expect(palette.trimWhite.emissiveIntensity).toBeLessThan(palette.trimCyan.emissiveIntensity);
     expect(palette.paint.metalness).toBe(0.15);
     expect(palette.panel.metalness).toBe(0.1);

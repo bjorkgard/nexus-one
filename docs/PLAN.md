@@ -132,7 +132,7 @@ Goal: a readable futuristic campus, fully procedural, inside the performance bud
 
 - **Action:** Parametric tower: floor slabs, columns, transparent glass curtain walls (low-opacity, `depthWrite: false`, sorted), roof with named AC units. Floor count derives from desk capacity needs (step 2.5).
 - **Test:** Unit: `floors = 6` yields 6 slabs and wall sets. Screenshot from all four 90° rotations.
-- **Done when:** interiors are visible through the glass from every side with no transparency sorting artifacts (z-fighting or popping) in the four screenshots.
+- **Done when:** interiors are visible through the glass from every side with no transparency sorting artifacts. Popping is proven by the winding/coplanarity unit tests and the glass preconditions; the four screenshots check z-fighting and visibility.
 
 <a id="t2-4"></a>
 

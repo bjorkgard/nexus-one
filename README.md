@@ -27,7 +27,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
 - `vp test` — Run the unit test suite.
-- `npx playwright test` — Run the Playwright tests (smoke, data source, performance overlay and isometric stage) against the dev server on port 5199.
+- `npx playwright test` — Run the Playwright tests (smoke, data source, performance overlay, isometric stage and tower) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
 - `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus`, a performance overlay marker, the zone overlay marker or the palette board marker reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
@@ -43,12 +43,15 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 
 - `index.html` — HTML entry point.
 - `src/main.tsx` — Application entry; writes the colour tokens as `--nx-*` CSS variables, then mounts React into `#app`.
-- `src/App.tsx` — Root component with the 3D canvas, the stage, the wordmark and the canvas error boundary (which shows `ErrorPanel`); in dev it also mounts the performance overlay, the zone overlay and (with `?palette=1`) the palette board.
+- `src/App.tsx` — Root component with the 3D canvas (with soft shadows on, named by `canvasLabel`), the stage, the wordmark and the canvas error boundary (which shows `ErrorPanel`); in dev it also mounts the performance overlay, the zone overlay and (with `?palette=1`) the palette board.
 - `src/style.css` — Tailwind import, the bundled Instrument Sans font, base layout styles, the stage fade-in and the wordmark and error panel styles.
 - `src/world/` — Geometry.
   - `zones.ts` — `createZoneRegistry({ floors })`: the named campus zones (lobby, office floors, garage, loading bay, break room, server room, roof) as boxes, with `byId(id)` and `at(point)` lookups. `floors` counts the lobby and must be an integer from 2 to 40 (default 6).
   - `camera.ts` — Isometric camera maths: view direction, framing bounds, camera rig and `fitZoom`, plus the grid fade.
-  - `Stage.tsx` — The ground slab, grid, lights and orthographic camera; refits on resize and calls `onReady` after the first fitted frame. In dev, `?floors=<n>` overrides the floor count (an invalid value shows the error panel) and `?zones=1` frames the whole campus box and turns on the zone overlay.
+  - `tower.ts` — `buildTower({ floors })`: the glass office tower as instanced parts (slabs, columns, glass walls, floor glow, roof deck, parapet, AC units) plus the AC unit list, in metres, with no three.js scene objects.
+  - `Tower.tsx` — Renders the tower parts, one `instancedMesh` per part, with the shared palette materials.
+  - `ready-gate.ts` — `stageReady`, `shadowPending` and `shadowSettled`: the stage reveals only once the camera is fitted, the reveal hold is over and the first shadow render after the tower upload has happened.
+  - `Stage.tsx` — The ground slab, grid, lights and orthographic camera; refits on resize and calls `onReady` after the first fitted frame. In dev, `?floors=<n>` overrides the floor count and `?view=0..3` turns the camera in 90 degree steps (an invalid value shows the error panel), `?glow=0` hides the floor glow and `?zones=1` frames the whole campus box and turns on the zone overlay.
   - `palette.ts` — `palette` (the 10 shared materials), `variant(name, overrides)` and `MATERIAL_BUDGET`; see [Material palette and geometry cache](#material-palette-and-geometry-cache).
   - `geometry-cache.ts` — `getGeometry(kind, params, build)`: one shared geometry per kind and params, with cache stats.
   - `palette-layout.ts` — Layout constants and slot positions for the `?palette=1` board, also used for its camera framing bounds.
@@ -58,13 +61,14 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
 - `src/ui/` — Dashboard.
   - `Wordmark.tsx` — The "Nexus One" wordmark in the top-left corner.
   - `ErrorPanel.tsx` — The message and Reload button shown when the 3D view cannot start; in dev it also shows the error text.
+  - `canvas-label.ts` — `canvasLabel(report)`: the canvas's accessible name, which includes the tower's floor count once `Stage` has validated it.
   - `applyCssTokens.ts` — Writes every token from `src/shared/tokens.ts` to `<html>` as a `--nx-*` CSS variable.
 - `src/data/` — Client store and data sources. `mock.ts` exports `createMockStream(options?)`, the seeded, repeatable mock event stream (same seed, same events), plus `MOCK_ROLES` and `MOCK_TIMING` for finding its scripted agents. A lint rule bans `Date`, `Math.random`, `performance.now`, `performance.timeOrigin` and `crypto` in `mock.ts` and its test.
   - `source.ts` — `createDataClient(transport)`: the one gate for epoch, seq cursor and dedup; `selectSource(search)` reads `?source=` and `?port=`.
   - `live-source.ts` — `liveTransport(port)`: WebSocket transport to `127.0.0.1` with backoff and a hello+snapshot deadline.
   - `mock-source.ts` — `mockTransport()`: plays the mock stream with a movable clock; a backward seek rebuilds state in a new epoch.
   - `boot.ts` — `startDataSource()`: picks the transport, starts the client and registers the dev hooks; called once from `src/main.tsx`.
-- `src/debug/` — Dev-only `window.__nexus` test hooks, the performance overlay and the zone overlay (`ZoneOverlay.tsx`: zone box edges and name labels, shown with `?zones=1`) and the palette board (`PaletteBoard.tsx`: swatches, shown with `?palette=1`; `PaletteFailure.tsx`: the one-line failure message).
+- `src/debug/` — Dev-only `window.__nexus` test hooks, the performance overlay and the zone overlay (`ZoneOverlay.tsx`: zone box edges, name labels anchored at each box's nearest corner for the current `?view=`, and the roof AC unit labels, shown with `?zones=1`) and the palette board (`PaletteBoard.tsx`: swatches, shown with `?palette=1`; `PaletteFailure.tsx`: the one-line failure message).
 - `src/shared/` — Types and schema shared with `collector/`; imports no React, Three, Node, or other `src/` folders; ESM only (no `require`); `schema.ts` is the only place event shapes are declared, and trust edges call its `parseEvent` (returns issues, never throws); `check-stream.ts` exports `checkStream(events, { complete })`, which validates any event stream and returns named problems instead of throwing.
   - `protocol.ts` — Wire messages (`hello`, `snapshot`, `event`) and `parseServerMessage`.
   - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.

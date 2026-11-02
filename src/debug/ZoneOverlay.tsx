@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useMemo, useState } from "react";
 import { Color } from "three";
 import { TOKENS } from "../shared/tokens";
+import { nearestCorner, viewYaw } from "../world/camera";
 import { LOOK } from "../world/stage-look";
 import { useZones } from "../world/Stage";
 import { FLOOR_HEIGHT } from "../world/zones";
@@ -37,8 +38,38 @@ function buildEdges(zones: readonly Zone[]) {
   return { positions: new Float32Array(positions), colors: new Float32Array(colors) };
 }
 
+function Label(props: {
+  position: readonly [number, number, number];
+  color: string;
+  testId: string;
+  idAttr: string;
+  text: string;
+}) {
+  return (
+    <Html position={props.position} zIndexRange={[10, 0]}>
+      <div
+        data-testid={props.testId}
+        data-zone-id={props.idAttr}
+        style={{
+          height: LOOK.zonesOverlayPillPx,
+          padding: "0 8px",
+          lineHeight: `${LOOK.zonesOverlayPillPx}px`,
+          borderRadius: LOOK.zonesOverlayPillPx / 2,
+          background: `color-mix(in srgb, ${TOKENS.bg.bottom} 70%, transparent)`,
+          color: props.color,
+          fontSize: LOOK.zonesOverlayLabelPx,
+          whiteSpace: "nowrap",
+          pointerEvents: "none",
+        }}
+      >
+        {props.text}
+      </div>
+    </Html>
+  );
+}
+
 export default function ZoneOverlay() {
-  const { registry: zones, zonesOverlay } = useZones();
+  const { registry: zones, zonesOverlay, view, acUnits, towerVisible } = useZones();
   const camera = useThree((s) => s.camera);
   const [zoom, setZoom] = useState(camera.zoom);
   const edges = useMemo(() => buildEdges(zones.zones), [zones]);
@@ -49,6 +80,7 @@ export default function ZoneOverlay() {
 
   if (!zonesOverlay) return null;
 
+  const yaw = viewYaw(view);
   const hideFloors = zoom * BAND_PX_PER_ZOOM < LOOK.zonesOverlayHideFloorsBelowPx;
 
   return (
@@ -62,31 +94,28 @@ export default function ZoneOverlay() {
       </lineSegments>
       {zones.zones.map((z) =>
         hideFloors && isTowerFloor(z) ? null : (
-          <Html
+          <Label
             key={z.id}
-            position={[z.box.max[0], z.box.max[1], z.box.max[2]]}
-            zIndexRange={[10, 0]}
-          >
-            <div
-              data-testid="zone-label"
-              data-zone-id={z.id}
-              style={{
-                height: LOOK.zonesOverlayPillPx,
-                padding: "0 8px",
-                lineHeight: `${LOOK.zonesOverlayPillPx}px`,
-                borderRadius: LOOK.zonesOverlayPillPx / 2,
-                background: `color-mix(in srgb, ${TOKENS.bg.bottom} 70%, transparent)`,
-                color: TOKENS.zone[z.kind],
-                fontSize: LOOK.zonesOverlayLabelPx,
-                whiteSpace: "nowrap",
-                pointerEvents: "none",
-              }}
-            >
-              {z.name}
-            </div>
-          </Html>
+            position={nearestCorner(z.box, yaw)}
+            color={TOKENS.zone[z.kind]}
+            testId="zone-label"
+            idAttr={z.id}
+            text={z.name}
+          />
         ),
       )}
+      {towerVisible && !hideFloors
+        ? acUnits.map((u) => (
+            <Label
+              key={u.id}
+              position={u.position}
+              color={TOKENS.zone.floor}
+              testId="ac-label"
+              idAttr={u.id}
+              text={u.name}
+            />
+          ))
+        : null}
     </group>
   );
 }

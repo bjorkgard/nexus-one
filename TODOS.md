@@ -2,19 +2,19 @@
 
 ## Rendering
 
-### Add key-light shadows with the first casters
+### Floor cutaway so floor centres stay visible
 
-**Issue:** [#130](https://github.com/bjorkgard/nexus-one/issues/130)
+**Issue:** [#139](https://github.com/bjorkgard/nexus-one/issues/139)
 
-**What:** Turn on key-light shadows when the tower shell adds the first shadow casters: pick the shadow map type, fit the light's shadow camera to the campus box, tune softness against the 2.1 "night studio diorama" target look, and budget the extra draw calls.
+**What:** Let the viewer see the middle of a floor: hide or fade the floors above a chosen floor (cutaway), so desks deep inside the tower are visible from the iso camera.
 
-**Why:** Task 2.1 keeps the key light but ships no shadows, because nothing casts one yet and VSM would cost two full-screen blur passes per frame for an invisible result (CEO D13 in `docs/plans/2.1-isometric-stage.md`).
+**Why:** At the iso pitch (~35°) the slab above each floor blocks the view about 5.7 m into the floor (4 m floor height / tan 35°, estimated), while the tower is 30 m deep. Once 2.5 places desks, agents in the floor centre will be hidden behind slabs and glass. Found in the task 2.3 CEO review (E3, decision D4).
 
-**Context:** three 0.186 removed `PCFSoftShadowMap` and falls back to PCF with a warning (`node_modules/three/build/three.module.js:9152`); R3F `<Canvas shadows>` with a boolean picks it (`@react-three/fiber` events file, line 1719). `shadows="variance"` (VSM) supports `shadow.radius`/`blurSamples` but adds two blur draws per frame (`three.module.js:9415-9419`). Key-light direction is `LOOK.key.direction` in `src/world/stage-look.ts`. The 2.1 e2e asserts 1 to 2 draw calls for the empty stage (`e2e/stage.spec.ts`); update that bound when shadows land. Consider `shadow.autoUpdate = false` for static casters.
+**Context:** Floor height and tower footprint are in `src/world/zones.ts` (`FLOOR_HEIGHT = 6` since 2.3, `FOOTPRINTS.tower` 30 × 30 m). How floors are hidden depends on how 2.3 builds them (per-floor meshes or instanced parts; decided in `docs/plans/2.3-tower-shell.md`). Phase 3 owns camera input (`docs/PLAN.md` 3.1); decide there whether the cutaway is a toggle, follows the selected agent's floor, or both. Start by measuring the real sight depth in the 2.3 four-view screenshots. Readability target (2.3 design review DZ3): a seated agent is at least 16 px tall at the 3.1 working zoom with the cutaway on. Floors are 6 m tall from 2.3 (DZ2).
 
-**Effort:** S (human) / S (CC+gstack)
+**Effort:** M (human) / S (CC+gstack)
 **Priority:** P2
-**Depends on:** Task 2.1 (light baseline); lands with task 2.3 (first casters)
+**Depends on:** Task 2.3 (tower shell); must land before 2.5 desks are judged visually
 
 ### Precompile palette shaders before the stage reveal
 
@@ -194,7 +194,7 @@
 
 **Why:** Task 2.1's design review created the first real design system pieces, but they live only in `docs/plans/2.1-isometric-stage.md` and `src/shared/tokens.ts`. Phase 5 panels and Phase 7 alerts need a type scale, spacing rules and component patterns; without a shared document each panel invents its own.
 
-**Context:** Decisions Q1-Q12 in the "Design review" section of `docs/plans/2.1-isometric-stage.md`; approved mockups in `~/.gstack/projects/bjorkgard-nexus-one/designs/isometric-stage-20261029/variant-A.png` and `.../error-panel-20261029/variant-A.png`. Task 5.1 plans "Tailwind tokens and a GlassPanel"; those tokens must extend `src/shared/tokens.ts` (single source, design Q8), not start a second set. Start by running `/design-consultation` with the 2.1 plan as input.
+**Context:** Decisions Q1-Q12 in the "Design review" section of `docs/plans/2.1-isometric-stage.md`; approved mockups in `~/.gstack/projects/bjorkgard-nexus-one/designs/isometric-stage-20261029/variant-A.png` and `.../error-panel-20261029/variant-A.png`. Task 5.1 plans "Tailwind tokens and a GlassPanel"; those tokens must extend `src/shared/tokens.ts` (single source, design Q8), not start a second set. Start by running `/design-consultation` with the 2.1 plan as input. Also decide a short product descriptor beside the wordmark (e.g. "Agent campus"), with agents in view (2.3 design review DZ1).
 
 **Effort:** M (human) / S (CC+gstack)
 **Priority:** P2
@@ -229,6 +229,22 @@
 **Depends on:** Task 2.2 (palette board labels); must land before task 3.2 (hover name tags)
 
 ## Completed
+
+### Add key-light shadows with the first casters
+
+**Issue:** [#130](https://github.com/bjorkgard/nexus-one/issues/130)
+
+**What:** Turn on key-light shadows when the tower shell adds the first shadow casters: pick the shadow map type, fit the light's shadow camera to the campus box, tune softness against the 2.1 "night studio diorama" target look, and budget the extra draw calls.
+
+**Why:** Task 2.1 keeps the key light but ships no shadows, because nothing casts one yet and VSM would cost two full-screen blur passes per frame for an invisible result (CEO D13 in `docs/plans/2.1-isometric-stage.md`).
+
+**Context:** three 0.186 removed `PCFSoftShadowMap` and falls back to PCF with a warning (`node_modules/three/build/three.module.js:9152`); R3F `<Canvas shadows>` with a boolean picks it (`@react-three/fiber` events file, line 1719). `shadows="variance"` (VSM) supports `shadow.radius`/`blurSamples` but adds two blur draws per frame (`three.module.js:9415-9419`). Key-light direction is `LOOK.key.direction` in `src/world/stage-look.ts`. The 2.1 e2e asserts 1 to 2 draw calls for the empty stage (`e2e/stage.spec.ts`); update that bound when shadows land. Consider `shadow.autoUpdate = false` for static casters.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 2.1 (light baseline); lands with task 2.3 (first casters)
+
+**Completed:** v0.10.2 (2026-11-02)
 
 ### Run the pre-commit full check against the staged index
 

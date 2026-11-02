@@ -2,6 +2,7 @@ import { Grid, OrthographicCamera } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -10,26 +11,46 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
-import { BoxGeometry, Color, Float32BufferAttribute, Vector3 } from "three";
-import type { OrthographicCamera as OrthographicCameraImpl } from "three";
+import { BoxGeometry, Color, Float32BufferAttribute } from "three";
+import type { DirectionalLight, OrthographicCamera as OrthographicCameraImpl } from "three";
 import { TOKENS } from "../shared/tokens";
 import {
+  FIT_MARGIN,
   GROUND_EDGE_PX_PER_ZOOM,
   boundsCentre,
   cameraRig,
   cellOpacity,
-  fitZoom,
+  fitPointsZoom,
   framingBounds,
-  isoDirection,
+  framingPoints,
+  keyLightDirection,
+  keyShadowFrustum,
+  readDevInt,
+  viewBasis,
+  viewYaw,
 } from "./camera";
 import { __clearGeometryCache, getGeometry } from "./geometry-cache";
 import { palette } from "./palette";
+import { shadowPending, stageReady } from "./ready-gate";
 import { RevealHoldContext, createRevealHold } from "./reveal-hold";
 import { LOOK } from "./stage-look";
-import { DEFAULT_FLOORS, createZoneRegistry } from "./zones";
-import type { ZoneRegistry } from "./zones";
+// Explicit extension: on a case-insensitive disk "./Tower" would also match tower.ts.
+import { GRID_RENDER_ORDER, Tower } from "./Tower.tsx";
+import { TOWER_GEOMETRY_KINDS, buildTower } from "./tower";
+import type { AcUnit } from "./tower";
+import { DEFAULT_FLOORS, MAX_FLOORS, MIN_FLOORS, createZoneRegistry } from "./zones";
+import type { Box, ZoneRegistry } from "./zones";
 
-export type ZonesValue = { registry: ZoneRegistry; zonesOverlay: boolean };
+export type ZonesValue = {
+  registry: ZoneRegistry;
+  zonesOverlay: boolean;
+  view: number;
+  acUnits: readonly AcUnit[];
+  towerVisible: boolean;
+};
+
+// The validated floor count and whether the tower is drawn, reported once for the canvas accessible name.
+export type FloorsReport = { floors: number; towerVisible: boolean };
 
 export const ZonesContext = createContext<ZonesValue | null>(null);
 
@@ -43,13 +64,22 @@ export function useZones(): ZonesValue {
 export const isPaletteBoardOn = () =>
   import.meta.env.DEV && new URLSearchParams(window.location.search).get("palette") === "1";
 
-// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?zones=1` frames the campus box, `?palette=1` frames the palette board.
-function readDevParams(): { floors: number; zonesOverlay: boolean; palette: boolean } {
-  if (!import.meta.env.DEV) return { floors: DEFAULT_FLOORS, zonesOverlay: false, palette: false };
+// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?view=0..3` turns the camera in 90 degree steps, `?zones=1` frames the campus box, `?palette=1` frames the palette board, `?glow=0` hides the floor glow.
+function readDevParams(): {
+  floors: number;
+  view: number;
+  glow: boolean;
+  zonesOverlay: boolean;
+  palette: boolean;
+} {
+  if (!import.meta.env.DEV) {
+    return { floors: DEFAULT_FLOORS, view: 0, glow: true, zonesOverlay: false, palette: false };
+  }
   const params = new URLSearchParams(location.search);
-  const floors = params.get("floors");
   return {
-    floors: floors === null ? DEFAULT_FLOORS : Number(floors),
+    floors: readDevInt(params, "floors", MIN_FLOORS, MAX_FLOORS, DEFAULT_FLOORS),
+    view: readDevInt(params, "view", 0, 3, 0),
+    glow: readDevInt(params, "glow", 0, 1, 1) === 1,
     zonesOverlay: params.get("zones") === "1",
     palette: isPaletteBoardOn(),
   };
@@ -71,26 +101,71 @@ function buildSlabGeometry(): BoxGeometry {
   return geometry;
 }
 
-import.meta.hot?.dispose(() => __clearGeometryCache(["slab"]));
+import.meta.hot?.dispose(() => __clearGeometryCache(["slab", ...TOWER_GEOMETRY_KINDS]));
 
-export function Stage({ children, onReady }: { children?: ReactNode; onReady?: () => void }) {
+export function Stage({
+  children,
+  onReady,
+  onFloors,
+}: {
+  children?: ReactNode;
+  onReady?: () => void;
+  onFloors?: (report: FloorsReport) => void;
+}) {
   const size = useThree((s) => s.size);
+  const canvas = useThree((s) => s.gl.domElement);
   const activeCamera = useThree((s) => s.camera);
   const cameraRef = useRef<OrthographicCameraImpl>(null);
   const [zoom, setZoom] = useState<number | null>(null);
   const fitted = useRef(false);
   const signalled = useRef(false);
+  const lightRef = useRef<DirectionalLight>(null);
+  const shadowRequested = useRef(false);
 
   // Built in render, not at import: a bad `?floors` throws into CanvasErrorBoundary instead of a blank page.
-  const { floors, zonesOverlay, palette: paletteBoard } = useMemo(() => readDevParams(), []);
+  const {
+    floors,
+    view,
+    glow,
+    zonesOverlay,
+    palette: paletteBoard,
+  } = useMemo(() => readDevParams(), []);
+  const towerVisible = !paletteBoard;
   const zones = useMemo(() => createZoneRegistry({ floors }), [floors]);
-  const zonesValue = useMemo(() => ({ registry: zones, zonesOverlay }), [zones, zonesOverlay]);
+  const tower = useMemo(
+    () => (towerVisible ? buildTower({ floors }) : null),
+    [towerVisible, floors],
+  );
+  const zonesValue = useMemo(
+    () => ({
+      registry: zones,
+      zonesOverlay,
+      view,
+      acUnits: tower?.acUnits ?? [],
+      towerVisible,
+    }),
+    [zones, zonesOverlay, view, tower, towerVisible],
+  );
+  useEffect(() => {
+    onFloors?.({ floors, towerVisible });
+  }, [floors, towerVisible, onFloors]);
   const bounds = useMemo(
     () => framingBounds({ zonesOverlay, floors, palette: paletteBoard }),
     [zonesOverlay, floors, paletteBoard],
   );
   // Derived in render (zero-size viewport keeps the previous zoom); the effect below applies it to the camera.
-  const nextZoom = fitZoom(bounds, size);
+  const yaw = viewYaw(view);
+  const fit = useMemo(
+    () => framingPoints({ zonesOverlay, floors, palette: paletteBoard }),
+    [zonesOverlay, floors, paletteBoard],
+  );
+  // Depth range covers everything fitted (a tall tower reaches toward the camera), not only the slab.
+  const rigBounds = useMemo((): Box => {
+    const lo = (a: 0 | 1 | 2) => Math.min(...fit.points.map((p) => p[a]));
+    const hi = (a: 0 | 1 | 2) => Math.max(...fit.points.map((p) => p[a]));
+    return { min: [lo(0), lo(1), lo(2)], max: [hi(0), hi(1), hi(2)] };
+  }, [fit]);
+  const nextZoom = fitPointsZoom(fit.points, fit.centre, size, FIT_MARGIN, yaw);
   if (nextZoom !== null && nextZoom !== zoom) setZoom(nextZoom);
   const slab = useMemo(
     () =>
@@ -113,17 +188,46 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
     return () => hold.dispose();
   }, [hold]);
 
-  const keyLight = useMemo(
-    () => new Vector3(...LOOK.key.direction).normalize().multiplyScalar(100),
-    [],
-  );
+  // Light distance and shadow camera fitted to the campus box at the current floors, turned with the view.
+  const shadowCam = useMemo(() => keyShadowFrustum(floors, yaw), [floors, yaw]);
+  const keyLight = useMemo(() => {
+    const dir = keyLightDirection(yaw);
+    return [
+      dir[0] * shadowCam.distance,
+      dir[1] * shadowCam.distance,
+      dir[2] * shadowCam.distance,
+    ] as const;
+  }, [yaw, shadowCam]);
+  // Static shadow map: redrawn only on request, and only after the instances are uploaded.
+  const requestShadow = useCallback(() => {
+    const light = lightRef.current;
+    if (!light) return;
+    light.shadow.needsUpdate = true;
+    shadowRequested.current = true;
+  }, []);
+  useLayoutEffect(() => {
+    const light = lightRef.current;
+    if (!light) return;
+    const { left, right, top, bottom, near, far } = shadowCam;
+    Object.assign(light.shadow.camera, { left, right, top, bottom, near, far });
+    light.shadow.camera.updateProjectionMatrix();
+    light.shadow.autoUpdate = false;
+    // Children's layout effects (the Tower upload) have already run, so the map is drawn from loaded instances.
+    requestShadow();
+  }, [shadowCam, keyLight, requestShadow, towerVisible]);
+
+  // A restored WebGL context has lost the static shadow map: draw it again.
+  useEffect(() => {
+    canvas.addEventListener("webglcontextrestored", requestShadow);
+    return () => canvas.removeEventListener("webglcontextrestored", requestShadow);
+  }, [canvas, requestShadow]);
 
   useLayoutEffect(() => {
     const camera = cameraRef.current;
     if (!camera) return;
     const target = boundsCentre(bounds);
-    const { distance, near, far } = cameraRig(bounds);
-    const direction = isoDirection();
+    const { distance, near, far } = cameraRig(rigBounds);
+    const { direction } = viewBasis(yaw);
     camera.position.set(
       target[0] - direction[0] * distance,
       target[1] - direction[1] * distance,
@@ -139,12 +243,24 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
     }
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
-  }, [bounds, zoom]);
+  }, [bounds, rigBounds, yaw, zoom]);
 
-  // Ready once the ortho camera is the active one, the fitted zoom is applied and a frame has been drawn.
-  useFrame(() => {
-    if (signalled.current || !fitted.current || activeCamera !== cameraRef.current) return;
-    if (hold.status === "pending") return;
+  // Ready once the ortho camera is the active one, the fitted zoom is applied, the first shadow map has been
+  // drawn and a frame has been drawn.
+  useFrame(({ gl }) => {
+    if (signalled.current) return;
+    const ok = stageReady({
+      fitted: fitted.current,
+      cameraActive: activeCamera === cameraRef.current,
+      holdStatus: hold.status,
+      shadowPending: shadowPending({
+        towerVisible,
+        enabled: gl.shadowMap.enabled,
+        requested: shadowRequested.current,
+        needsUpdate: lightRef.current?.shadow.needsUpdate ?? true,
+      }),
+    });
+    if (!ok) return;
     signalled.current = true;
     requestAnimationFrame(() => onReady?.());
   });
@@ -161,11 +277,17 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
           args={[LOOK.hemisphere.sky, LOOK.hemisphere.ground, LOOK.hemisphere.intensity]}
         />
         <directionalLight
+          ref={lightRef}
           color={LOOK.key.color}
           intensity={LOOK.key.intensity}
           position={keyLight}
+          castShadow={towerVisible}
+          shadow-mapSize={[LOOK.key.shadow.mapSize, LOOK.key.shadow.mapSize]}
+          shadow-radius={LOOK.key.shadow.radius}
+          shadow-bias={LOOK.key.shadow.bias}
+          shadow-normalBias={LOOK.key.shadow.normalBias}
         />
-        <mesh geometry={slab} material={palette.ground} />
+        <mesh geometry={slab} material={palette.ground} receiveShadow />
         <Grid
           args={[LOOK.slabSize, LOOK.slabSize]}
           position={[0, LOOK.gridLift, 0]}
@@ -177,7 +299,9 @@ export function Stage({ children, onReady }: { children?: ReactNode; onReady?: (
           sectionThickness={LOOK.gridSectionThickness}
           fadeFrom={0}
           fadeDistance={Math.hypot(half, half)}
+          renderOrder={GRID_RENDER_ORDER}
         />
+        {tower && <Tower parts={tower.parts} view={view} glow={glow} onUploaded={requestShadow} />}
         {children}
       </RevealHoldContext.Provider>
     </ZonesContext.Provider>

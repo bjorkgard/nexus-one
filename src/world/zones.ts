@@ -23,7 +23,7 @@ export interface ZoneRegistry {
 }
 
 export const DEFAULT_FLOORS = 6;
-export const FLOOR_HEIGHT = 4;
+export const FLOOR_HEIGHT = 6;
 export const MIN_FLOORS = 2;
 export const MAX_FLOORS = 40;
 
@@ -172,13 +172,18 @@ function buildZones(floors: number): Zone[] {
   return zones;
 }
 
-// `floors` counts the lobby: lobby is floor 0, offices are 1..floors-1, the roof is floor `floors`.
-export function createZoneRegistry({ floors }: { floors: number }): ZoneRegistry {
+// The one floor-count guard: the registry and the tower builder both call it.
+export function assertFloors(floors: number): void {
   if (!Number.isInteger(floors) || floors < MIN_FLOORS || floors > MAX_FLOORS) {
     throw new RangeError(
       `floors must be an integer in [${MIN_FLOORS}, ${MAX_FLOORS}], got ${String(floors)}`,
     );
   }
+}
+
+// `floors` counts the lobby: lobby is floor 0, offices are 1..floors-1, the roof is floor `floors`.
+export function createZoneRegistry({ floors }: { floors: number }): ZoneRegistry {
+  assertFloors(floors);
   const built = buildZones(floors);
   validateZones(built);
   const zones = Object.freeze(built.map(deepFreeze));

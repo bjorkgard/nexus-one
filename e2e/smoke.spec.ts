@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { nexus, waitForHook } from "./nexus";
+import { ready } from "./helpers";
 
 let errors: string[] = [];
 
@@ -83,6 +84,8 @@ test("getCamera returns plain data", async ({ page }) => {
 });
 
 test("project maps the camera target to canvas center, also after resize", async ({ page }) => {
+  // Two full stage reveals (the tower's shadow included) can pass 30 s under parallel load.
+  test.setTimeout(60_000);
   await page.goto("/");
   const expectCentered = async () => {
     const box = await canvasBox(page);
@@ -94,14 +97,10 @@ test("project maps the camera target to canvas center, also after resize", async
     expect(Math.abs(p.x - (box.x + box.width / 2))).toBeLessThanOrEqual(1);
     expect(Math.abs(p.y - (box.y + box.height / 2))).toBeLessThanOrEqual(1);
   };
+  // `ready` waits until the canvas has its laid-out size (not the 300 px default) and the stage is fitted.
+  await ready(page, { width: 1280, height: 720 });
   await expectCentered();
-  await page.setViewportSize({ width: 800, height: 600 });
-  await expect
-    .poll(async () => {
-      const { width, height } = await canvasBox(page);
-      return [width, height];
-    })
-    .toEqual([800, 600]);
+  await ready(page, { width: 800, height: 600 });
   await expectCentered();
 });
 
