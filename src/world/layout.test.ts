@@ -753,6 +753,38 @@ describe("named errors", () => {
       (I as { doorWidth: number }).doorWidth = original;
     }
   });
+
+  // Coverage audit (ship, 2.4 floor layout).
+  // Value: protects=a template change that shrinks offices below a cluster throws a ZoneError naming floor, office
+  // and minimum, never zero desks; fails_when=the deskSlotsFor width guard is dropped or its message loses the
+  // room; why_new=only the door-fit guard is tested; seam=none; no_claim=other template constants (mutated LOOK)
+  it("names the floor, office and minimum when an office is narrower than a desk cluster", () => {
+    const original = I.minOfficeWidth;
+    (I as { minOfficeWidth: number }).minOfficeWidth = 50;
+    try {
+      const message = errorOf(() => build(3));
+      expect(message).toMatch(/floor [12]/);
+      expect(message).toMatch(/office "office-[12]-\d+"/);
+      expect(message).toMatch(/less than the 50 m minimum/);
+    } finally {
+      (I as { minOfficeWidth: number }).minOfficeWidth = original;
+    }
+  });
+
+  // Value: protects=an escalator size that no longer tiles the -z strip throws a ZoneError naming the landing and
+  // where it must end; fails_when=the escalatorRects fit guard is dropped, leaving a gap or overlap by the landing;
+  // why_new=no test changes the escalator size; seam=none; no_claim=a length change (read once at module load)
+  it("names the landing and the required end when the escalator no longer tiles the strip", () => {
+    const original = I.escalator.width;
+    (I.escalator as { width: number }).width = original + 0.5;
+    try {
+      const message = errorOf(() => build(3));
+      expect(message).toContain('"escalator-1-0"');
+      expect(message).toMatch(/must end at 7\.4 m/);
+    } finally {
+      (I.escalator as { width: number }).width = original;
+    }
+  });
 });
 
 function errorOf(fn: () => void): string {

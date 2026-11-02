@@ -210,6 +210,31 @@ describe("validateZones", () => {
     expect(() => validateZones([campus, a, b])).toThrow(/"a".*"b"/);
   });
 
+  // Coverage audit (ship, 2.4 floor layout).
+  // Value: protects=every validateZones ZoneError names the floor of the zone it rejects (plan: messages name the
+  // floor); fails_when=a message drops "on floor N" or reports the wrong zone's floor; why_new=only the overlap
+  // row asserts the floor; seam=none; no_claim=the error panel rendering (unit only)
+  it.each([
+    ["a duplicate id", () => [campus, zone("a", { floor: 1 }), zone("a", { floor: 1 })]],
+    ["a missing parent", () => [campus, zone("a", { floor: 1, parentId: "ghost" })]],
+    [
+      "a cycle",
+      () => [
+        campus,
+        zone("a", { floor: 1, parentId: "b" }),
+        zone("b", { floor: 1, parentId: "a" }),
+      ],
+    ],
+    ["an inverted box", () => [campus, zone("a", { floor: 1, box: box([5, 4, 0], [5, 8, 10]) })]],
+    [
+      "a child outside its parent",
+      () => [campus, zone("a", { floor: 1, box: box([95, 4, 0], [105, 8, 10]) })],
+    ],
+  ])("names the zone's floor when it rejects %s", (_label, table) => {
+    expect(() => validateZones(table())).toThrow(ZoneError);
+    expect(() => validateZones(table())).toThrow(/on floor 1\b/);
+  });
+
   it("accepts siblings that overlap in x/z on different floors", () => {
     const a = zone("a");
     const b = zone("b", {

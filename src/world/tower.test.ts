@@ -618,6 +618,23 @@ describe("holed slab", () => {
     expect(() => bad({ ...hole, max: [GLASS_HALF + 1, h1[1]] })).toThrow(/slab hole/);
     expect(() => bad({ ...hole, floor: 6 })).toThrow(/slab hole/);
   });
+
+  // Coverage audit (ship, 2.4 floor layout).
+  // Value: protects=buildTower rejects a slab hole on the lobby, on a fractional floor or with no area;
+  // fails_when=the floor >= 1 / integer / non-empty guard is dropped or off by one (hole on the lobby slab);
+  // why_new=the test above covers only the glass-line and floor = floors rows; seam=none;
+  // no_claim=none beyond protects
+  it.each([
+    ["the lobby (floor 0)", { floor: 0 }],
+    ["a fractional floor", { floor: 1.5 }],
+    ["zero width", { max: [hole.min[0], hole.max[1]] as const }],
+    ["zero depth", { max: [hole.max[0], hole.min[1]] as const }],
+  ])("rejects a hole on %s", (_label, patch) => {
+    const slabHole = { ...hole, ...patch } as typeof hole;
+    const make = () => buildTower({ floors: 6, openings: { ...OPENINGS, slabHole } });
+    expect(make).toThrow(ZoneError);
+    expect(make).toThrow(/slab hole/);
+  });
 });
 
 describe("entrance portal frames", () => {
