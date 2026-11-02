@@ -7,7 +7,7 @@ import { LAYOUT_SEED, ROOM_TYPES, buildLayout, type Rect, type Wall } from "./la
 import { palette, materialBudgetCount, MATERIAL_BUDGET } from "./palette";
 import { LOOK } from "./stage-look";
 import { TOWER_PART_KINDS, buildTower, floorTopY, type TowerPart } from "./tower";
-import { GLASS_RENDER_ORDER, partRenderOrder } from "./Tower.tsx";
+import { GLASS_RENDER_ORDER, Tower, partRenderOrder } from "./Tower.tsx";
 import { FLOOR_HEIGHT } from "./zones";
 
 const I = LOOK.interior;
@@ -85,10 +85,24 @@ describe("buildInterior parts", () => {
   });
 
   it("renders every glass-material part in the transparent pass", () => {
-    for (const p of parts) {
+    const all = [...parts, ...buildTower({ floors: FLOORS, openings: layout.openings }).parts];
+    for (const p of all) {
       expect(partRenderOrder(p), p.kind).toBe(p.material === "glass" ? GLASS_RENDER_ORDER : 0);
     }
     expect(part("penthouseGlass").material).toBe("glass");
+    expect(all.some((p) => p.kind === "penthouseGlass")).toBe(true);
+  });
+
+  it("hides every glow part, the penthouse glow included, when the glow is off", () => {
+    const all = [...parts, ...buildTower({ floors: FLOORS, openings: layout.openings }).parts];
+    const kinds = (glow: boolean) => {
+      const out = Tower({ parts: all, view: 0, glow, onUploaded: () => {} });
+      return (out.props.children as { props: { part: TowerPart } }[]).map((e) => e.props.part.kind);
+    };
+    expect(kinds(true)).toContain("penthouseGlow");
+    expect(kinds(false)).not.toContain("glow");
+    expect(kinds(false)).not.toContain("glowHoled");
+    expect(kinds(false)).not.toContain("penthouseGlow");
   });
 });
 
@@ -338,6 +352,11 @@ describe("floor tints", () => {
     expect(Object.keys(TOKENS.room).sort()).toEqual([...ROOM_TYPES].sort());
   });
 
+  it("keys the tint geometry on every baked room colour", () => {
+    const params = part("floorTint").geometryKey.params;
+    for (const hex of Object.values(TOKENS.room)) expect(Object.values(params)).toContain(hex);
+  });
+
   const tint = part("floorTint");
   const geometry = tint.buildGeometry();
   const position = geometry.getAttribute("position");
@@ -359,10 +378,10 @@ describe("floor tints", () => {
   });
   const tinted = layout.levels.flatMap((lv) => lv.rooms.filter((r) => r.roomType !== "corridor"));
 
-  it("is one single-instance part on ground, cached by seed and floors", () => {
+  it("is one single-instance part on ground, cached by seed, floors and room colours", () => {
     expect(tint.material).toBe("ground");
     expect(tint.matrices).toHaveLength(1);
-    expect(tint.geometryKey.params).toEqual({ seed: LAYOUT_SEED, floors: FLOORS });
+    expect(tint.geometryKey.params).toEqual({ seed: LAYOUT_SEED, floors: FLOORS, ...TOKENS.room });
     expect(geometry.getAttribute("normal").getY(0)).toBe(1);
   });
 

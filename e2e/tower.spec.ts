@@ -174,6 +174,60 @@ for (const view of VIEWS) {
   });
 }
 
+// The lobby furniture is white-based material with per-instance colours: if the colours were dropped, every piece
+// would render white. The reception desk sits too close to white under the glass tint to tell apart (156 against 173
+// luma measured), so the check uses the dark `panel` waiting chairs, seen from view 2: 68 with colours, 173 without.
+test("lobby furniture renders in its per-instance colours", async ({ page }) => {
+  test.setTimeout(180_000);
+  await openSettled(page, "/?view=2");
+  const png = await page.screenshot({ path: "test-results/tower-lobby-furniture.png" });
+  // The first two chairs (z = -6, -4) are in the clear from this view; the others sit behind the core or a wall.
+  const chairs = GLOW_LAYOUT.levels[0]!.anchors.filter((a) => a.kind === "waiting-chair")
+    .slice(0, 2)
+    .map((a): Vec3 => [
+      (a.min[0] + a.max[0]) / 2,
+      floorTopY(0) + LOOK.interior.chair.height,
+      (a.min[1] + a.max[1]) / 2,
+    ]);
+  const { projected, means } = await patchMeans(page, png, chairs);
+  projected.forEach((p, i) => expect(p.visible, `chair ${i}`).toBe(true));
+  const lumas = means.map(luma);
+  report("waiting chair luma", lumas.map((l) => l.toFixed(0)).join(", "));
+  for (const l of lumas) expect(l).toBeLessThan(120);
+});
+
+// The penthouse floor plate glows on the same material as the tower glow, so ?glow=0 must put it out too.
+test("?glow=0 puts the penthouse glow out", async ({ page }) => {
+  test.setTimeout(180_000);
+  const room = GLOW_LAYOUT.levels[DEFAULT_FLOORS]!.rooms[0]!;
+  await openSettled(page, "/?view=0");
+  // The roof slab hides the plate from above, so sample it just inside the two walls facing the camera.
+  const { sx, sz } = await visibleSides(page);
+  const IN = 1;
+  const world: Vec3[] = [
+    [
+      sx > 0 ? room.max[0] - IN : room.min[0] + IN,
+      floorTopY(DEFAULT_FLOORS) + LOOK.tower.glowLift + LOOK.interior.penthouse.glowThickness,
+      sz > 0 ? room.max[1] - IN : room.min[1] + IN,
+    ],
+  ];
+  const lit = await patchMeans(
+    page,
+    await page.screenshot({ path: "test-results/penthouse-lit.png" }),
+    world,
+  );
+  await openSettled(page, "/?view=0&glow=0");
+  const dark = await patchMeans(
+    page,
+    await page.screenshot({ path: "test-results/penthouse-dark.png" }),
+    world,
+  );
+  expect(lit.projected[0]!.visible).toBe(true);
+  const gain = luma(lit.means[0]!) - luma(dark.means[0]!);
+  report("penthouse glow gain (luma, 0-255)", gain.toFixed(1));
+  expect(gain).toBeGreaterThanOrEqual(MIN_GLOW_GAIN);
+});
+
 // Ground points for the shadow check: one inside the tower's shadow and one in the light, both on the ground,
 // outside the footprint and not hidden behind the tower from the camera. `direction` is the camera's view direction.
 function shadowProbes(floors: number, view: number, direction: Vec3) {

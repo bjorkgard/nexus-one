@@ -221,7 +221,7 @@ export function buildInterior(layout: Layout): TowerPart[] {
     part(
       "floorTint",
       "ground",
-      { kind: "interior-tint", params: { seed: layout.seed, floors } },
+      { kind: "interior-tint", params: { seed: layout.seed, floors, ...TOKENS.room } },
       () => buildTintGeometry(layout),
       [new Matrix4()],
     ),

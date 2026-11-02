@@ -70,7 +70,11 @@ export function Tower({
   return (
     <>
       {parts
-        .filter((part) => glow || (part.kind !== "glow" && part.kind !== "glowHoled"))
+        .filter(
+          (part) =>
+            glow ||
+            (part.kind !== "glow" && part.kind !== "glowHoled" && part.kind !== "penthouseGlow"),
+        )
         .map((part) => (
           <TowerPartMesh key={part.kind} part={part} view={view} onUploaded={onUploaded} />
         ))}
