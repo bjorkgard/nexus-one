@@ -84,6 +84,8 @@ test("getCamera returns plain data", async ({ page }) => {
 });
 
 test("project maps the camera target to canvas center, also after resize", async ({ page }) => {
+  // Two full stage reveals (the tower's shadow included) can pass 30 s under parallel load.
+  test.setTimeout(60_000);
   await page.goto("/");
   const expectCentered = async () => {
     const box = await canvasBox(page);
