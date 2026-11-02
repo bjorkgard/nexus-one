@@ -14,6 +14,8 @@ import type { ReactNode } from "react";
 import { BoxGeometry, Color, Float32BufferAttribute } from "three";
 import type { DirectionalLight, OrthographicCamera as OrthographicCameraImpl } from "three";
 import { TOKENS } from "../shared/tokens";
+import { deskTotal, previewDesks } from "../debug/desk-preview";
+import { registerNexus } from "../debug/nexus";
 import {
   FIT_MARGIN,
   GROUND_EDGE_PX_PER_ZOOM,
@@ -35,7 +37,7 @@ import { LOOK } from "./stage-look";
 // Explicit extension: on a case-insensitive disk "./Tower" would also match tower.ts.
 import { GRID_RENDER_ORDER, Tower } from "./Tower.tsx";
 import { INTERIOR_GEOMETRY_KINDS, buildInterior } from "./interior";
-import { TOWER_GEOMETRY_KINDS, buildTower } from "./tower";
+import { TOWER_GEOMETRY_KINDS, buildTower, cutCounts } from "./tower";
 import type { AcUnit } from "./tower";
 import { DEFAULT_FLOORS, MAX_FLOORS, MIN_FLOORS, createZoneRegistry } from "./zones";
 import type { Box, ZoneRegistry } from "./zones";
@@ -65,7 +67,7 @@ export function useZones(): ZonesValue {
 export const isPaletteBoardOn = () =>
   import.meta.env.DEV && new URLSearchParams(window.location.search).get("palette") === "1";
 
-// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?view=0..3` turns the camera in 90 degree steps, `?zones=1` frames the campus box, `?floor=0..floors` shows that floor's rooms in the zone overlay, `?palette=1` frames the palette board, `?glow=0` hides the floor glow.
+// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?view=0..3` turns the camera in 90 degree steps, `?zones=1` frames the campus box, `?floor=0..floors` shows that floor's rooms in the zone overlay, `?palette=1` frames the palette board, `?glow=0` hides the floor glow, `?cut=1..floors` hides the floors above that one, `?agents=N` seats N preview agents.
 function readDevParams(): {
   floors: number;
   view: number;
@@ -73,6 +75,8 @@ function readDevParams(): {
   zonesOverlay: boolean;
   floorFilter: number;
   palette: boolean;
+  cut: number;
+  agents: number;
 } {
   if (!import.meta.env.DEV) {
     return {
@@ -82,6 +86,8 @@ function readDevParams(): {
       zonesOverlay: false,
       floorFilter: -1,
       palette: false,
+      cut: 0,
+      agents: 0,
     };
   }
   const params = new URLSearchParams(location.search);
@@ -93,6 +99,8 @@ function readDevParams(): {
     zonesOverlay: params.get("zones") === "1",
     floorFilter: readDevInt(params, "floor", 0, floors, -1),
     palette: isPaletteBoardOn(),
+    cut: readDevInt(params, "cut", 1, floors, 0),
+    agents: readDevInt(params, "agents", 0, deskTotal(floors), 0),
   };
 }
 
@@ -143,21 +151,30 @@ export function Stage({
     zonesOverlay,
     floorFilter,
     palette: paletteBoard,
+    cut,
+    agents,
   } = useMemo(() => readDevParams(), []);
   const towerVisible = !paletteBoard;
   const zones = useMemo(() => createZoneRegistry({ floors }), [floors]);
   const tower = useMemo(
-    () => (towerVisible ? buildTower({ floors, openings: zones.layout.openings }) : null),
-    [towerVisible, floors, zones],
+    () => (towerVisible ? buildTower({ floors, openings: zones.layout.openings, view }) : null),
+    [towerVisible, floors, zones, view],
   );
+  const preview = useMemo(() => previewDesks(floors, agents), [floors, agents]);
   const interior = useMemo(
-    () => (towerVisible ? buildInterior(zones.layout) : null),
-    [towerVisible, zones],
+    () => (towerVisible ? buildInterior(zones.layout, preview.occupied) : null),
+    [towerVisible, zones, preview],
   );
   const towerParts = useMemo(
     () => (tower && interior ? [...tower.parts, ...interior] : null),
     [tower, interior],
   );
+  // `?cut=k`: instances of the floors above k are not drawn (0 = no cut).
+  const counts = useMemo(
+    () => (towerParts && cut > 0 ? cutCounts(towerParts, cut, floors) : undefined),
+    [towerParts, cut, floors],
+  );
+  useEffect(() => registerNexus("desks", () => preview.report), [preview]);
   const zonesValue = useMemo(
     () => ({
       registry: zones,
@@ -321,7 +338,13 @@ export function Stage({
           renderOrder={GRID_RENDER_ORDER}
         />
         {towerParts && (
-          <Tower parts={towerParts} view={view} glow={glow} onUploaded={requestShadow} />
+          <Tower
+            parts={towerParts}
+            view={view}
+            glow={glow}
+            counts={counts}
+            onUploaded={requestShadow}
+          />
         )}
         {children}
       </RevealHoldContext.Provider>

@@ -2,8 +2,9 @@ import { Vector3 } from "three";
 import type { Camera, Material, Object3D } from "three";
 import type { DataStats } from "../data/source";
 import type { Vec3 } from "../world/zones";
+import type { DeskReport } from "./desk-preview";
 
-export type { Vec3 };
+export type { Vec3, DeskReport };
 
 export type CameraInfo = {
   type: string;
@@ -44,6 +45,8 @@ export interface NexusHooks {
   pauseClock(paused: boolean): void;
   dataState(): DataState;
   cacheStats(): { size: number; hits: number; misses: number };
+  // Desk allocation of the `?agents=N` preview (dev only).
+  desks(): DeskReport;
 }
 
 export type NexusApi = Partial<NexusHooks>;

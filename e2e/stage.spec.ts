@@ -101,12 +101,12 @@ test("resizing refits the stage", async ({ page }) => {
   await expect.poll(async () => (await nexus(page, "getCamera")).zoom).toBeLessThan(before);
 });
 
-test("the tower stage is 19 draw calls in a steady frame", async ({ page }) => {
+test("the tower stage is 25 draw calls in a steady frame", async ({ page }) => {
   await page.goto("/");
   await ready(page, { width: 1280, height: 720 });
   // The static shadow map is drawn once; a later frame has no shadow pass, so the count settles.
-  // 2.4: 10 + the holed floor-1 slab (the entrance jambs join the columns) + 7 interior parts: partitions, core frame, floor tint, furniture, penthouse glass, roof and glow and the holed floor-1 glow (measured 19 in a steady frame).
-  await expect.poll(async () => (await nexus(page, "rendererInfo")).calls).toBe(19);
+  // 2.4: 10 + the holed floor-1 slab (the entrance jambs join the columns) + 7 interior parts: partitions, core frame, floor tint, furniture, penthouse glass, roof and glow and the holed floor-1 glow (19), + the 6 desk-kit parts: desk top, chair, monitor, screen, lamp, plant (OV6, measured 25 in a steady frame).
+  await expect.poll(async () => (await nexus(page, "rendererInfo")).calls).toBe(25);
 });
 
 test("zone overlay is off by default", async ({ page }) => {
@@ -184,6 +184,49 @@ test.describe("bad floors", () => {
       errors = [];
     });
   }
+});
+
+test.describe("bad desk params", () => {
+  for (const [name, value] of [
+    ["agents", "abc"],
+    ["agents", "9999"],
+    ["cut", "99"],
+    ["cut", "0"],
+  ] as const) {
+    test(`/?${name}=${value} shows the error panel naming ${name}`, async ({ page }) => {
+      await page.goto(`/?${name}=${value}`);
+      const alert = page.getByRole("alert");
+      await expect(alert).toBeVisible();
+      await expect(alert).toContainText("The 3D view could not start");
+      await expect(page.getByTestId("error-detail")).toContainText(`${name} must be an integer`);
+      expect(errors.length).toBeGreaterThan(0);
+      for (const line of errors) expect(line, line).toMatch(/RangeError|must be an integer/);
+      errors = [];
+    });
+  }
+});
+
+test("?agents=8 seats 8 agents, all on the top office floor", async ({ page }) => {
+  await page.goto("/?agents=8");
+  await ready(page, { width: 1280, height: 720 });
+  const desks = await nexus(page, "desks");
+  expect(desks.seated).toBe(8);
+  expect(desks.unseated).toBe(0);
+  expect(desks.seats).toHaveLength(8);
+  for (const seat of desks.seats) expect(seat.floor).toBe(desks.floorsNeeded - 1);
+  await expect.poll(async () => (await nexus(page, "rendererInfo")).calls).toBe(25);
+});
+
+test("?cut=1 draws fewer instances and skips the parts with none left", async ({ page }) => {
+  await page.goto("/");
+  await ready(page, { width: 1280, height: 720 });
+  await expect.poll(async () => (await nexus(page, "rendererInfo")).calls).toBe(25);
+  const full = (await nexus(page, "rendererInfo")).triangles;
+  await page.goto("/?cut=1");
+  await ready(page, { width: 1280, height: 720 });
+  // A part with no instance left (count 0) is not drawn, so 7 of the 25 calls go (measured 18 at floor 1).
+  await expect.poll(async () => (await nexus(page, "rendererInfo")).calls).toBe(18);
+  await expect.poll(async () => (await nexus(page, "rendererInfo")).triangles).toBeLessThan(full);
 });
 
 test.describe("bad view", () => {
@@ -377,7 +420,7 @@ async function materialsAndCache(page: Page) {
   return { info, cache: await nexus(page, "cacheStats") };
 }
 
-test("the tower stage has 7 materials, 7 bound programs, 11 cached geometries and no reveal hold", async ({
+test("the tower stage has 9 materials, 9 bound programs, 11 cached geometries and no reveal hold", async ({
   page,
 }) => {
   const warnings = watchHoldWarnings(page);
@@ -385,8 +428,9 @@ test("the tower stage has 7 materials, 7 bound programs, 11 cached geometries an
   await ready(page, { width: 1280, height: 720 });
   const { info, cache } = await materialsAndCache(page);
   // ground, grid, glass, trimWhite, trimCyan, plus panel (partitions, core frame, penthouse roof) and furniture (lobby)
-  expect(info.materials).toBe(7);
-  expect(info.programs).toBe(7);
+  // 2.5: + screen (MeshBasic) and led (the desk lamps), each its own shader program (measured 9 and 9).
+  expect(info.materials).toBe(9);
+  expect(info.programs).toBe(9);
   // 2.4: 7 + the holed slab geometry + the interior unit box and the floor-tint geometry + the holed glow ring (measured 11).
   expect(cache.size).toBe(11);
   // The hold's timeout is 3 s; wait it out so a stray hold would have fired.
@@ -425,6 +469,8 @@ async function watchBoardReveal(page: Page) {
   });
 }
 
+const DESK_KIT_TOKENS = ["surface.chair", "surface.plant", "surface.lampWarm", "surface.screenOff"];
+
 test("?palette=1 shows 11 materials, 5 cached shapes and every labelled swatch at reveal", async ({
   page,
 }) => {
@@ -445,7 +491,12 @@ test("?palette=1 shows 11 materials, 5 cached shapes and every labelled swatch a
   const hexOf = new Map(tokens.map(([name], i) => [name, live[i]!]));
   const slotLabels = [
     ...tokens
-      .filter(([name]) => name.startsWith("surface.") || name.startsWith("paint."))
+      // The board shows the 8 material surfaces; the desk-kit tokens (chair, plant, lampWarm, screenOff) are instance colours.
+      .filter(
+        ([name]) =>
+          (name.startsWith("surface.") && !DESK_KIT_TOKENS.includes(name)) ||
+          name.startsWith("paint."),
+      )
       .map(([name]) => `${name.replace(/^surface\./, "")} ${hexOf.get(name)}`),
     `led ${hexOf.get("surface.trimCyan")}`,
   ];

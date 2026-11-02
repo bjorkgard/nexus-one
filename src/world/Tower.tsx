@@ -42,14 +42,19 @@ function TowerPartMesh({
     mesh.instanceMatrix.needsUpdate = true;
     part.colors?.forEach((color, i) => mesh.setColorAt(i, color));
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Over every instance, whatever `mesh.count` the cut left: the next effect restores the visible count.
+    mesh.count = part.matrices.length;
     mesh.computeBoundingSphere();
     onUploaded();
   }, [part, geometry, view, onUploaded]);
 
   useLayoutEffect(() => {
     const mesh = ref.current;
-    if (mesh) mesh.count = Math.min(visibleCount ?? part.matrices.length, part.matrices.length);
-  }, [part, visibleCount]);
+    if (!mesh) return;
+    mesh.count = Math.min(visibleCount ?? part.matrices.length, part.matrices.length);
+    // A new count changes what the static shadow map must show.
+    onUploaded();
+  }, [part, visibleCount, onUploaded]);
 
   return (
     <instancedMesh
