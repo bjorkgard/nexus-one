@@ -5,6 +5,20 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-11-02
+
+### Added
+
+- You can now see rooms through the tower's glass. Every floor has a dark open frame at its core, a corridor ring around it, and offices, meeting rooms and restrooms along the windows, divided by low partitions. Each room type has its own soft floor colour, so offices, meeting rooms, restrooms and the break room are easy to tell apart.
+- The lobby now has two entrances in the glass, a reception desk, waiting chairs and an opening in the ceiling where the escalator rises to the first floor.
+- A small glass server room now sits on the roof with a cool white glow.
+- The building plan stays the same every time you open the app, and adding floors never rearranges the floors below.
+- Developers can label one floor's rooms with `?zones=1&floor=N`, from the lobby (`0`) up to the roof. Plain `?zones=1` no longer shows room outlines or labels, so the overview stays readable on tall towers. These options exist only in development builds.
+
+### Changed
+
+- `?glow=0` now also turns off the rooftop server room's glow.
+
 ## [0.10.2] - 2026-11-02
 
 ### Added
