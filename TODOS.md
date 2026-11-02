@@ -186,6 +186,20 @@
 
 ## Design
 
+### Default camera framing to match mockup A
+
+**Issue:** [#141](https://github.com/bjorkgard/nexus-one/issues/141)
+
+**What:** Change the default stage view so the tower fills the frame like the approved 2.4 mockup (variant A), instead of framing the whole 120 m campus slab with a small tower in the middle.
+
+**Why:** The approved mockup shows the tower as the clear subject with the ground cropped; today's default (2.1 framing, extended in 2.3 eng D2 to fit the tower) shows the full slab, so rooms, tints and the lobby read small. No later plan step changes the default view: Phase 3 adds user pan/zoom/rotate (3.1) and cutaway (3.5) only. 2.5 desks and the #139 readability target (seated agent ≥ 16 px at the working zoom) should be judged at the new default.
+
+**Context:** Found after the 2.4 implementation (owner request, 2026-11-02). Mockup: `~/.gstack/projects/bjorkgard-nexus-one/designs/floor-layout-interior-20261102/variant-A.png`. The angle already matches closely (pitch `ISO_PITCH` ≈ 35°, yaw 45°, `src/world/camera.ts:12-13`); the gap is framing: `framingBounds`/`framingPoints` (`src/world/camera.ts:54,94`), `FIT_MARGIN` (`:110`), `fitPointsZoom` (`:114`). Reverses the 2.1/2.3 framing decisions, so it needs its own plan review; e2e framing and draw-call expectations in `e2e/stage.spec.ts` and `e2e/tower.spec.ts` will move. Tradeoff to decide: 2.7 (garage) and 2.8 (campus exterior) add things around the tower that a tight framing hides until 3.1 adds user zoom. `?zones=1` and `?palette=1` framing stay as they are unless the review says otherwise.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 2.4 (floor layout, commit 981ba0e); must land before task 2.5
+
 ### Write DESIGN.md from the 2.1 design decisions
 
 **Issue:** [#131](https://github.com/bjorkgard/nexus-one/issues/131)

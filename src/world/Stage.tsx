@@ -36,6 +36,7 @@ import { RevealHoldContext, createRevealHold } from "./reveal-hold";
 import { LOOK } from "./stage-look";
 // Explicit extension: on a case-insensitive disk "./Tower" would also match tower.ts.
 import { GRID_RENDER_ORDER, Tower } from "./Tower.tsx";
+import { INTERIOR_GEOMETRY_KINDS, buildInterior } from "./interior";
 import { TOWER_GEOMETRY_KINDS, buildTower } from "./tower";
 import type { AcUnit } from "./tower";
 import { DEFAULT_FLOORS, MAX_FLOORS, MIN_FLOORS, createZoneRegistry } from "./zones";
@@ -44,6 +45,8 @@ import type { Box, ZoneRegistry } from "./zones";
 export type ZonesValue = {
   registry: ZoneRegistry;
   zonesOverlay: boolean;
+  // `?floor=N` for the zone overlay: the one floor whose rooms show, -1 for none.
+  floorFilter: number;
   view: number;
   acUnits: readonly AcUnit[];
   towerVisible: boolean;
@@ -64,23 +67,33 @@ export function useZones(): ZonesValue {
 export const isPaletteBoardOn = () =>
   import.meta.env.DEV && new URLSearchParams(window.location.search).get("palette") === "1";
 
-// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?view=0..3` turns the camera in 90 degree steps, `?zones=1` frames the campus box, `?palette=1` frames the palette board, `?glow=0` hides the floor glow.
+// Dev-only URL parameters: `?floors=<n>` overrides the floor count, `?view=0..3` turns the camera in 90 degree steps, `?zones=1` frames the campus box, `?floor=0..floors` shows that floor's rooms in the zone overlay, `?palette=1` frames the palette board, `?glow=0` hides the floor glow.
 function readDevParams(): {
   floors: number;
   view: number;
   glow: boolean;
   zonesOverlay: boolean;
+  floorFilter: number;
   palette: boolean;
 } {
   if (!import.meta.env.DEV) {
-    return { floors: DEFAULT_FLOORS, view: 0, glow: true, zonesOverlay: false, palette: false };
+    return {
+      floors: DEFAULT_FLOORS,
+      view: 0,
+      glow: true,
+      zonesOverlay: false,
+      floorFilter: -1,
+      palette: false,
+    };
   }
   const params = new URLSearchParams(location.search);
+  const floors = readDevInt(params, "floors", MIN_FLOORS, MAX_FLOORS, DEFAULT_FLOORS);
   return {
-    floors: readDevInt(params, "floors", MIN_FLOORS, MAX_FLOORS, DEFAULT_FLOORS),
+    floors,
     view: readDevInt(params, "view", 0, 3, 0),
     glow: readDevInt(params, "glow", 0, 1, 1) === 1,
     zonesOverlay: params.get("zones") === "1",
+    floorFilter: readDevInt(params, "floor", 0, floors, -1),
     palette: isPaletteBoardOn(),
   };
 }
@@ -101,7 +114,9 @@ function buildSlabGeometry(): BoxGeometry {
   return geometry;
 }
 
-import.meta.hot?.dispose(() => __clearGeometryCache(["slab", ...TOWER_GEOMETRY_KINDS]));
+import.meta.hot?.dispose(() =>
+  __clearGeometryCache(["slab", ...TOWER_GEOMETRY_KINDS, ...INTERIOR_GEOMETRY_KINDS]),
+);
 
 export function Stage({
   children,
@@ -128,23 +143,33 @@ export function Stage({
     view,
     glow,
     zonesOverlay,
+    floorFilter,
     palette: paletteBoard,
   } = useMemo(() => readDevParams(), []);
   const towerVisible = !paletteBoard;
   const zones = useMemo(() => createZoneRegistry({ floors }), [floors]);
   const tower = useMemo(
-    () => (towerVisible ? buildTower({ floors }) : null),
-    [towerVisible, floors],
+    () => (towerVisible ? buildTower({ floors, openings: zones.layout.openings }) : null),
+    [towerVisible, floors, zones],
+  );
+  const interior = useMemo(
+    () => (towerVisible ? buildInterior(zones.layout) : null),
+    [towerVisible, zones],
+  );
+  const towerParts = useMemo(
+    () => (tower && interior ? [...tower.parts, ...interior] : null),
+    [tower, interior],
   );
   const zonesValue = useMemo(
     () => ({
       registry: zones,
       zonesOverlay,
+      floorFilter,
       view,
       acUnits: tower?.acUnits ?? [],
       towerVisible,
     }),
-    [zones, zonesOverlay, view, tower, towerVisible],
+    [zones, zonesOverlay, floorFilter, view, tower, towerVisible],
   );
   useEffect(() => {
     onFloors?.({ floors, towerVisible });
@@ -301,7 +326,9 @@ export function Stage({
           fadeDistance={Math.hypot(half, half)}
           renderOrder={GRID_RENDER_ORDER}
         />
-        {tower && <Tower parts={tower.parts} view={view} glow={glow} onUploaded={requestShadow} />}
+        {towerParts && (
+          <Tower parts={towerParts} view={view} glow={glow} onUploaded={requestShadow} />
+        )}
         {children}
       </RevealHoldContext.Provider>
     </ZonesContext.Provider>

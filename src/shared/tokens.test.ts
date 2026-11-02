@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { chroma, hexDeltaE, hexToLab } from "./color-metrics";
+import { chroma, hexDeltaE, hexToLab, hexToLinear } from "./color-metrics";
 import { CSS_VAR_PREFIX, TOKENS, cssVarName, flattenTokens } from "./tokens";
 
 const paints = Object.entries(TOKENS.paint);
@@ -63,5 +63,23 @@ describe("tokens", () => {
 
   it("every paint is muted (C* at most 45)", () => {
     for (const [name, hex] of paints) expect(chroma(hex), name).toBeLessThanOrEqual(45);
+  });
+
+  it("has a floor tint for every room type, each within WCAG contrast 1.00-1.15 of slab.interiorTop", () => {
+    const luminance = (hex: string) => {
+      const [r, g, b] = hexToLinear(hex);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi! + 0.05) / (lo! + 0.05);
+    };
+    // src/shared is a leaf module, so the room list is spelled out; interior.test.ts checks it against ROOM_TYPES.
+    expect(Object.keys(TOKENS.room)).toHaveLength(10);
+    for (const [name, hex] of Object.entries(TOKENS.room)) {
+      const c = contrast(hex, TOKENS.slab.interiorTop);
+      expect(c, name).toBeGreaterThanOrEqual(1);
+      expect(c, name).toBeLessThanOrEqual(1.15);
+    }
   });
 });

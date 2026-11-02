@@ -1,17 +1,22 @@
 import { describe, expect, it } from "vite-plus/test";
+import { ZoneError } from "./dimensions";
+import { LAYOUT_SEED, ROOM_TYPES, buildLayout } from "./layout";
 import {
   DEFAULT_FLOORS,
   FLOOR_HEIGHT,
-  ZoneError,
   createZoneRegistry,
   validateZones,
+  type FloorZone,
+  type SiteZone,
   type Vec3,
   type Zone,
 } from "./zones";
 
 const registry = createZoneRegistry({ floors: DEFAULT_FLOORS });
+// Inside the escalator hall: the fifth corridor room on floors 0 and 1.
+const HALL_Z = -11;
 
-function zone(id: string, patch: Partial<Zone> = {}): Zone {
+function zone(id: string, patch: Partial<FloorZone> = {}): FloorZone {
   return {
     id,
     name: id,
@@ -23,14 +28,18 @@ function zone(id: string, patch: Partial<Zone> = {}): Zone {
   };
 }
 
-const campus = zone("campus", {
+const campus: SiteZone = {
+  ...zone("campus", { parentId: null, box: { min: [-100, 0, -100], max: [100, 40, 100] } }),
   kind: "site",
-  parentId: null,
-  box: { min: [-100, 0, -100], max: [100, 40, 100] },
-});
+};
 
 function box(min: Vec3, max: Vec3) {
   return { min, max };
+}
+
+function centreOf(id: string): Vec3 {
+  const { min, max } = registry.byId(id)!.box;
+  return [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
 }
 
 describe("createZoneRegistry lookups", () => {
@@ -54,19 +63,21 @@ describe("createZoneRegistry lookups", () => {
   });
 
   it("at resolves the lobby, garage, rooms, floors and roof", () => {
-    expect(registry.at([0, 1, 0])?.id).toBe("lobby");
+    expect(registry.at([0, 1, 0])?.id).toBe("core-0");
+    expect(registry.at([0, 1, HALL_Z])?.id).toBe("corridor-0-4");
     expect(registry.at([30, 1, -10])?.id).toBe("garage");
     expect(registry.at([-40, 1, -5])?.id).toBe("loading-bay");
-    expect(registry.at([-8, FLOOR_HEIGHT + 1, 9])?.id).toBe("break-room");
-    expect(registry.at([0, FLOOR_HEIGHT + 1, 0])?.id).toBe("floor-1");
-    expect(registry.at([8, 5 * FLOOR_HEIGHT + 1, -9])?.id).toBe("server-room");
+    expect(registry.at(centreOf("break-room"))?.id).toBe("break-room");
+    expect(registry.at([0, FLOOR_HEIGHT + 1, 0])?.id).toBe("core-1");
+    expect(registry.at([0, FLOOR_HEIGHT + 1, HALL_Z])?.id).toBe("corridor-1-4");
+    expect(registry.at(centreOf("server-room"))?.id).toBe("server-room");
     expect(registry.at([0, 6 * FLOOR_HEIGHT + 1, 0])?.id).toBe("roof");
     expect(registry.at([-55, 1, 55])?.id).toBe("campus");
   });
 
   it("resolves a shared face between floors to the upper floor", () => {
-    expect(registry.at([0, FLOOR_HEIGHT, 0])?.id).toBe("floor-1");
-    expect(registry.at([0, 0, 0])?.id).toBe("lobby");
+    expect(registry.at([0, FLOOR_HEIGHT, HALL_Z])?.id).toBe("corridor-1-4");
+    expect(registry.at([0, 0, HALL_Z])?.id).toBe("corridor-0-4");
   });
 
   it("returns undefined outside the campus", () => {
@@ -96,6 +107,8 @@ describe("createZoneRegistry input", () => {
     const six = createZoneRegistry({ floors: 6 });
     const seven = createZoneRegistry({ floors: 7 });
     expect(seven.byId("break-room")?.box).toEqual(six.byId("break-room")?.box);
+    expect(six.byId("server-room")?.parentId).toBe("roof");
+    expect(seven.byId("server-room")?.parentId).toBe("roof");
     const s6 = six.byId("server-room")?.box;
     const s7 = seven.byId("server-room")?.box;
     expect(s7?.min[1]).toBe((s6?.min[1] ?? 0) + FLOOR_HEIGHT);
@@ -113,6 +126,42 @@ describe("createZoneRegistry input", () => {
     }).toThrow(TypeError);
     expect(registry.byId("lobby")?.box.min[0]).toBe(-15);
     expect(Object.isFrozen(z.box)).toBe(true);
+  });
+});
+
+describe("createZoneRegistry rooms", () => {
+  it("owns a frozen layout equal to buildLayout with LAYOUT_SEED", () => {
+    expect(registry.layout).toEqual(buildLayout({ floors: DEFAULT_FLOORS, seed: LAYOUT_SEED }));
+    expect(Object.isFrozen(registry.layout)).toBe(true);
+    expect(Object.isFrozen(registry.layout.levels[1]!.rooms[0])).toBe(true);
+  });
+
+  it("turns every layout room into a room zone with its type and passes validateZones", () => {
+    const rooms = registry.zones.filter((z) => z.kind === "room");
+    const specs = registry.layout.levels.flatMap((l) => l.rooms);
+    expect(rooms.map((z) => z.id)).toEqual(specs.map((r) => r.id));
+    for (const z of rooms) {
+      expect(ROOM_TYPES).toContain(z.kind === "room" ? z.roomType : undefined);
+    }
+    expect(() => validateZones(registry.zones)).not.toThrow();
+  });
+
+  it("rejects a planted room overlap naming both rooms and the floor", () => {
+    const rooms = registry.zones.filter((z) => z.kind === "room" && z.floor === 1);
+    const a = rooms[0]!;
+    const planted: Zone = { ...rooms[1]!, id: "planted", box: a.box };
+    expect(() => validateZones([...registry.zones, planted])).toThrow(ZoneError);
+    expect(() => validateZones([...registry.zones, planted])).toThrow(
+      /planted.*overlap on floor 1/,
+    );
+  });
+
+  it("parents floor-0 rooms to the lobby, floor N rooms to floor-N and the penthouse to the roof", () => {
+    for (const z of registry.zones) {
+      if (z.kind !== "room") continue;
+      if (z.id === "server-room") expect(z.parentId).toBe("roof");
+      else expect(z.parentId).toBe(z.floor === 0 ? "lobby" : `floor-${z.floor}`);
+    }
   });
 });
 
@@ -159,6 +208,31 @@ describe("validateZones", () => {
     const a = zone("a");
     const b = zone("b", { box: box([5, 0, 5], [15, 4, 15]) });
     expect(() => validateZones([campus, a, b])).toThrow(/"a".*"b"/);
+  });
+
+  // Coverage audit (ship, 2.4 floor layout).
+  // Value: protects=every validateZones ZoneError names the floor of the zone it rejects (plan: messages name the
+  // floor); fails_when=a message drops "on floor N" or reports the wrong zone's floor; why_new=only the overlap
+  // row asserts the floor; seam=none; no_claim=the error panel rendering (unit only)
+  it.each([
+    ["a duplicate id", () => [campus, zone("a", { floor: 1 }), zone("a", { floor: 1 })]],
+    ["a missing parent", () => [campus, zone("a", { floor: 1, parentId: "ghost" })]],
+    [
+      "a cycle",
+      () => [
+        campus,
+        zone("a", { floor: 1, parentId: "b" }),
+        zone("b", { floor: 1, parentId: "a" }),
+      ],
+    ],
+    ["an inverted box", () => [campus, zone("a", { floor: 1, box: box([5, 4, 0], [5, 8, 10]) })]],
+    [
+      "a child outside its parent",
+      () => [campus, zone("a", { floor: 1, box: box([95, 4, 0], [105, 8, 10]) })],
+    ],
+  ])("names the zone's floor when it rejects %s", (_label, table) => {
+    expect(() => validateZones(table())).toThrow(ZoneError);
+    expect(() => validateZones(table())).toThrow(/on floor 1\b/);
   });
 
   it("accepts siblings that overlap in x/z on different floors", () => {

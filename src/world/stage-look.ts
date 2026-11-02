@@ -41,6 +41,41 @@ export const LOOK = {
     slabTopLift: 0.02,
     glowLift: 0.02,
   },
+  // Floor layout sizes in metres (task 2.4). Changing any of these, or LAYOUT_SEED, moves every desk.
+  interior: {
+    wallThickness: 0.1,
+    doorWidth: 1.2,
+    // Floor-0 entrance gap in the glass; must stay narrower than a mullion bay minus `tower.columnSize`.
+    entranceWidth: 3,
+    // Floor-0 entrance portal frame: jambs this deep (across the glass plane) and wide, in the frame colour.
+    portalDepth: 0.3,
+    // Desk cluster footprint (4 desks) and the smallest office run: cluster plus 1 m door clearance.
+    clusterSize: 3.2,
+    minOfficeWidth: 4.2,
+    clearance: 1,
+    // Centre core half-size and ring corridor width; their sum is the ring's outer half-size.
+    coreHalf: 7,
+    corridorWidth: 2.4,
+    // Rooms at the ends of the +z and -z strips reach this far past the ring's outer edge into the ring's span, so they touch a corridor.
+    cornerContact: 2,
+    // Floor-0 escalator base: width across, length along the run; the floor-1 landing is `width` square. Length plus
+    // width must equal 2 * (ring outer half - cornerContact) so the run and landing tile the -z strip against the glass.
+    escalator: { width: 1.6, length: 13.2 },
+    // Rooftop server room: footprint and height; a `panel` roof slab tops the glass walls, and a lit floor plate (the cool-white glow) sits `glowInset` inside the walls.
+    penthouse: {
+      x: 10,
+      z: 8,
+      height: 3.5,
+      roofThickness: 0.2,
+      glowInset: 0.6,
+      glowThickness: 0.04,
+    },
+    // Visual sizes for the rendered interior (DECISIONS #15): low partitions, open core frame (posts and beams), lobby furniture.
+    partitionHeight: 1.2,
+    coreFrameSize: 0.3,
+    receptionDesk: { length: 3, depth: 0.8, height: 1.1 },
+    chair: { size: 0.6, height: 0.8 },
+  },
   // Dev overlay type: labels (zone overlay, palette board swatches) and headings (board title, rows, failure line).
   zonesOverlayLabelPx: 11,
   overlayHeadingPx: 13,

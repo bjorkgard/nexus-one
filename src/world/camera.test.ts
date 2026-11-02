@@ -18,6 +18,7 @@ import {
   viewBasis,
   viewYaw,
 } from "./camera";
+import { LAYOUT_SEED, buildLayout } from "./layout";
 import { LOOK } from "./stage-look";
 import { PALETTE_BOUNDS } from "./palette-layout";
 import { buildTower } from "./tower";
@@ -257,7 +258,7 @@ describe("key light turns with the view", () => {
 describe("keyShadowFrustum", () => {
   // Top corners of every roof instance (parapet, cyan bar, AC): each is a unit box placed by its matrix.
   const towerRoofCorners = (floors: number): Vec3[] =>
-    buildTower({ floors })
+    buildTower({ floors, openings: buildLayout({ floors, seed: LAYOUT_SEED }).openings })
       .parts.filter((p) => p.kind === "parapet" || p.kind === "parapetEdge" || p.kind === "ac")
       .flatMap((p) => p.matrices)
       .flatMap((m) =>
