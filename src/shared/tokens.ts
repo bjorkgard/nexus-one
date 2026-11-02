@@ -18,6 +18,19 @@ export const TOKENS = {
     screenIdle: "#2a6f7c",
     screenActive: "#5fe3ff",
   },
+  // Floor tints per room type (task 2.4), diffuse vertex colours on the ground material. Each is within WCAG contrast 1.00-1.15 of slab.interiorTop (tested in tokens.test.ts); corridor is the slab colour itself, so it reads as untinted. Keys are the layout's RoomType names.
+  room: {
+    core: "#253145",
+    corridor: "#2a3646",
+    office: "#2c3a4e",
+    meeting: "#27403f",
+    restroom: "#332f45",
+    reception: "#3a3a3c",
+    waiting: "#3a3a3c",
+    escalator: "#3a3a3c",
+    "break-room": "#45392c",
+    "server-room": "#22344a",
+  },
   // Vehicle paints: muted (C* <= 45) and separable for colour-vision deficiency, both tested.
   paint: {
     red: "#b07c77",

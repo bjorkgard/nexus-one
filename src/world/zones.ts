@@ -1,3 +1,6 @@
+import { TOWER_HALF, ZoneError } from "./dimensions";
+import { LAYOUT_SEED, buildLayout, type Layout, type RoomType } from "./layout";
+
 export type Vec3 = readonly [number, number, number];
 
 export type ZoneKind = "site" | "floor" | "room";
@@ -7,17 +10,33 @@ export interface Box {
   readonly max: Vec3;
 }
 
-export interface Zone {
+interface ZoneBase {
   readonly id: string;
   readonly name: string;
-  readonly kind: ZoneKind;
   readonly floor: number;
   readonly parentId: string | null;
   readonly box: Box;
 }
 
+export interface SiteZone extends ZoneBase {
+  readonly kind: "site";
+}
+
+export interface FloorZone extends ZoneBase {
+  readonly kind: "floor";
+}
+
+export interface RoomZone extends ZoneBase {
+  readonly kind: "room";
+  readonly roomType: RoomType;
+}
+
+export type Zone = SiteZone | FloorZone | RoomZone;
+
 export interface ZoneRegistry {
   readonly zones: readonly Zone[];
+  // The floor layout the room zones came from: walls, doors, anchors, desk slots and tower openings.
+  readonly layout: Layout;
   byId(id: string): Zone | undefined;
   at(point: Vec3): Zone | undefined;
 }
@@ -30,21 +49,12 @@ export const MAX_FLOORS = 40;
 // x/z in metres, centre at the origin. Boxes are half-open: min inclusive, max exclusive.
 export const FOOTPRINTS = {
   campus: { x: [-60, 60], z: [-60, 60] },
-  tower: { x: [-15, 15], z: [-15, 15] },
+  tower: { x: [-TOWER_HALF, TOWER_HALF], z: [-TOWER_HALF, TOWER_HALF] },
   garage: { x: [20, 50], z: [-30, 10] },
   loadingBay: { x: [-50, -25], z: [-20, 5] },
-  breakRoom: { x: [-13, -3], z: [5, 13] },
-  serverRoom: { x: [3, 13], z: [-13, -5] },
 } as const;
 
 type Footprint = { readonly x: readonly number[]; readonly z: readonly number[] };
-
-export class ZoneError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ZoneError";
-  }
-}
 
 const AXES = [0, 1, 2] as const;
 
@@ -67,12 +77,14 @@ function quote(id: string): string {
 export function validateZones(zones: readonly Zone[]): void {
   const byId = new Map<string, Zone>();
   for (const z of zones) {
-    if (byId.has(z.id)) throw new ZoneError(`duplicate zone id ${quote(z.id)}`);
+    if (byId.has(z.id)) throw new ZoneError(`duplicate zone id ${quote(z.id)} on floor ${z.floor}`);
     byId.set(z.id, z);
   }
   for (const z of zones) {
     if (z.parentId !== null && !byId.has(z.parentId)) {
-      throw new ZoneError(`zone ${quote(z.id)} has missing parent ${quote(z.parentId)}`);
+      throw new ZoneError(
+        `zone ${quote(z.id)} on floor ${z.floor} has missing parent ${quote(z.parentId)}`,
+      );
     }
   }
   for (const z of zones) {
@@ -82,7 +94,8 @@ export function validateZones(zones: readonly Zone[]): void {
       cur;
       cur = cur.parentId ? byId.get(cur.parentId) : undefined
     ) {
-      if (seen.has(cur.id)) throw new ZoneError(`parent cycle through ${quote(cur.id)}`);
+      if (seen.has(cur.id))
+        throw new ZoneError(`parent cycle through ${quote(cur.id)} on floor ${cur.floor}`);
       seen.add(cur.id);
     }
   }
@@ -91,14 +104,18 @@ export function validateZones(zones: readonly Zone[]): void {
       const lo = z.box.min[axis]!;
       const hi = z.box.max[axis]!;
       if (!Number.isFinite(lo) || !Number.isFinite(hi) || !(lo < hi)) {
-        throw new ZoneError(`zone ${quote(z.id)} has an invalid box on axis ${axis}`);
+        throw new ZoneError(
+          `zone ${quote(z.id)} on floor ${z.floor} has an invalid box on axis ${axis}`,
+        );
       }
     }
     const parent = z.parentId === null ? undefined : byId.get(z.parentId);
     if (parent) {
       for (const axis of AXES) {
         if (z.box.min[axis]! < parent.box.min[axis]! || z.box.max[axis]! > parent.box.max[axis]!) {
-          throw new ZoneError(`zone ${quote(z.id)} lies outside parent ${quote(parent.id)}`);
+          throw new ZoneError(
+            `zone ${quote(z.id)} on floor ${z.floor} lies outside parent ${quote(parent.id)}`,
+          );
         }
       }
     }
@@ -120,7 +137,11 @@ export function validateZones(zones: readonly Zone[]): void {
           Math.max(a.box.min[axis]!, b.box.min[axis]!) <
           Math.min(a.box.max[axis]!, b.box.max[axis]!),
       );
-      if (overlaps) throw new ZoneError(`sibling zones ${quote(a.id)} and ${quote(b.id)} overlap`);
+      if (overlaps) {
+        throw new ZoneError(
+          `sibling zones ${quote(a.id)} and ${quote(b.id)} overlap on floor ${a.floor}`,
+        );
+      }
     }
   }
 }
@@ -132,7 +153,27 @@ function deepFreeze(zone: Zone): Zone {
   return Object.freeze(zone);
 }
 
-function buildZones(floors: number): Zone[] {
+function roomZones(layout: Layout): Zone[] {
+  return layout.levels.flatMap((level) =>
+    level.rooms.map((r): Zone => {
+      const [lo, hi] = bandOf(r.floor);
+      return {
+        id: r.id,
+        name: r.name,
+        kind: "room",
+        roomType: r.roomType,
+        floor: r.floor,
+        parentId: r.parentId,
+        box: {
+          min: [r.min[0], lo, r.min[1]],
+          max: [r.max[0], r.height === undefined ? hi : lo + r.height, r.max[1]],
+        },
+      };
+    }),
+  );
+}
+
+function buildZones(floors: number, layout: Layout): Zone[] {
   const T = floors - 1;
   const level = (id: string, name: string, floor: number, footprint: Footprint): Zone => ({
     id,
@@ -140,14 +181,6 @@ function buildZones(floors: number): Zone[] {
     kind: "floor",
     floor,
     parentId: "campus",
-    box: boxOf(footprint, bandOf(floor)),
-  });
-  const room = (id: string, name: string, floor: number, footprint: Footprint): Zone => ({
-    id,
-    name,
-    kind: "room",
-    floor,
-    parentId: `floor-${floor}`,
     box: boxOf(footprint, bandOf(floor)),
   });
   const zones: Zone[] = [
@@ -164,11 +197,7 @@ function buildZones(floors: number): Zone[] {
     level("loading-bay", "Loading bay", 0, FOOTPRINTS.loadingBay),
   ];
   for (let k = 1; k <= T; k++) zones.push(level(`floor-${k}`, `Floor ${k}`, k, FOOTPRINTS.tower));
-  zones.push(
-    room("break-room", "Break room", 1, FOOTPRINTS.breakRoom),
-    room("server-room", "Server room", T, FOOTPRINTS.serverRoom),
-    level("roof", "Roof", floors, FOOTPRINTS.tower),
-  );
+  zones.push(level("roof", "Roof", floors, FOOTPRINTS.tower), ...roomZones(layout));
   return zones;
 }
 
@@ -184,7 +213,8 @@ export function assertFloors(floors: number): void {
 // `floors` counts the lobby: lobby is floor 0, offices are 1..floors-1, the roof is floor `floors`.
 export function createZoneRegistry({ floors }: { floors: number }): ZoneRegistry {
   assertFloors(floors);
-  const built = buildZones(floors);
+  const layout = buildLayout({ floors, seed: LAYOUT_SEED });
+  const built = buildZones(floors, layout);
   validateZones(built);
   const zones = Object.freeze(built.map(deepFreeze));
   const index = new Map(zones.map((z) => [z.id, z]));
@@ -197,6 +227,7 @@ export function createZoneRegistry({ floors }: { floors: number }): ZoneRegistry
   const campus = index.get("campus")!;
   return {
     zones,
+    layout,
     byId: (id) => index.get(id),
     at(point) {
       for (const value of point) {

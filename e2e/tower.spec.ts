@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { buildTower, floorTopY, GLASS_HALF } from "../src/world/tower";
+import { GLASS_HALF } from "../src/world/dimensions";
+import { LAYOUT_SEED, buildLayout } from "../src/world/layout";
+import { buildTower, floorTopY } from "../src/world/tower";
 import { keyLightDirection, viewYaw } from "../src/world/camera";
 import { LOOK } from "../src/world/stage-look";
 import { DEFAULT_FLOORS, FLOOR_HEIGHT, FOOTPRINTS } from "../src/world/zones";
@@ -75,14 +77,48 @@ const GLOW_MID_HALF = GLASS_HALF - LOOK.tower.glowInset - LOOK.tower.glowWidth /
 // Clear of the mullions at +-3 and +-9 and of the corner posts.
 const ALONG = [-12, -6, 0, 6, 12];
 const CORNER_BACK = 0.6;
+const GLOW_LAYOUT = buildLayout({ floors: DEFAULT_FLOORS, seed: LAYOUT_SEED });
+// A partition standing on the strip hides it from the camera for about 0.25 m beside it, so a sample keeps
+// `WALL_CLEAR` from every partition that reaches the strip along `axis` (0: points along x, 1: along z).
+const WALL_CLEAR = 0.5;
+function clearOfPartitions(floor: number, axis: 0 | 1, t: number): number {
+  const reaching = GLOW_LAYOUT.levels[floor]!.walls.filter(
+    (w) =>
+      w.max[axis]! - w.min[axis]! < 0.2 &&
+      Math.max(Math.abs(w.min[1 - axis]!), Math.abs(w.max[1 - axis]!)) >= GLOW_MID_HALF,
+  ).map((w) => (w.min[axis]! + w.max[axis]!) / 2);
+  const clear = (v: number) => reaching.every((c) => Math.abs(v - c) >= WALL_CLEAR);
+  for (let d = 0; d < 3; d += 0.1) {
+    for (const v of [t - d, t + d]) if (clear(v)) return Math.round(v * 10) / 10;
+  }
+  throw new Error(`no partition-free sample near ${t} on floor ${floor}`);
+}
+
+// The floor-1 glow ring is cut over the slab hole (no glow over the void), so the -z face samples there move
+// clear of the hole's x span, keeping 5 per face: still clear of the mullions and the corner posts.
+const GLOW_HOLE = GLOW_LAYOUT.openings.slabHole;
+const ALONG_HOLED = [-12, -10.5, 7, 10.5, 12];
+const inGlowHole = (floor: number, x: number, z: number) =>
+  floor === GLOW_HOLE.floor &&
+  x >= GLOW_HOLE.min[0] - WALL_CLEAR &&
+  x <= GLOW_HOLE.max[0] + WALL_CLEAR &&
+  z >= GLOW_HOLE.min[1] &&
+  z <= GLOW_HOLE.max[1];
 
 function glowPoints(floors: number, sx: number, sz: number) {
   const points: { label: string; world: Vec3 }[] = [];
   for (let k = 0; k < floors; k++) {
     const y = floorTopY(k) + LOOK.tower.glowLift;
-    for (const t of ALONG) {
-      points.push({ label: `floor ${k} +x face ${t}`, world: [sx * GLOW_MID_HALF, y, t] });
-      points.push({ label: `floor ${k} +z face ${t}`, world: [t, y, sz * GLOW_MID_HALF] });
+    // Along the face the sample slides to stay clear of a partition; the hole check holds the slid value too.
+    const holed = inGlowHole(k, 0, sz * GLOW_MID_HALF);
+    for (const [i, along] of ALONG.entries()) {
+      const tx = clearOfPartitions(k, 1, along);
+      const tz = clearOfPartitions(k, 0, holed ? ALONG_HOLED[i]! : along);
+      if (inGlowHole(k, tz, sz * GLOW_MID_HALF) || inGlowHole(k, sx * GLOW_MID_HALF, tx)) {
+        throw new Error(`glow sample on floor ${k} lands over the slab hole`);
+      }
+      points.push({ label: `floor ${k} +x face ${tx}`, world: [sx * GLOW_MID_HALF, y, tx] });
+      points.push({ label: `floor ${k} +z face ${tz}`, world: [tz, y, sz * GLOW_MID_HALF] });
     }
     // The mitred corner itself hides behind the corner post (measured gain 0), so the corner is sampled
     // `CORNER_BACK` along each arm from it, where the strip is in the clear.
@@ -292,7 +328,10 @@ test("?palette=1 has no tower: the 2.2 board counts and the generic name stand",
 
 // ---- AC unit labels (?zones=1) ----
 
-const AC_UNITS = buildTower({ floors: DEFAULT_FLOORS }).acUnits;
+const AC_UNITS = buildTower({
+  floors: DEFAULT_FLOORS,
+  openings: buildLayout({ floors: DEFAULT_FLOORS, seed: LAYOUT_SEED }).openings,
+}).acUnits;
 
 for (const view of VIEWS) {
   test(`?zones=1 view ${view}: 3 AC labels, inside the canvas, anchored at their units`, async ({

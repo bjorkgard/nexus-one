@@ -8,6 +8,7 @@ import { LOOK } from "../world/stage-look";
 import { useZones } from "../world/Stage";
 import { FLOOR_HEIGHT } from "../world/zones";
 import type { Zone } from "../world/zones";
+import { overlayZones, roomLabelAnchor } from "./zone-filter";
 
 // Projected px of one floor band: 1 m of height shows as 2/sqrt(6) px per unit of zoom.
 const BAND_PX_PER_ZOOM = (FLOOR_HEIGHT * 2) / Math.sqrt(6);
@@ -19,7 +20,9 @@ const isTowerFloor = (z: Zone) =>
 function buildEdges(zones: readonly Zone[]) {
   const positions: number[] = [];
   const colors: number[] = [];
+  const ids: string[] = [];
   for (const z of zones) {
+    ids.push(z.id);
     const { min, max } = z.box;
     const c = new Color(TOKENS.zone[z.kind]);
     const corner = (i: number): [number, number, number] => [
@@ -35,7 +38,7 @@ function buildEdges(zones: readonly Zone[]) {
       }
     }
   }
-  return { positions: new Float32Array(positions), colors: new Float32Array(colors) };
+  return { positions: new Float32Array(positions), colors: new Float32Array(colors), ids };
 }
 
 function Label(props: {
@@ -69,10 +72,11 @@ function Label(props: {
 }
 
 export default function ZoneOverlay() {
-  const { registry: zones, zonesOverlay, view, acUnits, towerVisible } = useZones();
+  const { registry: zones, zonesOverlay, floorFilter, view, acUnits, towerVisible } = useZones();
   const camera = useThree((s) => s.camera);
   const [zoom, setZoom] = useState(camera.zoom);
-  const edges = useMemo(() => buildEdges(zones.zones), [zones]);
+  const shown = useMemo(() => overlayZones(zones.zones, floorFilter), [zones, floorFilter]);
+  const edges = useMemo(() => buildEdges(shown.edges), [shown]);
 
   useFrame(() => {
     if (camera.zoom !== zoom) setZoom(camera.zoom);
@@ -92,11 +96,19 @@ export default function ZoneOverlay() {
         </bufferGeometry>
         <lineBasicMaterial vertexColors />
       </lineSegments>
-      {zones.zones.map((z) =>
+      {/* Test seam: the zone ids whose box edges are drawn. */}
+      <Html position={[0, 0, 0]}>
+        <div
+          data-testid="zone-edges"
+          data-zone-ids={edges.ids.join(" ")}
+          style={{ display: "none" }}
+        />
+      </Html>
+      {shown.labels.map((z) =>
         hideFloors && isTowerFloor(z) ? null : (
           <Label
             key={z.id}
-            position={nearestCorner(z.box, yaw)}
+            position={z.kind === "room" ? roomLabelAnchor(z) : nearestCorner(z.box, yaw)}
             color={TOKENS.zone[z.kind]}
             testId="zone-label"
             idAttr={z.id}

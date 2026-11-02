@@ -10,6 +10,11 @@ import type { TowerPart } from "./tower";
 export const GLASS_RENDER_ORDER = 2;
 export const GRID_RENDER_ORDER = GLASS_RENDER_ORDER - 1;
 
+// Transparent parts (anything on the glass material) draw in the glass pass, whatever their kind.
+export function partRenderOrder(part: TowerPart): number {
+  return part.material === "glass" ? GLASS_RENDER_ORDER : 0;
+}
+
 // One InstancedMesh per part. `onUploaded` fires after the matrices, the instance flag and the bounding sphere
 // are set, so the caller can request the shadow update that depends on them.
 function TowerPartMesh({
@@ -32,6 +37,8 @@ function TowerPartMesh({
     if (!mesh) return;
     part.matrices.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
     mesh.instanceMatrix.needsUpdate = true;
+    part.colors?.forEach((color, i) => mesh.setColorAt(i, color));
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
     onUploaded();
   }, [part, geometry, view, onUploaded]);
@@ -44,7 +51,7 @@ function TowerPartMesh({
       args={[geometry, palette[part.material], part.matrices.length]}
       castShadow={part.castShadow}
       receiveShadow={part.receiveShadow}
-      renderOrder={part.kind === "glass" ? GLASS_RENDER_ORDER : 0}
+      renderOrder={partRenderOrder(part)}
     />
   );
 }
@@ -63,7 +70,7 @@ export function Tower({
   return (
     <>
       {parts
-        .filter((part) => glow || part.kind !== "glow")
+        .filter((part) => glow || (part.kind !== "glow" && part.kind !== "glowHoled"))
         .map((part) => (
           <TowerPartMesh key={part.kind} part={part} view={view} onUploaded={onUploaded} />
         ))}
