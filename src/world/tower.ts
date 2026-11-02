@@ -146,6 +146,16 @@ function buildGlowGeometry(): BufferGeometry {
   return geometry;
 }
 
+// Every geometry-cache kind the tower builds; Stage clears these on HMR dispose.
+export const TOWER_GEOMETRY_KINDS = [
+  "tower-slab",
+  "tower-roof",
+  "tower-box",
+  "tower-frame-box",
+  "tower-glass",
+  "tower-glow",
+] as const;
+
 const unitBox = { kind: "tower-box", params: {} } as const;
 const buildUnitBox = () => new BoxGeometry(1, 1, 1);
 
@@ -266,7 +276,7 @@ export function buildTower({ floors }: { floors: number }): Tower {
     box([-edge, ey, 0], [T.parapetEdgeWidth, T.parapetEdgeHeight, barShort]),
   ];
 
-  // One 3 x 2 x 1.4 m unit and a pair of 1.4 x 1.4 x 1 m units sitting on the roof deck; sizes are [x, y, z].
+  // One 3 × 1.4 × 2 m unit and a pair of 1.4 × 1 × 1.4 m units ([x, y, z]) sitting on the roof deck.
   const acSpec: { x: number; z: number; size: Vec3 }[] = [
     { x: -5, z: 4, size: [3, 1.4, 2] },
     { x: 7, z: -4, size: [1.4, 1, 1.4] },

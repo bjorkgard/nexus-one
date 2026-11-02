@@ -106,13 +106,16 @@ export function framingPoints({
   return { centre: boundsCentre(bounds), points };
 }
 
+// Fraction of the viewport kept empty around the fitted framing.
+export const FIT_MARGIN = 0.15;
+
 // Zoom (px per metre) that fits the points into the viewport around `centre` for the view at `yaw`,
 // or null for a zero-size viewport (the caller keeps the previous zoom).
 export function fitPointsZoom(
   points: readonly Vec3[],
   centre: Vec3,
   viewport: { width: number; height: number },
-  margin = 0.15,
+  margin = FIT_MARGIN,
   yaw = ISO_YAW,
 ): number | null {
   if (!(viewport.width > 0) || !(viewport.height > 0)) return null;
@@ -131,7 +134,7 @@ export function fitPointsZoom(
 export function fitZoom(
   bounds: Box,
   viewport: { width: number; height: number },
-  margin = 0.15,
+  margin = FIT_MARGIN,
   yaw = ISO_YAW,
 ): number | null {
   return fitPointsZoom(boxCorners(bounds), boundsCentre(bounds), viewport, margin, yaw);

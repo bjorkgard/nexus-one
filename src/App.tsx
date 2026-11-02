@@ -5,6 +5,7 @@ import { AgXToneMapping, SRGBColorSpace } from "three";
 
 import { DevBoundary } from "./debug/DevBoundary";
 import { PaletteFailure } from "./debug/PaletteFailure";
+import { canvasLabel } from "./ui/canvas-label";
 import { ErrorPanel } from "./ui/ErrorPanel";
 import { Wordmark } from "./ui/Wordmark";
 import { useRevealHold } from "./world/reveal-hold";
@@ -52,14 +53,6 @@ export class CanvasErrorBoundary extends Component<
     return this.props.children;
   }
 }
-
-const GENERIC_LABEL = "Nexus One campus, isometric view";
-
-// The name follows what is drawn: the tower's floor count once Stage has validated it, generic otherwise.
-export const canvasLabel = (report: FloorsReport | null) =>
-  report?.towerVisible
-    ? `Nexus One campus: glass office tower, ${report.floors} floors, isometric view`
-    : GENERIC_LABEL;
 
 export function App() {
   const [revealed, setRevealed] = useState(false);

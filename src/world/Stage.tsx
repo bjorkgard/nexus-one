@@ -15,6 +15,7 @@ import { BoxGeometry, Color, Float32BufferAttribute } from "three";
 import type { DirectionalLight, OrthographicCamera as OrthographicCameraImpl } from "three";
 import { TOKENS } from "../shared/tokens";
 import {
+  FIT_MARGIN,
   GROUND_EDGE_PX_PER_ZOOM,
   boundsCentre,
   cameraRig,
@@ -30,12 +31,12 @@ import {
 } from "./camera";
 import { __clearGeometryCache, getGeometry } from "./geometry-cache";
 import { palette } from "./palette";
-import { shadowSettled, stageReady } from "./ready-gate";
+import { shadowPending, stageReady } from "./ready-gate";
 import { RevealHoldContext, createRevealHold } from "./reveal-hold";
 import { LOOK } from "./stage-look";
 // Explicit extension: on a case-insensitive disk "./Tower" would also match tower.ts.
 import { GRID_RENDER_ORDER, Tower } from "./Tower.tsx";
-import { buildTower } from "./tower";
+import { TOWER_GEOMETRY_KINDS, buildTower } from "./tower";
 import type { AcUnit } from "./tower";
 import { DEFAULT_FLOORS, MAX_FLOORS, MIN_FLOORS, createZoneRegistry } from "./zones";
 import type { Box, ZoneRegistry } from "./zones";
@@ -100,14 +101,6 @@ function buildSlabGeometry(): BoxGeometry {
   return geometry;
 }
 
-const TOWER_GEOMETRY_KINDS = [
-  "tower-slab",
-  "tower-roof",
-  "tower-box",
-  "tower-frame-box",
-  "tower-glass",
-  "tower-glow",
-];
 import.meta.hot?.dispose(() => __clearGeometryCache(["slab", ...TOWER_GEOMETRY_KINDS]));
 
 export function Stage({
@@ -120,6 +113,7 @@ export function Stage({
   onFloors?: (report: FloorsReport) => void;
 }) {
   const size = useThree((s) => s.size);
+  const canvas = useThree((s) => s.gl.domElement);
   const activeCamera = useThree((s) => s.camera);
   const cameraRef = useRef<OrthographicCameraImpl>(null);
   const [zoom, setZoom] = useState<number | null>(null);
@@ -171,7 +165,7 @@ export function Stage({
     const hi = (a: 0 | 1 | 2) => Math.max(...fit.points.map((p) => p[a]));
     return { min: [lo(0), lo(1), lo(2)], max: [hi(0), hi(1), hi(2)] };
   }, [fit]);
-  const nextZoom = fitPointsZoom(fit.points, fit.centre, size, 0.15, yaw);
+  const nextZoom = fitPointsZoom(fit.points, fit.centre, size, FIT_MARGIN, yaw);
   if (nextZoom !== null && nextZoom !== zoom) setZoom(nextZoom);
   const slab = useMemo(
     () =>
@@ -222,6 +216,12 @@ export function Stage({
     requestShadow();
   }, [shadowCam, keyLight, requestShadow, towerVisible]);
 
+  // A restored WebGL context has lost the static shadow map: draw it again.
+  useEffect(() => {
+    canvas.addEventListener("webglcontextrestored", requestShadow);
+    return () => canvas.removeEventListener("webglcontextrestored", requestShadow);
+  }, [canvas, requestShadow]);
+
   useLayoutEffect(() => {
     const camera = cameraRef.current;
     if (!camera) return;
@@ -247,18 +247,18 @@ export function Stage({
 
   // Ready once the ortho camera is the active one, the fitted zoom is applied, the first shadow map has been
   // drawn and a frame has been drawn.
-  useFrame(() => {
+  useFrame(({ gl }) => {
     if (signalled.current) return;
-    const settled = shadowSettled({
-      requested: shadowRequested.current,
-      needsUpdate: lightRef.current?.shadow.needsUpdate ?? true,
-    });
     const ok = stageReady({
       fitted: fitted.current,
       cameraActive: activeCamera === cameraRef.current,
       holdStatus: hold.status,
-      // No upload requested yet also counts as pending; without a tower there is no shadow to wait for.
-      shadowPending: towerVisible && (!shadowRequested.current || !settled),
+      shadowPending: shadowPending({
+        towerVisible,
+        enabled: gl.shadowMap.enabled,
+        requested: shadowRequested.current,
+        needsUpdate: lightRef.current?.shadow.needsUpdate ?? true,
+      }),
     });
     if (!ok) return;
     signalled.current = true;
@@ -282,7 +282,7 @@ export function Stage({
           intensity={LOOK.key.intensity}
           position={keyLight}
           castShadow={towerVisible}
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={[LOOK.key.shadow.mapSize, LOOK.key.shadow.mapSize]}
           shadow-radius={LOOK.key.shadow.radius}
           shadow-bias={LOOK.key.shadow.bias}
           shadow-normalBias={LOOK.key.shadow.normalBias}

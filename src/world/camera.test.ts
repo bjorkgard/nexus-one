@@ -20,6 +20,7 @@ import {
 } from "./camera";
 import { LOOK } from "./stage-look";
 import { PALETTE_BOUNDS } from "./palette-layout";
+import { buildTower } from "./tower";
 import { createZoneRegistry, DEFAULT_FLOORS, MAX_FLOORS, type Box, type Vec3 } from "./zones";
 
 const bounds = framingBounds({ zonesOverlay: false });
@@ -254,11 +255,19 @@ describe("key light turns with the view", () => {
 });
 
 describe("keyShadowFrustum", () => {
+  // Top corners of every roof instance (parapet, cyan bar, AC): each is a unit box placed by its matrix.
   const towerRoofCorners = (floors: number): Vec3[] =>
-    corners(framingBounds({ zonesOverlay: true, floors })).filter((c) => c[1] > 0);
+    buildTower({ floors })
+      .parts.filter((p) => p.kind === "parapet" || p.kind === "parapetEdge" || p.kind === "ac")
+      .flatMap((p) => p.matrices)
+      .flatMap((m) =>
+        [-0.5, 0.5].flatMap((x) =>
+          [-0.5, 0.5].map((z) => new Vector3(x, 0.5, z).applyMatrix4(m).toArray() as Vec3),
+        ),
+      );
 
   it.each([2, 6, 40])(
-    "floors %i: campus box and roof lie inside the frustum in every view",
+    "floors %i: campus box and roof parts lie inside the frustum in every view",
     (floors) => {
       for (const view of [0, 1, 2, 3]) {
         const yaw = viewYaw(view);
@@ -270,7 +279,9 @@ describe("keyShadowFrustum", () => {
         cam.updateMatrixWorld();
         cam.updateProjectionMatrix();
         const box = framingBounds({ zonesOverlay: true, floors });
-        for (const c of [...corners(box), ...towerRoofCorners(floors)]) {
+        const roof = towerRoofCorners(floors);
+        expect(roof).toHaveLength(4 * (4 + 4 + 3));
+        for (const c of [...corners(box), ...roof]) {
           const ndc = new Vector3(...c).project(cam);
           for (const v of [ndc.x, ndc.y, ndc.z]) {
             expect(v).toBeGreaterThanOrEqual(-1);

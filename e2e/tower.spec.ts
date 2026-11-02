@@ -201,10 +201,12 @@ test("shadow is present after reveal, and shadows on/off screenshots are saved",
   // Same scene with the key light's shadow intensity forced to 0: the map is still drawn (so the ready gate and the exposure are the same), nothing is darkened.
   await page.route("**/src/world/Stage.tsx*", async (route) => {
     const response = await route.fetch();
-    const body = (await response.text()).replace(
+    const original = await response.text();
+    const body = original.replace(
       "castShadow: towerVisible,",
       'castShadow: towerVisible, "shadow-intensity": 0,',
     );
+    expect(body, "Stage.tsx shadow patch applied").not.toBe(original);
     await route.fulfill({ response, body });
   });
   await openSettled(page, "/");
@@ -212,6 +214,48 @@ test("shadow is present after reveal, and shadows on/off screenshots are saved",
   report("shadowed/lit ground luma ratio, shadows off", off.toFixed(3));
   // Measured 1.00: with the shadow off the two patches are equally lit.
   expect(Math.abs(off - 1)).toBeLessThan(0.2);
+});
+
+test("shadow is redrawn after the WebGL context is lost and restored", async ({ page }) => {
+  test.setTimeout(180_000);
+  await openSettled(page, "/");
+  const { shadowed, lit } = shadowProbes(
+    DEFAULT_FLOORS,
+    0,
+    (await nexus(page, "getCamera")).direction,
+  );
+  const ratio = async () => {
+    const { projected, means } = await patchMeans(
+      page,
+      await page.screenshot(),
+      [shadowed, lit],
+      3,
+    );
+    for (const p of projected) expect(p.visible).toBe(true);
+    return luma(means[0]!) / luma(means[1]!);
+  };
+  expect(await ratio()).toBeLessThan(0.7);
+  // One page call: getExtension returns null once the context is lost, so the extension object is kept.
+  await page.evaluate(async () => {
+    const canvas = document.querySelector<HTMLCanvasElement>("[data-testid=scene] canvas");
+    const gl = canvas?.getContext("webgl2");
+    const ext = gl?.getExtension("WEBGL_lose_context");
+    if (!canvas || !ext) throw new Error("WEBGL_lose_context unavailable");
+    const once = (name: string) =>
+      new Promise<void>((resolve) =>
+        canvas.addEventListener(name, () => resolve(), { once: true }),
+      );
+    const lost = once("webglcontextlost");
+    ext.loseContext();
+    await lost;
+    // Chrome allows restoreContext only after the lost event has been fully dispatched.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const restored = once("webglcontextrestored");
+    ext.restoreContext();
+    await restored;
+  });
+  // Let three re-initialise and draw a few frames; the redrawn map must again darken the shadowed patch.
+  await expect.poll(ratio, { timeout: 15_000 }).toBeLessThan(0.7);
 });
 
 for (const floors of [2, 40]) {

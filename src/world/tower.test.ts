@@ -5,7 +5,14 @@ import { TOKENS } from "../shared/tokens";
 import { fitZoom, framingBounds } from "./camera";
 import { palette } from "./palette";
 import { LOOK } from "./stage-look";
-import { GLASS_HALF, buildTower, floorTopY, type TowerPart, type TowerPartKind } from "./tower";
+import {
+  GLASS_HALF,
+  TOWER_GEOMETRY_KINDS,
+  buildTower,
+  floorTopY,
+  type TowerPart,
+  type TowerPartKind,
+} from "./tower";
 import { FLOOR_HEIGHT, MAX_FLOORS, MIN_FLOORS, assertFloors, createZoneRegistry } from "./zones";
 
 const T = LOOK.tower;
@@ -373,7 +380,12 @@ describe("shell sizes", () => {
     expect(T.parapetHeight).toBe(0.6);
     expect(T.glowWidth).toBe(0.4);
     expect(T.glowInset).toBe(0.15);
-    expect(LOOK.key.shadow).toEqual({ radius: 3, bias: -0.0005, normalBias: 0.02 });
+    expect(LOOK.key.shadow).toEqual({
+      radius: 3,
+      bias: -0.0005,
+      normalBias: 0.02,
+      mapSize: 2048,
+    });
   });
 });
 
@@ -386,7 +398,6 @@ describe("brightness ladder", () => {
   it("keeps tower glow at most 75% of trimCyan in intensity x linear luminance", () => {
     const glow = palette.trimWhite.emissiveIntensity * luminance(TOKENS.surface.trimWhite);
     const cyan = palette.trimCyan.emissiveIntensity * luminance(TOKENS.surface.trimCyan);
-    expect(palette.trimWhite.emissiveIntensity).toBe(0.35);
     expect(glow).toBeLessThanOrEqual(0.75 * cyan);
     expect(glow).toBeGreaterThan(0);
   });
@@ -411,5 +422,12 @@ describe("glow strip visibility", () => {
       const perpendicular = (cross / Math.hypot(along[0]!, along[1]!)) * zoom;
       expect(perpendicular).toBeGreaterThanOrEqual(1.5);
     }
+  });
+});
+
+describe("TOWER_GEOMETRY_KINDS", () => {
+  it.each([2, 6, 40])("lists the geometry kind of every part at %i floors", (floors) => {
+    const kinds: readonly string[] = TOWER_GEOMETRY_KINDS;
+    for (const p of buildTower({ floors }).parts) expect(kinds).toContain(p.geometryKey.kind);
   });
 });

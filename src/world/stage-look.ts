@@ -21,7 +21,7 @@ export const LOOK = {
     color: "#ffd9a8",
     intensity: 3.4,
     direction: [-0.5, 2, 1.5] as const,
-    shadow: { radius: 3, bias: -0.0005, normalBias: 0.02 },
+    shadow: { radius: 3, bias: -0.0005, normalBias: 0.02, mapSize: 2048 },
   },
   // Tower shell sizes in metres (task 2.3). The slab covers the tower footprint and sticks out past the glass by `glassInset`.
   tower: {
