@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { createZoneRegistry, DEFAULT_FLOORS } from "../src/world/zones";
 import type { Vec3 } from "../src/world/zones";
-import { boundsCentre, framingBounds, ISO_PITCH, ISO_YAW } from "../src/world/camera";
+import { boundsCentre, framingBounds, ISO_PITCH, ISO_YAW, towerBox } from "../src/world/camera";
 import { TOKENS, cssVarName, flattenTokens } from "../src/shared/tokens";
 import { hexDeltaE, hexToLab } from "../src/shared/color-metrics";
 import { SIZE, place, rowV, slotU, swatchCentre } from "../src/world/palette-layout";
@@ -45,7 +45,7 @@ function corners(b: { min: Vec3; max: Vec3 }): Vec3[] {
   return out;
 }
 
-test("ortho camera targets the framing-bounds centre at the iso angle", async ({ page }) => {
+test("ortho camera targets the tower-box centre at the iso angle", async ({ page }) => {
   await page.goto("/");
   await expect
     .poll(async () => (await nexus(page, "getCamera")).type, SETUP_TIMEOUT)
@@ -54,7 +54,7 @@ test("ortho camera targets the framing-bounds centre at the iso angle", async ({
     .poll(async () => (await nexus(page, "getCamera")).target, SETUP_TIMEOUT)
     .not.toBeNull();
   const cam = await nexus(page, "getCamera");
-  const centre = boundsCentre(framingBounds({ zonesOverlay: false }));
+  const centre = boundsCentre(towerBox(DEFAULT_FLOORS));
   centre.forEach((v, i) => expect(Math.abs(cam.target![i]! - v)).toBeLessThan(0.01));
   const [dx, dy, dz] = cam.direction;
   const deg = (r: number) => (r * 180) / Math.PI;
@@ -67,11 +67,11 @@ for (const size of [
   { width: 800, height: 600 },
   { width: 2560, height: 1440 },
 ]) {
-  test(`framing bounds fit and centre at ${size.width}x${size.height}`, async ({ page }) => {
+  test(`tower box fits and centres at ${size.width}x${size.height}`, async ({ page }) => {
     await page.goto("/");
     await ready(page, size);
     const box = await canvasBox(page);
-    const points = await projectAll(page, corners(framingBounds({ zonesOverlay: false })));
+    const points = await projectAll(page, corners(towerBox(DEFAULT_FLOORS)));
     for (const p of points) {
       expect(p.visible).toBe(true);
       expect(p.x).toBeGreaterThanOrEqual(box.x);

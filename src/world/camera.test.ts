@@ -3,7 +3,10 @@ import { OrthographicCamera, Vector3 } from "three";
 import {
   ISO_PITCH,
   ISO_YAW,
+  FIT_MARGIN,
   GROUND_EDGE_PX_PER_ZOOM,
+  boundsCentre,
+  towerBox,
   cameraRig,
   cellOpacity,
   fitPointsZoom,
@@ -166,28 +169,56 @@ describe("framing with the tower", () => {
     { width: 2560, height: 1440 },
     { width: 720, height: 1280 },
   ];
-  it.each(viewports)("default floors zoom equals slab-only zoom at $width x $height", (vp) => {
+  it.each(viewports)("default zoom fits the tower box only at $width x $height", (vp) => {
     for (const view of [0, 1, 2, 3]) {
       const { centre, points } = framingPoints({ zonesOverlay: false, floors: DEFAULT_FLOORS });
-      expect(fitPointsZoom(points, centre, vp, 0.15, viewYaw(view))).toBeCloseTo(
-        fitZoom(bounds, vp, 0.15, viewYaw(view))!,
+      const tower = towerBox(DEFAULT_FLOORS);
+      expect(centre).toEqual(boundsCentre(tower));
+      expect(fitPointsZoom(points, centre, vp, FIT_MARGIN, viewYaw(view))).toBeCloseTo(
+        fitZoom(tower, vp, FIT_MARGIN, viewYaw(view))!,
         9,
+      );
+      expect(fitPointsZoom(points, centre, vp, FIT_MARGIN, viewYaw(view))).toBeGreaterThan(
+        fitZoom(bounds, vp, FIT_MARGIN, viewYaw(view))!,
       );
     }
   });
 
-  it.each([0, 1, 2, 3])("floors 40 fits all points in view %i", (view) => {
+  it("zero viewport gives null", () => {
+    const { centre, points } = framingPoints({ zonesOverlay: false });
+    expect(fitPointsZoom(points, centre, { width: 0, height: 600 })).toBeNull();
+  });
+
+  it.each([0, 1, 2, 3])("floors 40 fits the tower box in view %i", (view) => {
     const vp = { width: 1280, height: 720 };
     const { centre, points } = framingPoints({ zonesOverlay: false, floors: MAX_FLOORS });
     const yaw = viewYaw(view);
-    const zoom = fitPointsZoom(points, centre, vp, 0.15, yaw)!;
+    const zoom = fitPointsZoom(points, centre, vp, FIT_MARGIN, yaw)!;
     const { right, up } = viewBasis(yaw);
-    for (const p of points) {
+    for (const p of corners(towerBox(MAX_FLOORS))) {
       const rel: Vec3 = [p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]];
       expect(Math.abs(dot(rel, right)) * zoom).toBeLessThanOrEqual(vp.width / 2 + 1e-9);
       expect(Math.abs(dot(rel, up)) * zoom).toBeLessThanOrEqual(vp.height / 2 + 1e-9);
     }
-    expect(zoom).toBeLessThan(fitZoom(bounds, vp, 0.15, yaw)!);
+  });
+
+  it.each([0, 1, 2, 3])("depth points keep slab corners inside near..far in view %i", (view) => {
+    for (const floors of [DEFAULT_FLOORS, MAX_FLOORS]) {
+      const { centre, depthPoints } = framingPoints({ zonesOverlay: false, floors });
+      const lo = (a: 0 | 1 | 2) => Math.min(...depthPoints.map((p) => p[a]));
+      const hi = (a: 0 | 1 | 2) => Math.max(...depthPoints.map((p) => p[a]));
+      const { distance, near, far } = cameraRig({
+        min: [lo(0), lo(1), lo(2)],
+        max: [hi(0), hi(1), hi(2)],
+      });
+      const { direction } = viewBasis(viewYaw(view));
+      for (const p of [...corners(bounds), ...corners(towerBox(floors))]) {
+        const rel: Vec3 = [p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]];
+        const depth = distance + dot(rel, direction);
+        expect(depth).toBeGreaterThanOrEqual(near);
+        expect(depth).toBeLessThanOrEqual(far);
+      }
+    }
   });
 
   it("zones and palette framing fit their own box", () => {

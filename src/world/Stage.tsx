@@ -17,11 +17,9 @@ import { TOKENS } from "../shared/tokens";
 import {
   FIT_MARGIN,
   GROUND_EDGE_PX_PER_ZOOM,
-  boundsCentre,
   cameraRig,
   cellOpacity,
   fitPointsZoom,
-  framingBounds,
   framingPoints,
   keyLightDirection,
   keyShadowFrustum,
@@ -174,20 +172,16 @@ export function Stage({
   useEffect(() => {
     onFloors?.({ floors, towerVisible });
   }, [floors, towerVisible, onFloors]);
-  const bounds = useMemo(
-    () => framingBounds({ zonesOverlay, floors, palette: paletteBoard }),
-    [zonesOverlay, floors, paletteBoard],
-  );
   // Derived in render (zero-size viewport keeps the previous zoom); the effect below applies it to the camera.
   const yaw = viewYaw(view);
   const fit = useMemo(
     () => framingPoints({ zonesOverlay, floors, palette: paletteBoard }),
     [zonesOverlay, floors, paletteBoard],
   );
-  // Depth range covers everything fitted (a tall tower reaches toward the camera), not only the slab.
+  // Depth range covers the slab and the tower (a tall tower reaches toward the camera), not only what is fitted.
   const rigBounds = useMemo((): Box => {
-    const lo = (a: 0 | 1 | 2) => Math.min(...fit.points.map((p) => p[a]));
-    const hi = (a: 0 | 1 | 2) => Math.max(...fit.points.map((p) => p[a]));
+    const lo = (a: 0 | 1 | 2) => Math.min(...fit.depthPoints.map((p) => p[a]));
+    const hi = (a: 0 | 1 | 2) => Math.max(...fit.depthPoints.map((p) => p[a]));
     return { min: [lo(0), lo(1), lo(2)], max: [hi(0), hi(1), hi(2)] };
   }, [fit]);
   const nextZoom = fitPointsZoom(fit.points, fit.centre, size, FIT_MARGIN, yaw);
@@ -250,7 +244,7 @@ export function Stage({
   useLayoutEffect(() => {
     const camera = cameraRef.current;
     if (!camera) return;
-    const target = boundsCentre(bounds);
+    const target = fit.centre;
     const { distance, near, far } = cameraRig(rigBounds);
     const { direction } = viewBasis(yaw);
     camera.position.set(
@@ -268,7 +262,7 @@ export function Stage({
     }
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
-  }, [bounds, rigBounds, yaw, zoom]);
+  }, [fit, rigBounds, yaw, zoom]);
 
   // Ready once the ortho camera is the active one, the fitted zoom is applied, the first shadow map has been
   // drawn and a frame has been drawn.
