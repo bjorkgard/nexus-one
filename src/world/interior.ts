@@ -9,15 +9,20 @@ import {
 } from "three";
 import { TOKENS } from "../shared/tokens";
 import { GLASS_HALF } from "./dimensions";
-import type { Layout, Rect, Wall } from "./layout";
+import { DESK_STREAM, seatsOf, type Seat } from "./desks";
+import { LAYOUT_SEED, type Layout, type Rect, type Wall } from "./layout";
 import type { PaletteName } from "./palette";
+import { hashSeed, mulberry32 } from "./rng";
 import { LOOK } from "./stage-look";
 import { floorTopY, type TowerPart, type TowerPartKind } from "./tower";
 import { FLOOR_HEIGHT, type Vec3 } from "./zones";
 
 const T = LOOK.tower;
 const I = LOOK.interior;
+const D = I.desk;
 const EPS = 1e-9;
+// Added to the floor in the desk stream id so desk-top tints draw apart from the plant stream (floors stay far below it).
+const TINT_STREAM = 0x10000;
 
 // Every geometry-cache kind the interior builds; Stage clears these on HMR dispose.
 export const INTERIOR_GEOMETRY_KINDS = ["interior-box", "interior-tint"] as const;
@@ -94,9 +99,33 @@ function buildTintQuad(): BufferGeometry {
   return geometry;
 }
 
+// Unit-box transform for a desk-kit piece of a seat: `along` moves it along the seat's facing direction and `run`
+// across it, from the desk centre; `sizes.depth` is measured along the facing axis, `sizes.run` across it.
+function seatBox(
+  seat: Seat,
+  yBottom: number,
+  along: number,
+  run: number,
+  sizes: { run: number; height: number; depth: number },
+): Matrix4 {
+  const facingX = seat.facing[1] === "x";
+  const sign = seat.facing[0] === "+" ? 1 : -1;
+  const x = seat.x + (facingX ? sign * along : run);
+  const z = seat.z + (facingX ? run : sign * along);
+  return box(
+    [x, yBottom + sizes.height / 2, z],
+    facingX ? [sizes.depth, sizes.height, sizes.run] : [sizes.run, sizes.height, sizes.depth],
+  );
+}
+
 // Interior parts from the layout, in the order `Tower` draws them: low partitions, the open core frame, per-type
-// floor tints, the lobby furniture and the rooftop server penthouse. None casts or receives a shadow.
-export function buildInterior(layout: Layout): TowerPart[] {
+// floor tints, the lobby furniture, the desk kit and the rooftop server penthouse. None casts or receives a shadow.
+// Desk-kit instance i sits at `seatsOf(layout)[i]` (plants: one per drawn pod); `occupied` holds the seat indices
+// whose screen shows the idle glow.
+export function buildInterior(
+  layout: Layout,
+  occupied: ReadonlySet<number> = new Set(),
+): TowerPart[] {
   const { floors } = layout;
   const hole = layout.openings.slabHole;
   const none = { cast: false, receive: false };
@@ -196,6 +225,89 @@ export function buildInterior(layout: Layout): TowerPart[] {
     }
   }
 
+  // Desk kit: per seat a desk, a chair on the outer side, a monitor on the inner edge and a lamp at one end; per pod
+  // a plant with probability `plantRate`. Variety draws from the desk stream, never the layout's floor streams.
+  const seats = seatsOf(layout);
+  const seatFloors = seats.map((seat) => seat.floor);
+  const deskTops: Matrix4[] = [];
+  const deskTints: Color[] = [];
+  const chairs: Matrix4[] = [];
+  const monitors: Matrix4[] = [];
+  const screens: Matrix4[] = [];
+  const screenColors: Color[] = [];
+  const lamps: Matrix4[] = [];
+  const plants: Matrix4[] = [];
+  const plantFloors: number[] = [];
+  const plantRng = new Map<number, () => number>();
+  const tintRng = new Map<number, () => number>();
+  const rngOf = (streams: Map<number, () => number>, floor: number, offset: number) => {
+    if (!streams.has(floor)) {
+      streams.set(floor, mulberry32(hashSeed(LAYOUT_SEED ^ DESK_STREAM, floor + offset)));
+    }
+    return streams.get(floor)!;
+  };
+  const furnitureHsl = new Color(TOKENS.surface.furniture).getHSL({ h: 0, s: 0, l: 0 });
+  const idleScreen = new Color(TOKENS.surface.screenIdle);
+  const offScreen = new Color(TOKENS.surface.screenOff);
+  const lampColor = new Color(TOKENS.surface.lampWarm).multiplyScalar(D.lampGain);
+  const mon = D.monitor;
+  // Offsets from the desk centre along the facing direction (monitor on the inner edge, chair behind the desk) and
+  // along the run (lamp near the desk's outer end); the screen is a thin plate on the monitor's chair-side face.
+  const monitorAlong = 0.25;
+  const chairAlong = -0.5;
+  const lampRun = 0.5;
+  const plate = 0.01;
+  for (const seat of seats) {
+    const base = floorTopY(seat.floor);
+    const standTop = base + D.top.height;
+    deskTops.push(
+      seatBox(seat, base, 0, 0, { run: D.top.length, height: D.top.height, depth: D.top.depth }),
+    );
+    const tint = 2 * rngOf(tintRng, seat.floor, TINT_STREAM)() - 1;
+    deskTints.push(
+      new Color().setHSL(furnitureHsl.h, furnitureHsl.s, furnitureHsl.l * (1 + D.tintRange * tint)),
+    );
+    chairs.push(
+      seatBox(seat, base, chairAlong, 0, {
+        run: I.chair.size,
+        height: I.chair.height,
+        depth: I.chair.size,
+      }),
+    );
+    monitors.push(
+      seatBox(seat, standTop, monitorAlong, 0, {
+        run: mon.width,
+        height: mon.stand + mon.height,
+        depth: mon.depth,
+      }),
+    );
+    screens.push(
+      seatBox(seat, standTop + mon.stand + mon.inset, monitorAlong - (mon.depth + plate) / 2, 0, {
+        run: mon.width - 2 * mon.inset,
+        height: mon.height - 2 * mon.inset,
+        depth: plate,
+      }),
+    );
+    screenColors.push(occupied.has(seat.index) ? idleScreen : offScreen);
+    lamps.push(
+      seatBox(seat, standTop, 0, (seat.seat % 2 === 0 ? -1 : 1) * lampRun, {
+        run: D.lamp.head,
+        height: D.lamp.height,
+        depth: D.lamp.head,
+      }),
+    );
+    if (seat.seat === 0 && rngOf(plantRng, seat.floor, 0)() < D.plantRate) {
+      const pod = seats.slice(seat.index, seat.index + 4);
+      const cx = pod.reduce((sum, p) => sum + p.x, 0) / pod.length;
+      const cz = pod.reduce((sum, p) => sum + p.z, 0) / pod.length;
+      plants.push(
+        box([cx, base + D.plant.height / 2, cz], [D.plant.width, D.plant.height, D.plant.width]),
+      );
+      plantFloors.push(seat.floor);
+    }
+  }
+  const everySeat = (color: string) => seats.map(() => new Color(color));
+
   const roofFloors = (m: Matrix4[]) => m.map(() => floors);
   const roofY = floorTopY(floors);
   const room = layout.levels[floors]!.rooms[0]!;
@@ -241,6 +353,44 @@ export function buildInterior(layout: Layout): TowerPart[] {
       furniture,
       furniture.map(() => 0),
       furnitureColors,
+    ),
+    part("deskTop", "furniture", unitBox, buildUnitBox, deskTops, seatFloors, deskTints),
+    part(
+      "chair",
+      "furniture",
+      unitBox,
+      buildUnitBox,
+      chairs,
+      seatFloors,
+      everySeat(TOKENS.surface.chair),
+    ),
+    part(
+      "monitor",
+      "furniture",
+      unitBox,
+      buildUnitBox,
+      monitors,
+      seatFloors,
+      everySeat(TOKENS.surface.panel),
+    ),
+    part("screen", "screen", unitBox, buildUnitBox, screens, seatFloors, screenColors),
+    part(
+      "lamp",
+      "led",
+      unitBox,
+      buildUnitBox,
+      lamps,
+      seatFloors,
+      seats.map(() => lampColor),
+    ),
+    part(
+      "plant",
+      "furniture",
+      unitBox,
+      buildUnitBox,
+      plants,
+      plantFloors,
+      plants.map(() => new Color(TOKENS.surface.plant)),
     ),
     part("penthouseGlass", "glass", unitBox, buildUnitBox, glass, roofFloors(glass)),
     part("penthouseRoof", "panel", unitBox, buildUnitBox, roof, roofFloors(roof)),
