@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { hashSeed, mulberry32 } from "./rng";
+import { fnv1a, hashSeed, mulberry32 } from "./rng";
 
 const take = (next: () => number, n: number) => Array.from({ length: n }, next);
 
@@ -49,5 +49,25 @@ describe("hashSeed", () => {
 
   it("depends on the seed", () => {
     expect(hashSeed(1, 5)).not.toBe(hashSeed(2, 5));
+  });
+});
+
+describe("fnv1a", () => {
+  it("matches the FNV-1a 32-bit reference vectors", () => {
+    expect(fnv1a("")).toBe(0x811c9dc5);
+    expect(fnv1a("a")).toBe(0xe40c292c);
+    expect(fnv1a("foobar")).toBe(0xbf9cf968);
+  });
+
+  it("differs for near-identical ids", () => {
+    const hashes = new Set(Array.from({ length: 100 }, (_, i) => fnv1a(`agent-${i}`)));
+    expect(hashes.size).toBe(100);
+  });
+
+  it("hashes UTF-16 code units and stays unsigned 32-bit", () => {
+    const h = fnv1a("åäö🙂");
+    expect(h).toBeGreaterThanOrEqual(0);
+    expect(h).toBeLessThanOrEqual(0xffffffff);
+    expect(Number.isInteger(h)).toBe(true);
   });
 });

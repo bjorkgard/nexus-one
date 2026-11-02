@@ -3,7 +3,7 @@ import { hashSeed, mulberry32 } from "./rng";
 import { LOOK } from "./stage-look";
 
 // Changing LAYOUT_SEED, or any template constant in this file or in LOOK.interior, moves every desk
-// (slot order and positions). Task 2.5 owns the migration policy for existing desk assignments.
+// (slot order and positions); a layout change reassigns all desks.
 export const LAYOUT_SEED = 0x4e5855;
 
 export const ROOM_TYPES = [
