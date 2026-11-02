@@ -27,7 +27,7 @@ Open the local URL printed in the terminal. Changes to source files update the a
 - `vp run dev` — Start the development server.
 - `vp check` — Check formatting, lint rules, and TypeScript types.
 - `vp test` — Run the unit test suite.
-- `npx playwright test` — Run the Playwright tests (smoke, data source, performance overlay, isometric stage and tower) against the dev server on port 5199.
+- `npx playwright test` — Run the Playwright tests (smoke, data source, performance overlay, isometric stage, tower and floor layout) against the dev server on port 5199.
 - `vp exec playwright install chromium` — One-time download of the browser Playwright uses.
 - `vp run build` — Run `vp check` and the TypeScript compiler, then create a production build in `dist/`. Any `vp build` fails if a Node built-in, `__nexus`, a performance overlay marker, the zone overlay marker or the palette board marker reaches the browser bundle.
 - `vp run preview` — Serve the production build locally after building.
@@ -60,7 +60,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `geometry-cache.ts` — `getGeometry(kind, params, build)`: one shared geometry per kind and params, with cache stats.
   - `palette-layout.ts` — Layout constants and slot positions for the `?palette=1` board, also used for its camera framing bounds.
   - `reveal-hold.ts` — `createRevealHold`: holds the stage reveal until the palette board mounts or a 3 s timeout, plus its React context and hook.
-  - `stage-look.ts` — `LOOK`: the stage's size, grid, light and overlay constants (surface colours come from `src/shared/tokens.ts`).
+  - `stage-look.ts` — `LOOK`: the stage's size, grid, light and overlay constants, plus the floor layout and interior sizes in `LOOK.interior` (surface colours come from `src/shared/tokens.ts`).
 - `src/sim/` — Simulation and animation state.
 - `src/ui/` — Dashboard.
   - `Wordmark.tsx` — The "Nexus One" wordmark in the top-left corner.
@@ -78,7 +78,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.
   - `apply-once.ts` — `applyOnce`, the dedup entry: bounded recent-id ring plus reducer.
   - `color-metrics.ts` — Pure colour maths (hex to Lab, ΔE2000, colour-vision-deficiency simulation) for token tests.
-  - `tokens.ts` — `TOKENS`, the shared colour tokens (background, slab, grid, text, danger, zone kinds, material surfaces and vehicle paints), as data only; `flattenTokens` and `cssVarName` map them to `--nx-*` names.
+  - `tokens.ts` — `TOKENS`, the shared colour tokens (background, slab, grid, text, danger, zone kinds, material surfaces, room floor tints and vehicle paints), as data only; `flattenTokens` and `cssVarName` map them to `--nx-*` names.
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main process. `main.ts` is start-up and the window; `resolve.ts` is the `app://` file policy. Imports only `electron/` and `src/shared/`; no browser libraries (React, Three, zustand, three-stdlib); no `createRequire` or CommonJS.
 - `package.json` `dependencies` is empty on purpose: it means "loaded by Electron main at run time". Everything else is bundled (Vite for the renderer, `vp pack` for main) and goes in `devDependencies`.
