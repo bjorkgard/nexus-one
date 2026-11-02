@@ -5,6 +5,25 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-11-02
+
+### Added
+
+- The campus now has its first building, a glass office tower with six floors standing on the stage. Each floor is a slab with dark framing and a soft cyan glow around its edge, and the roof carries a parapet with a cyan line and three air-conditioning units.
+- The tower casts a soft shadow from the key light onto the ground, and the stage waits for that shadow before it appears, so the first frame you see is already complete.
+- The camera frames the whole tower and the stage together, so tall buildings stay in view.
+- Screen readers now hear the tower's floor count in the campus description.
+- Developers can turn the view in 90 degree steps with `?view=0` to `?view=3`, change the tower height with `?floors=2` to `?floors=40`, and hide the floor glow with `?glow=0`. With `?zones=1`, the roof air-conditioning units are labelled too. These options exist only in development builds.
+
+### Changed
+
+- Floors are now 6 m tall instead of 4 m, which gives the tower office-like proportions.
+- A development option with a bad value, such as `?floors=abc`, now shows a clear error instead of being ignored silently.
+
+### Fixed
+
+- If the graphics context is lost and restored, the tower's shadow is drawn again instead of disappearing.
+
 ## [0.10.1] - 2026-10-29
 
 ### Added
