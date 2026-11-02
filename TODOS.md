@@ -16,6 +16,20 @@
 **Priority:** P2
 **Depends on:** Task 2.3 (tower shell); must land before 2.5 desks are judged visually
 
+### Grow the tower live when the desk allocator needs a floor
+
+**Issue:** [#143](https://github.com/bjorkgard/nexus-one/issues/143)
+
+**What:** When the 2.5 desk allocator reports `floorsNeeded` above the rendered floor count, rebuild the stage with the extra floor while the app runs: zone registry, tower parts, roof notch and penthouse position, key-light shadow frustum, framing and desk kit.
+
+**Why:** `docs/PLAN.md` 2.5 says the allocator "adds a floor when full". Task 2.5 ships only the pure contract (`floorsNeeded`, seats on the new floor, unit-tested) because floors are fixed at page load (`DEFAULT_FLOORS`, `?floors=`) and no client agent store exists before 4.5. Without this, agent 201+ gets a seat on a floor that is not drawn (`desks().offstage`).
+
+**Context:** Deferred in the task 2.5 CEO review (decision D3, `docs/plans/2.5-desk-kit.md`). Stage memoises registry, tower parts and framing on `floors` (`src/world/Stage.tsx:150-185`); the shadow frustum depends on floors (`keyShadowFrustum`, learning key-light-fixed-100m); the static shadow must be re-requested after the new parts upload. `buildLayout` keeps lower floors unchanged when a floor is added (`src/world/layout.ts:735`), so seated agents do not move. Start with the 4.8 agent-to-world binding, which is the first caller.
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 2.5 (desk allocator); lands with 4.5 (client store) and 4.8 (agent to world binding)
+
 ### Precompile palette shaders before the stage reveal
 
 **Issue:** [#134](https://github.com/bjorkgard/nexus-one/issues/134)
