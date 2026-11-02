@@ -72,38 +72,25 @@ const wallBox = (r: Rect, y: number, height: number) =>
     [r.max[0] - r.min[0], height, r.max[1] - r.min[1]],
   );
 
-// One quad set per tinted room (corridors keep the slab's own colour), lifted `minGap` above each slab top: above
-// it, below the glow strip. Rooms never cover the floor-1 slab hole, so nothing is tinted over the void.
-function buildTintGeometry(layout: Layout): BufferGeometry {
-  const position: number[] = [];
-  const normal: number[] = [];
-  const color: number[] = [];
-  for (const level of layout.levels) {
-    const y = floorTopY(level.floor) + T.minGap;
-    for (const room of level.rooms) {
-      if (room.roomType === "corridor") continue;
-      const c = new Color(TOKENS.room[room.roomType]);
-      const [x0, z0] = room.min;
-      const [x1, z1] = room.max;
-      // Counter-clockwise seen from above, so the face looks up.
-      for (const [x, z] of [
-        [x0, z0],
-        [x0, z1],
-        [x1, z1],
-        [x0, z0],
-        [x1, z1],
-        [x1, z0],
-      ] as const) {
-        position.push(x, y, z);
-        normal.push(0, 1, 0);
-        color.push(c.r, c.g, c.b);
-      }
-    }
-  }
+// One flat up-facing unit quad at y = 0, white so each room's instance colour sets its tint.
+function buildTintQuad(): BufferGeometry {
   const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new Float32BufferAttribute(position, 3));
-  geometry.setAttribute("normal", new Float32BufferAttribute(normal, 3));
-  geometry.setAttribute("color", new Float32BufferAttribute(color, 3));
+  // Counter-clockwise seen from above, so the face looks up.
+  geometry.setAttribute(
+    "position",
+    new Float32BufferAttribute(
+      [-0.5, 0, -0.5, -0.5, 0, 0.5, 0.5, 0, 0.5, -0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 0, -0.5],
+      3,
+    ),
+  );
+  geometry.setAttribute(
+    "normal",
+    new Float32BufferAttribute(Array.from({ length: 6 }, () => [0, 1, 0]).flat(), 3),
+  );
+  geometry.setAttribute(
+    "color",
+    new Float32BufferAttribute(Array.from({ length: 6 }, () => [1, 1, 1]).flat(), 3),
+  );
   return geometry;
 }
 
@@ -119,6 +106,7 @@ export function buildInterior(layout: Layout): TowerPart[] {
     geometryKey: TowerPart["geometryKey"],
     buildGeometry: () => BufferGeometry,
     matrices: Matrix4[],
+    floorOf: readonly number[],
     colors?: Color[],
   ): TowerPart => ({
     kind,
@@ -128,11 +116,17 @@ export function buildInterior(layout: Layout): TowerPart[] {
     geometryKey,
     buildGeometry,
     matrices,
+    floorOf,
     ...(colors ? { colors } : {}),
   });
 
   const partitions: Matrix4[] = [];
+  const partitionFloors: number[] = [];
   const frame: Matrix4[] = [];
+  const frameFloors: number[] = [];
+  const tints: Matrix4[] = [];
+  const tintColors: Color[] = [];
+  const tintFloors: number[] = [];
   const s = I.coreFrameSize;
   for (let k = 0; k < floors; k++) {
     const level = layout.levels[k]!;
@@ -140,6 +134,7 @@ export function buildInterior(layout: Layout): TowerPart[] {
     for (const wall of level.walls) {
       if (isHull(wall)) continue;
       partitions.push(wallBox(onWalkableSide(wall, hole), top, I.partitionHeight));
+      partitionFloors.push(k);
     }
     // Posts run from inside one slab to inside the next, like the tower columns.
     const y = top - T.slabThickness / 2 + FLOOR_HEIGHT / 2;
@@ -153,19 +148,29 @@ export function buildInterior(layout: Layout): TowerPart[] {
         frame.push(box(d.axis === "x" ? [e, y, d.at] : [d.at, y, e], [s, FLOOR_HEIGHT, s]));
       }
     }
-  }
-  // One beam along each core edge under every slab above a floor (the roof deck included).
-  const core0 = layout.levels[0]!.rooms.find((r) => r.roomType === "core")!;
-  const [cx0, cz0] = core0.min;
-  const [cx1, cz1] = core0.max;
-  for (let k = 1; k <= floors; k++) {
-    const y = floorTopY(k) - T.slabThickness - s / 2;
+    // One beam along each core edge under the slab above this floor (the roof deck for the top floor), so the
+    // frame is ordered by floor and a floor cut is exact.
+    const by = floorTopY(k + 1) - T.slabThickness - s / 2;
     frame.push(
-      box([(cx0 + cx1) / 2, y, cz0], [cx1 - cx0 + s, s, s]),
-      box([(cx0 + cx1) / 2, y, cz1], [cx1 - cx0 + s, s, s]),
-      box([cx0, y, (cz0 + cz1) / 2], [s, s, cz1 - cz0 + s]),
-      box([cx1, y, (cz0 + cz1) / 2], [s, s, cz1 - cz0 + s]),
+      box([(x0 + x1) / 2, by, z0], [x1 - x0 + s, s, s]),
+      box([(x0 + x1) / 2, by, z1], [x1 - x0 + s, s, s]),
+      box([x0, by, (z0 + z1) / 2], [s, s, z1 - z0 + s]),
+      box([x1, by, (z0 + z1) / 2], [s, s, z1 - z0 + s]),
     );
+    while (frameFloors.length < frame.length) frameFloors.push(k);
+  }
+  // One quad per tinted room (corridors keep the slab's own colour), lifted `minGap` above the slab top: above
+  // it, below the glow strip. Rooms never cover the floor-1 slab hole, so nothing is tinted over the void.
+  for (const level of layout.levels) {
+    for (const room of level.rooms) {
+      if (room.roomType === "corridor") continue;
+      const [rx0, rz0] = room.min;
+      const [rx1, rz1] = room.max;
+      const y = floorTopY(level.floor) + T.minGap;
+      tints.push(box([(rx0 + rx1) / 2, y, (rz0 + rz1) / 2], [rx1 - rx0, 1, rz1 - rz0]));
+      tintColors.push(new Color(TOKENS.room[room.roomType]));
+      tintFloors.push(level.floor);
+    }
   }
 
   const lobby = layout.levels[0]!;
@@ -191,6 +196,7 @@ export function buildInterior(layout: Layout): TowerPart[] {
     }
   }
 
+  const roofFloors = (m: Matrix4[]) => m.map(() => floors);
   const roofY = floorTopY(floors);
   const room = layout.levels[floors]!.rooms[0]!;
   const P = I.penthouse;
@@ -216,18 +222,28 @@ export function buildInterior(layout: Layout): TowerPart[] {
   ];
 
   return [
-    part("partition", "panel", unitBox, buildUnitBox, partitions),
-    part("coreFrame", "panel", unitBox, buildUnitBox, frame),
+    part("partition", "panel", unitBox, buildUnitBox, partitions, partitionFloors),
+    part("coreFrame", "panel", unitBox, buildUnitBox, frame, frameFloors),
     part(
       "floorTint",
       "ground",
-      { kind: "interior-tint", params: { seed: layout.seed, floors, ...TOKENS.room } },
-      () => buildTintGeometry(layout),
-      [new Matrix4()],
+      { kind: "interior-tint", params: {} },
+      buildTintQuad,
+      tints,
+      tintFloors,
+      tintColors,
     ),
-    part("furniture", "furniture", unitBox, buildUnitBox, furniture, furnitureColors),
-    part("penthouseGlass", "glass", unitBox, buildUnitBox, glass),
-    part("penthouseRoof", "panel", unitBox, buildUnitBox, roof),
-    part("penthouseGlow", "trimWhite", unitBox, buildUnitBox, glow),
+    part(
+      "furniture",
+      "furniture",
+      unitBox,
+      buildUnitBox,
+      furniture,
+      furniture.map(() => 0),
+      furnitureColors,
+    ),
+    part("penthouseGlass", "glass", unitBox, buildUnitBox, glass, roofFloors(glass)),
+    part("penthouseRoof", "panel", unitBox, buildUnitBox, roof, roofFloors(roof)),
+    part("penthouseGlow", "trimWhite", unitBox, buildUnitBox, glow, roofFloors(glow)),
   ];
 }

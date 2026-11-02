@@ -39,6 +39,8 @@ export const TOWER_PART_KINDS = [
 export type TowerPartKind = (typeof TOWER_PART_KINDS)[number];
 
 // One InstancedMesh per part: the component maps these generically. Instances are ordered by floor, ascending.
+// `floorOf[i]` is the floor of instance i (non-decreasing); roof-level instances (roof deck, parapet, AC, penthouse)
+// sit on floor `floors`. `cutCounts` reads it, so a `?cut` instance count is exact for every kind.
 export interface TowerPart {
   readonly kind: TowerPartKind;
   readonly material: PaletteName;
@@ -48,6 +50,7 @@ export interface TowerPart {
   readonly geometryKey: { readonly kind: string; readonly params: GeometryParams };
   readonly buildGeometry: () => BufferGeometry;
   readonly matrices: readonly Matrix4[];
+  readonly floorOf: readonly number[];
   // Optional per-instance colours, one per matrix, for white-based materials (`furniture`).
   readonly colors?: readonly Color[];
 }
@@ -58,6 +61,31 @@ export interface AcUnit {
   // Box centre in world metres.
   readonly position: Vec3;
 }
+
+// Instances to draw per part kind when floors above `k` are hidden (`?cut=k`, 1..floors): an instance shows when its
+// floor is at most `k`, so the roof level shows only at `k === floors`. Pure; `TowerPartMesh` sets `mesh.count` from it.
+export function cutCounts(
+  parts: readonly TowerPart[],
+  k: number,
+  floors: number,
+): Partial<Record<TowerPartKind, number>> {
+  if (!Number.isInteger(k) || k < 1 || k > floors) {
+    throw new RangeError(`cut must be an integer in 1..${floors}, got ${k}`);
+  }
+  return Object.fromEntries(
+    parts.map((p) => [p.kind, p.floorOf.filter((f) => f <= k).length]),
+  ) as Partial<Record<TowerPartKind, number>>;
+}
+
+// Roof opening per camera view (`?view`), as [minX, minZ, maxX, maxZ] inside the parapet ring (inner face 14.7 m).
+// Each opens the quadrant the camera looks from (view 0: +x+z, 1: +x-z, 2: -x-z, 3: -x+z) and clears the penthouse
+// (x -2..8, z 5.5..13.5) and the AC units (x -6.5..-3.5, z 3..5; x 6.3..9.9, z -4.7..-3.3) by at least 1 m.
+export const ROOF_HOLES: readonly Rect[] = [
+  { min: [9, 1], max: [14, 14] },
+  { min: [1, -14], max: [14, -6] },
+  { min: [-14, -14], max: [-1, -1] },
+  { min: [-14, 6], max: [-3, 14] },
+];
 
 export interface Tower {
   readonly parts: readonly TowerPart[];
@@ -397,14 +425,19 @@ const ENTRANCE_FACE = { "+x": [1, -1], "-x": [3, 1] } as const;
 
 // `floors` counts the lobby (floor 0); floors 0..floors-1 get a slab and a glass wall, the roof deck sits at floor `floors`.
 // `openings` come from the layout (the registry owns it): the entrance gaps cut the floor-0 glass, the slab hole the floor-1 slab.
+// `view` (0..3, default 0) picks the roof opening (`ROOF_HOLES`).
 export function buildTower({
   floors,
   openings,
+  view = 0,
 }: {
   floors: number;
   openings: Layout["openings"];
+  view?: number;
 }): Tower {
   assertFloors(floors);
+  const roofHole = ROOF_HOLES[view];
+  if (!roofHole) throw new ZoneError(`view must be 0..3, got ${view}`);
   const hole = openings.slabHole;
   const [h0, h1] = [hole.min, hole.max];
   const slackLine = GLASS_HALF + 1e-6;
@@ -426,6 +459,11 @@ export function buildTower({
   const glass: Matrix4[] = [];
   const glow: Matrix4[] = [];
   const glowHoled: Matrix4[] = [];
+  // Floor of each instance, parallel to the arrays above.
+  const slabFloors: number[] = [];
+  const columnFloors: number[] = [];
+  const glassFloors: number[] = [];
+  const glowFloors: number[] = [];
   const mullions = columnOffsets();
   // An entrance with its jambs must sit inside one mullion bay, clear of every column.
   const bays = [-GLASS_HALF, ...mullions, GLASS_HALF];
@@ -456,10 +494,14 @@ export function buildTower({
   ];
   for (let k = 0; k < floors; k++) {
     const top = floorTopY(k);
-    if (k !== hole.floor) slabs.push(new Matrix4().makeTranslation(0, top, 0));
+    if (k !== hole.floor) {
+      slabs.push(new Matrix4().makeTranslation(0, top, 0));
+      slabFloors.push(k);
+    }
     (k === hole.floor ? glowHoled : glow).push(
       new Matrix4().makeTranslation(0, top + T.glowLift, 0),
     );
+    if (k !== hole.floor) glowFloors.push(k);
     for (const face of [0, 1, 2, 3] as const) {
       // Entrance gaps run the full floor height: the pieces beside them replace the whole-face plane.
       const gaps = openings.entrances
@@ -472,18 +514,21 @@ export function buildTower({
         .sort((p, q) => p[0] - q[0]);
       for (const [u0, u1] of cutSpans(-GLASS_HALF, GLASS_HALF, gaps)) {
         glass.push(glassMatrix(face, top, floorTopY(k + 1), u0, u1));
+        glassFloors.push(k);
       }
     }
     // Columns run from inside one slab to inside the next, so no cap lies in a slab top plane.
     const y = top - T.slabThickness / 2 + FLOOR_HEIGHT / 2;
     for (const [x, z] of posts) {
       columns.push(box([x, y, z], [T.columnSize, FLOOR_HEIGHT, T.columnSize]));
+      columnFloors.push(k);
     }
     // Jambs beside each gap, as tall as the columns and centred on the glass plane like them.
     for (const e of openings.entrances.filter((o) => o.floor === k)) {
       const x = (e.face === "+x" ? 1 : -1) * GLASS_HALF;
       for (const z of [e.centre - e.width / 2 - jamb / 2, e.centre + e.width / 2 + jamb / 2]) {
         columns.push(box([x, y, z], [jamb, FLOOR_HEIGHT, jamb]));
+        columnFloors.push(k);
       }
     }
   }
@@ -530,6 +575,7 @@ export function buildTower({
     geometryKey: TowerPart["geometryKey"],
     buildGeometry: () => BufferGeometry,
     matrices: Matrix4[],
+    floorOf: readonly number[] = matrices.map(() => floors),
   ): TowerPart => ({
     kind,
     material,
@@ -538,6 +584,7 @@ export function buildTower({
     geometryKey,
     buildGeometry,
     matrices,
+    floorOf,
   });
   const interior = TOKENS.slab.interiorTop;
   const frame = TOKENS.slab.frame;
@@ -551,6 +598,7 @@ export function buildTower({
       slabKey("tower-slab", frame, interior),
       () => buildSlabGeometry(frame, interior, frame),
       slabs,
+      slabFloors,
     ),
     part(
       "slabHoled",
@@ -568,8 +616,9 @@ export function buildTower({
       },
       () => buildSlabGeometry(frame, interior, frame, hole),
       [new Matrix4().makeTranslation(0, floorTopY(hole.floor), 0)],
+      [hole.floor],
     ),
-    part("column", "ground", caster, frameBoxKey, buildFrameBox, columns),
+    part("column", "ground", caster, frameBoxKey, buildFrameBox, columns, columnFloors),
     part(
       "glass",
       "glass",
@@ -577,6 +626,7 @@ export function buildTower({
       { kind: "tower-glass", params: {} },
       () => new PlaneGeometry(1, 1),
       glass,
+      glassFloors,
     ),
     part(
       "glow",
@@ -588,6 +638,7 @@ export function buildTower({
       },
       () => buildGlowGeometry(),
       glow,
+      glowFloors,
     ),
     part(
       "glowHoled",
@@ -606,13 +657,23 @@ export function buildTower({
       },
       () => buildGlowGeometry(hole),
       glowHoled,
+      [hole.floor],
     ),
     part(
       "roofDeck",
       "ground",
       caster,
-      slabKey("tower-roof", frame, frame),
-      () => buildSlabGeometry(frame, frame, frame),
+      {
+        ...slabKey("tower-roof", frame, frame),
+        params: {
+          ...slabKey("tower-roof", frame, frame).params,
+          holeMinX: roofHole.min[0],
+          holeMinZ: roofHole.min[1],
+          holeMaxX: roofHole.max[0],
+          holeMaxZ: roofHole.max[1],
+        },
+      },
+      () => buildSlabGeometry(frame, frame, frame, roofHole),
       [new Matrix4().makeTranslation(0, roofY, 0)],
     ),
     part("parapet", "ground", caster, frameBoxKey, buildFrameBox, parapet),

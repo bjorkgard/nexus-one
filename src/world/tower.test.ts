@@ -10,7 +10,9 @@ import { LAYOUT_SEED, buildLayout, type Entrance } from "./layout";
 import { LOOK } from "./stage-look";
 import {
   TOWER_GEOMETRY_KINDS,
+  TOWER_PART_KINDS,
   buildTower,
+  cutCounts,
   floorTopY,
   type TowerPart,
   type TowerPartKind,
@@ -905,5 +907,178 @@ describe("TOWER_GEOMETRY_KINDS", () => {
   it.each([2, 6, 40])("lists the geometry kind of every part at %i floors", (floors) => {
     const kinds: readonly string[] = TOWER_GEOMETRY_KINDS;
     for (const p of towerOf(floors).parts) expect(kinds).toContain(p.geometryKey.kind);
+  });
+});
+
+describe("roof opening", () => {
+  const floors = 6;
+  const layout = buildLayout({ floors, seed: LAYOUT_SEED });
+  const towerAt = (view?: number) =>
+    buildTower({ floors, openings: layout.openings, ...(view === undefined ? {} : { view }) });
+  const partOf = (t: ReturnType<typeof towerOf>, kind: TowerPartKind) =>
+    t.parts.find((p) => p.kind === kind)!;
+  const holeOf = (view: number) => {
+    const p = partOf(towerAt(view), "roofDeck").geometryKey.params;
+    return {
+      min: [p.holeMinX as number, p.holeMinZ as number],
+      max: [p.holeMaxX as number, p.holeMaxZ as number],
+    };
+  };
+  // Footprints the hole must clear, from the layout's penthouse and the built AC boxes.
+  const penthouse = layout.levels[floors]!.rooms[0]!;
+  const acBoxes = () =>
+    partOf(towerAt(), "ac").matrices.map((m) => ({
+      min: [m.elements[12]! - m.elements[0]! / 2, m.elements[14]! - m.elements[10]! / 2],
+      max: [m.elements[12]! + m.elements[0]! / 2, m.elements[14]! + m.elements[10]! / 2],
+    }));
+  type Box = { readonly min: readonly number[]; readonly max: readonly number[] };
+  // Gap in metres between two rectangles (0 when they touch or overlap).
+  const gap = (a: Box, b: Box) =>
+    Math.hypot(
+      Math.max(0, a.min[0]! - b.max[0]!, b.min[0]! - a.max[0]!),
+      Math.max(0, a.min[1]! - b.max[1]!, b.min[1]! - a.max[1]!),
+    );
+
+  it.each([0, 1, 2, 3])("view %i: the hole clears the penthouse and every AC unit by 1 m", (v) => {
+    const hole = holeOf(v);
+    expect(gap(hole, penthouse)).toBeGreaterThanOrEqual(1);
+    for (const b of acBoxes()) expect(gap(hole, b)).toBeGreaterThanOrEqual(1);
+  });
+
+  it.each([0, 1, 2, 3])(
+    "view %i: the hole sits inside the parapet ring, in the camera's quadrant",
+    (v) => {
+      const hole = holeOf(v);
+      const inner = 15 - T.parapetThickness;
+      for (const c of [...hole.min, ...hole.max]) expect(Math.abs(c)).toBeLessThanOrEqual(inner);
+      // Camera in +x,+z at view 0, then turning 90 degrees a step: (+,+), (+,-), (-,-), (-,+).
+      const [sx, sz] = [
+        [1, 1],
+        [1, -1],
+        [-1, -1],
+        [-1, 1],
+      ][v]!;
+      expect(hole.min[0]! * sx!).toBeGreaterThan(0);
+      expect(hole.max[0]! * sx!).toBeGreaterThan(0);
+      expect(hole.min[1]! * sz!).toBeGreaterThan(0);
+      expect(hole.max[1]! * sz!).toBeGreaterThan(0);
+    },
+  );
+
+  it.each([0, 1, 2, 3])("view %i: the roof geometry has no top face over the hole", (v) => {
+    const deck = partOf(towerAt(v), "roofDeck");
+    const hole = holeOf(v);
+    const tops = worldTriangles(deck, deck.matrices[0]!).filter(
+      (tri) => normalOf(tri).y > 0.5 && Math.abs(tri[0]!.y - floorTopY(floors)) < 1e-4,
+    );
+    expect(tops.length).toBeGreaterThan(0);
+    for (const tri of tops) {
+      const cx = (tri[0]!.x + tri[1]!.x + tri[2]!.x) / 3;
+      const cz = (tri[0]!.z + tri[1]!.z + tri[2]!.z) / 3;
+      const inside =
+        cx > hole.min[0]! && cx < hole.max[0]! && cz > hole.min[1]! && cz < hole.max[1]!;
+      expect(inside).toBe(false);
+    }
+  });
+
+  it("keeps the parapet and cyan edge whole and identical at every view", () => {
+    const base = towerAt(0);
+    for (const v of [1, 2, 3]) {
+      const t = towerAt(v);
+      for (const kind of ["parapet", "parapetEdge"] as const) {
+        expect(partOf(t, kind).matrices.map((m) => m.elements)).toEqual(
+          partOf(base, kind).matrices.map((m) => m.elements),
+        );
+        expect(partOf(t, kind).matrices).toHaveLength(4);
+      }
+    }
+  });
+
+  it("changes only the roof deck between views: same kinds and instance counts", () => {
+    const base = towerAt(0);
+    expect(towerAt().parts.map((p) => p.geometryKey)).toEqual(base.parts.map((p) => p.geometryKey));
+    for (const v of [1, 2, 3]) {
+      const t = towerAt(v);
+      expect(t.parts.map((p) => [p.kind, p.matrices.length])).toEqual(
+        base.parts.map((p) => [p.kind, p.matrices.length]),
+      );
+      const changed = t.parts.filter(
+        (p, i) => JSON.stringify(p.geometryKey) !== JSON.stringify(base.parts[i]!.geometryKey),
+      );
+      expect(changed.map((p) => p.kind)).toEqual(["roofDeck"]);
+    }
+  });
+
+  it("rejects a view outside 0..3", () => {
+    for (const v of [-1, 4, 0.5]) expect(() => towerAt(v)).toThrow(ZoneError);
+  });
+});
+
+describe("cutCounts", () => {
+  // Floor of an instance from its own height alone (independent of `floorOf`): slab tops sit `slabTopLift`
+  // above k * FLOOR_HEIGHT, and every instance lies in the band above its slab or just below the next.
+  const floorFromY = (m: Matrix4) =>
+    Math.floor((m.elements[13]! - T.slabTopLift) / FLOOR_HEIGHT + 1e-6);
+  const partsAt = (floors: number) => {
+    const layout = buildLayout({ floors, seed: LAYOUT_SEED });
+    return [...buildTower({ floors, openings: layout.openings }).parts, ...buildInterior(layout)];
+  };
+
+  it.each([2, 6, 12])(
+    "matches the instances on floors <= k for every kind at %i floors",
+    (floors) => {
+      const parts = partsAt(floors);
+      expect(new Set(parts.map((p) => p.kind))).toEqual(new Set(TOWER_PART_KINDS));
+      for (const p of parts) {
+        expect(p.floorOf, p.kind).toEqual(p.matrices.map(floorFromY));
+        expect([...p.floorOf], p.kind).toEqual([...p.floorOf].sort((a, b) => a - b));
+      }
+      for (let k = 1; k <= floors; k++) {
+        const counts = cutCounts(parts, k, floors);
+        for (const p of parts) {
+          expect(counts[p.kind], `${p.kind} at k=${k}`).toBe(
+            p.matrices.filter((m) => floorFromY(m) <= k).length,
+          );
+        }
+      }
+    },
+  );
+
+  it("hides every roof-level kind below the top and shows all of them at k = floors", () => {
+    const floors = 6;
+    const parts = partsAt(floors);
+    const roofLevel = [
+      "roofDeck",
+      "parapet",
+      "parapetEdge",
+      "ac",
+      "penthouseGlass",
+      "penthouseRoof",
+      "penthouseGlow",
+    ] as const;
+    for (const k of [1, floors - 1]) {
+      const counts = cutCounts(parts, k, floors);
+      for (const kind of roofLevel) expect(counts[kind], kind).toBe(0);
+    }
+    const all = cutCounts(parts, floors, floors);
+    for (const p of parts) expect(all[p.kind], p.kind).toBe(p.matrices.length);
+  });
+
+  it("makes the interleaved kinds exact: core frame and tints grow floor by floor", () => {
+    const floors = 6;
+    const parts = partsAt(floors);
+    for (const kind of ["coreFrame", "floorTint", "column", "partition"] as const) {
+      const series = Array.from(
+        { length: floors - 1 },
+        (_, i) => cutCounts(parts, i + 1, floors)[kind]!,
+      );
+      for (let i = 1; i < series.length; i++)
+        expect(series[i], kind).toBeGreaterThan(series[i - 1]!);
+    }
+  });
+
+  it("rejects k outside 1..floors", () => {
+    const parts = partsAt(6);
+    for (const k of [0, 7, 1.5]) expect(() => cutCounts(parts, k, 6)).toThrow(RangeError);
   });
 });

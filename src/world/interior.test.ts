@@ -1,4 +1,4 @@
-import { Color, Matrix4, Vector3 } from "three";
+import { Color, Matrix4 } from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { TOKENS } from "../shared/tokens";
 import { GLASS_HALF } from "./dimensions";
@@ -347,41 +347,46 @@ describe("penthouse", () => {
   });
 });
 
+describe("floor order", () => {
+  it("interleaves core-frame posts and beams by floor, 4 beams under each floor's ceiling", () => {
+    const frame = part("coreFrame");
+    expect(frame.floorOf).toHaveLength(frame.matrices.length);
+    for (let k = 0; k < FLOORS; k++) {
+      const onFloor = frame.matrices.filter((_, i) => frame.floorOf[i] === k).map(boxOf);
+      const beams = onFloor.filter((b) => near(size(b)[1]!, I.coreFrameSize));
+      expect(beams, `floor ${k}`).toHaveLength(4);
+      for (const b of beams) expect(centre(b)[1]!).toBeLessThan(floorTopY(k + 1) - T.slabThickness);
+    }
+    expect([...frame.floorOf]).toEqual([...frame.floorOf].sort((a, b) => a - b));
+  });
+
+  it("orders floor tints by floor", () => {
+    const tint = part("floorTint");
+    expect([...tint.floorOf]).toEqual([...tint.floorOf].sort((a, b) => a - b));
+    expect(new Set(tint.floorOf)).toEqual(new Set(Array.from({ length: FLOORS + 1 }, (_, k) => k)));
+  });
+});
+
 describe("floor tints", () => {
   it("has a TOKENS.room colour for exactly every room type", () => {
     expect(Object.keys(TOKENS.room).sort()).toEqual([...ROOM_TYPES].sort());
   });
 
-  it("keys the tint geometry on every baked room colour", () => {
-    const params = part("floorTint").geometryKey.params;
-    for (const hex of Object.values(TOKENS.room)) expect(Object.values(params)).toContain(hex);
-  });
-
   const tint = part("floorTint");
-  const geometry = tint.buildGeometry();
-  const position = geometry.getAttribute("position");
-  const color = geometry.getAttribute("color");
-  // Each tint quad is two triangles: group vertices in sixes.
-  const quads = Array.from({ length: position.count / 6 }, (_, q) => {
-    const vs = Array.from({ length: 6 }, (_, k) =>
-      new Vector3().fromBufferAttribute(position, q * 6 + k),
-    );
-    return {
-      rect: {
-        min: [Math.min(...vs.map((v) => v.x)), Math.min(...vs.map((v) => v.z))],
-        max: [Math.max(...vs.map((v) => v.x)), Math.max(...vs.map((v) => v.z))],
-      } as Rect,
-      y: vs[0]!.y,
-      flat: vs.every((v) => v.y === vs[0]!.y),
-      color: new Color().fromBufferAttribute(color, q * 6).getHex(),
-    };
+  // One instance per tinted room: a unit quad scaled to the room, its y the quad height, its colour the room's token.
+  const quads = tint.matrices.map((m, i) => {
+    const b = boxOf(m);
+    return { rect: rectOf(b), y: centre(b)[1]!, flat: true, color: tint.colors![i]!.getHex() };
   });
   const tinted = layout.levels.flatMap((lv) => lv.rooms.filter((r) => r.roomType !== "corridor"));
 
-  it("is one single-instance part on ground, cached by seed, floors and room colours", () => {
+  it("is one ground part of per-room quad instances with a colour each", () => {
     expect(tint.material).toBe("ground");
-    expect(tint.matrices).toHaveLength(1);
-    expect(tint.geometryKey.params).toEqual({ seed: LAYOUT_SEED, floors: FLOORS, ...TOKENS.room });
+    expect(tint.matrices).toHaveLength(tinted.length);
+    expect(tint.colors).toHaveLength(tinted.length);
+    expect(tint.geometryKey.params).toEqual({});
+    const geometry = tint.buildGeometry();
+    expect(geometry.getAttribute("position").count).toBe(6);
     expect(geometry.getAttribute("normal").getY(0)).toBe(1);
   });
 
