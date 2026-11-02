@@ -492,7 +492,8 @@ describe("desk kit parts", () => {
   });
 
   it("places instance i at seat i (S1-1)", () => {
-    part("deskTop").matrices.forEach((m, i) => {
+    // The seat is the chair.
+    part("chair").matrices.forEach((m, i) => {
       const c = centre(boxOf(m));
       expect(c[0]).toBeCloseTo(seats[i]!.x, 9);
       expect(c[2]).toBeCloseTo(seats[i]!.z, 9);
@@ -500,10 +501,74 @@ describe("desk kit parts", () => {
     for (const k of seatKinds) {
       part(k).matrices.forEach((m, i) => {
         const c = centre(boxOf(m));
-        // Chair and screen sit within one desk depth of the desk centre, on the seat's own floor.
-        expect(Math.hypot(c[0]! - seats[i]!.x, c[2]! - seats[i]!.z), `${k} ${i}`).toBeLessThan(0.8);
+        // Every piece sits within a desk length of its seat.
+        expect(Math.hypot(c[0]! - seats[i]!.x, c[2]! - seats[i]!.z), `${k} ${i}`).toBeLessThan(1.4);
       });
     }
+  });
+
+  // The 3.2 m slot rect and pod centre line of every seat's pod.
+  const podOf = (s: (typeof seats)[number]) => {
+    const slot = layout.levels[s.floor]!.deskSlots[s.slot]!;
+    return { slot, mid: [(slot.min[0] + slot.max[0]) / 2, (slot.min[1] + slot.max[1]) / 2] };
+  };
+  const intersects = (a: Box3, b: Box3) =>
+    [0, 1, 2].every((k) => a.min[k]! < b.max[k]! - EPS && b.min[k]! < a.max[k]! - EPS);
+
+  it("keeps every chair clear of every desk in its pod", () => {
+    const chairs = part("chair").matrices.map(boxOf);
+    const desks = part("deskTop").matrices.map(boxOf);
+    seats.forEach((s, i) => {
+      for (const j of seats.keys()) {
+        if (seats[j]!.floor !== s.floor || seats[j]!.slot !== s.slot) continue;
+        expect(intersects(chairs[i]!, desks[j]!), `chair ${i} vs desk ${j}`).toBe(false);
+      }
+    });
+  });
+
+  it("keeps every desk-kit part inside its slot rect", () => {
+    for (const k of [...seatKinds, "plant"] as const) {
+      const p = part(k);
+      p.matrices.forEach((m, n) => {
+        const b = boxOf(m);
+        const centreXZ = [centre(b)[0]!, centre(b)[2]!];
+        const s = seats.find((q) => {
+          const { slot } = podOf(q);
+          return (
+            q.floor === p.floorOf[n] &&
+            centreXZ[0]! > slot.min[0] &&
+            centreXZ[0]! < slot.max[0] &&
+            centreXZ[1]! > slot.min[1] &&
+            centreXZ[1]! < slot.max[1]
+          );
+        });
+        expect(s, `${k} ${n} has a slot`).toBeDefined();
+        const { slot } = podOf(s!);
+        expect(b.min[0], `${k} ${n}`).toBeGreaterThanOrEqual(slot.min[0] - EPS);
+        expect(b.max[0], `${k} ${n}`).toBeLessThanOrEqual(slot.max[0] + EPS);
+        expect(b.min[2], `${k} ${n}`).toBeGreaterThanOrEqual(slot.min[1] - EPS);
+        expect(b.max[2], `${k} ${n}`).toBeLessThanOrEqual(slot.max[1] + EPS);
+      });
+    }
+  });
+
+  it("puts each desk's back edge on its pod centre line", () => {
+    part("deskTop").matrices.forEach((m, i) => {
+      const b = boxOf(m);
+      const s = seats[i]!;
+      const { mid } = podOf(s);
+      const axis = s.facing[1] === "x" ? 0 : 2;
+      const line = mid[axis / 2]!;
+      // The seat looks toward the centre line, so the desk's far edge along the facing direction is on it.
+      const sign = s.facing[0] === "+" ? 1 : -1;
+      expect(sign > 0 ? b.max[axis]! : b.min[axis]!).toBeCloseTo(line, 9);
+    });
+  });
+
+  it("keeps occupied screens at least 3:1 brighter than empty ones (D24)", () => {
+    const lit = buildInterior(layout, new Set([0])).find((p) => p.kind === "screen")!;
+    const [occupiedLum, emptyLum] = [lit.colors![0]!, lit.colors![1]!].map(luminance);
+    expect((occupiedLum! + 0.05) / (emptyLum! + 0.05)).toBeGreaterThanOrEqual(3);
   });
 
   it("sizes desk top, chair and lamp from LOOK", () => {

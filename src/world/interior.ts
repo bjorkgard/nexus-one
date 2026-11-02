@@ -9,7 +9,7 @@ import {
 } from "three";
 import { TOKENS } from "../shared/tokens";
 import { GLASS_HALF } from "./dimensions";
-import { DESK_STREAM, seatsOf, type Seat } from "./desks";
+import { DESK_STREAM, SEAT_DEPTH, seatsOf, type Seat } from "./desks";
 import { LAYOUT_SEED, type Layout, type Rect, type Wall } from "./layout";
 import type { PaletteName } from "./palette";
 import { hashSeed, mulberry32 } from "./rng";
@@ -251,46 +251,60 @@ export function buildInterior(
   const offScreen = new Color(TOKENS.surface.screenOff);
   const lampColor = new Color(TOKENS.surface.lampWarm).multiplyScalar(D.lampGain);
   const mon = D.monitor;
-  // Offsets from the desk centre along the facing direction (monitor on the inner edge, chair behind the desk) and
-  // along the run (lamp near the desk's outer end); the screen is a thin plate on the monitor's chair-side face.
-  const monitorAlong = 0.25;
-  const chairAlong = -0.5;
+  // The seat is the chair. Offsets from it along the facing direction: the desk's back edge is on the pod centre
+  // line, the monitor stands at that edge, and the screen is a thin plate on the monitor's chair-side face.
+  // Desks, monitors and lamps shift `runShift` outward along the run, which leaves a gap on the centre line for the
+  // plant; the lamp sits near the desk's outer end.
+  const deskAlong = SEAT_DEPTH - D.top.depth / 2;
+  const monitorAlong = SEAT_DEPTH - mon.depth / 2 - 0.05;
   const lampRun = 0.5;
+  const runShift = 0.05;
   const plate = 0.01;
   for (const seat of seats) {
     const base = floorTopY(seat.floor);
+    const shift = (seat.seat % 2 === 0 ? -1 : 1) * runShift;
     const standTop = base + D.top.height;
     deskTops.push(
-      seatBox(seat, base, 0, 0, { run: D.top.length, height: D.top.height, depth: D.top.depth }),
+      seatBox(seat, base, deskAlong, shift, {
+        run: D.top.length,
+        height: D.top.height,
+        depth: D.top.depth,
+      }),
     );
     const tint = 2 * rngOf(tintRng, seat.floor, TINT_STREAM)() - 1;
     deskTints.push(
       new Color().setHSL(furnitureHsl.h, furnitureHsl.s, furnitureHsl.l * (1 + D.tintRange * tint)),
     );
     chairs.push(
-      seatBox(seat, base, chairAlong, 0, {
+      seatBox(seat, base, 0, 0, {
         run: I.chair.size,
         height: I.chair.height,
         depth: I.chair.size,
       }),
     );
     monitors.push(
-      seatBox(seat, standTop, monitorAlong, 0, {
+      seatBox(seat, standTop, monitorAlong, shift, {
         run: mon.width,
         height: mon.stand + mon.height,
         depth: mon.depth,
       }),
     );
     screens.push(
-      seatBox(seat, standTop + mon.stand + mon.inset, monitorAlong - (mon.depth + plate) / 2, 0, {
-        run: mon.width - 2 * mon.inset,
-        height: mon.height - 2 * mon.inset,
-        depth: plate,
-      }),
+      seatBox(
+        seat,
+        standTop + mon.stand + mon.inset,
+        monitorAlong - (mon.depth + plate) / 2,
+        shift,
+        {
+          run: mon.width - 2 * mon.inset,
+          height: mon.height - 2 * mon.inset,
+          depth: plate,
+        },
+      ),
     );
     screenColors.push(occupied.has(seat.index) ? idleScreen : offScreen);
     lamps.push(
-      seatBox(seat, standTop, 0, (seat.seat % 2 === 0 ? -1 : 1) * lampRun, {
+      seatBox(seat, standTop, deskAlong, shift + (seat.seat % 2 === 0 ? -1 : 1) * lampRun, {
         run: D.lamp.head,
         height: D.lamp.height,
         depth: D.lamp.head,

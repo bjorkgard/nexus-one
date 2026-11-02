@@ -26,15 +26,16 @@ describe("seatsOf", () => {
     expect(new Set(seats.map(key)).size).toBe(seats.length);
   });
 
-  it("puts seats at +-0.8 m inside the cluster, door side first", () => {
+  it("puts seats at +-0.8 m along the run and +-1.05 m across the depth, door side first", () => {
     const slot = layout.levels[5]!.deskSlots[0]!;
     const cx = (slot.min[0] + slot.max[0]) / 2;
     const cz = (slot.min[1] + slot.max[1]) / 2;
     const four = seats.filter((s) => s.floor === 5 && s.slot === 0);
     expect(four.map((s) => s.seat)).toEqual([0, 1, 2, 3]);
     for (const s of four) {
-      expect(Math.abs(s.x - cx)).toBeCloseTo(0.8, 6);
-      expect(Math.abs(s.z - cz)).toBeCloseTo(0.8, 6);
+      const depthAlongZ = slot.facing[1] === "z";
+      expect(Math.abs(s.x - cx)).toBeCloseTo(depthAlongZ ? 0.8 : 1.05, 6);
+      expect(Math.abs(s.z - cz)).toBeCloseTo(depthAlongZ ? 1.05 : 0.8, 6);
       expect(s.mount[0]).toBe(s.x);
       expect(s.mount[2]).toBe(s.z);
       expect(s.mount[1]).toBeCloseTo(floorTopY(5) + 2.4, 6);

@@ -1,5 +1,6 @@
 import { buildLayout, type Facing, type Layout } from "./layout";
 import { fnv1a, hashSeed } from "./rng";
+import { LOOK } from "./stage-look";
 import { floorTopY } from "./tower";
 import { MAX_FLOORS } from "./zones";
 
@@ -7,9 +8,14 @@ import { MAX_FLOORS } from "./zones";
 // floor streams so floor layouts do not change.
 export const DESK_STREAM = 0x4445534b;
 
-// Seat offset from the cluster centre, along the run and across the depth (3.2 m cluster).
-const SEAT_OFFSET = 0.8;
-// Beacon height above the floor top, over the desk centre.
+// Seat offset from the cluster centre along the run (3.2 m cluster).
+const SEAT_RUN = 0.8;
+// Gap between a desk's near edge and its chair.
+const CHAIR_GAP = 0.05;
+// Seat (chair) offset across the depth: each desk's back edge is on the centre line, so the chair sits one desk
+// depth, a gap and half a chair out; its outer edge (1.35 m) stays inside the 1.6 m slot edge.
+export const SEAT_DEPTH = LOOK.interior.desk.top.depth + CHAIR_GAP + LOOK.interior.chair.size / 2;
+// Beacon height above the floor top, over the seat.
 const MOUNT_HEIGHT = 2.4;
 const SEATS_PER_SLOT = 4;
 
@@ -23,7 +29,7 @@ export interface Seat {
   readonly z: number;
   // The way the seated agent looks: across the cluster, toward the screen.
   readonly facing: Facing;
-  // Beacon mount point [x, y, z] above the desk centre.
+  // Beacon mount point [x, y, z] above the seat.
   readonly mount: readonly [number, number, number];
 }
 
@@ -41,8 +47,8 @@ export function seatsOf(layout: Layout): Seat[] {
       const doorSign = slot.facing[0] === "+" ? 1 : -1;
       for (let i = 0; i < SEATS_PER_SLOT; i++) {
         const doorSide = i < 2;
-        const run = (i % 2 === 0 ? -1 : 1) * SEAT_OFFSET;
-        const depth = (doorSide ? doorSign : -doorSign) * SEAT_OFFSET;
+        const run = (i % 2 === 0 ? -1 : 1) * SEAT_RUN;
+        const depth = (doorSide ? doorSign : -doorSign) * SEAT_DEPTH;
         const x = cx + (depthAlongZ ? run : depth);
         const z = cz + (depthAlongZ ? depth : run);
         seats.push({

@@ -21,7 +21,7 @@ export const TOKENS = {
     chair: "#3a3f47",
     plant: "#4f7a5a",
     lampWarm: "#ffd9a0",
-    screenOff: "#1b2430",
+    screenOff: "#121820",
   },
   // Floor tints per room type (task 2.4), diffuse vertex colours on the ground material. Each is within WCAG contrast 1.00-1.15 of slab.interiorTop (tested in tokens.test.ts); corridor is the slab colour itself, so it reads as untinted. Keys are the layout's RoomType names.
   room: {
