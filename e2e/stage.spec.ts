@@ -469,7 +469,13 @@ async function watchBoardReveal(page: Page) {
   });
 }
 
-const DESK_KIT_TOKENS = ["surface.chair", "surface.plant", "surface.lampWarm", "surface.screenOff"];
+const DESK_KIT_TOKENS = [
+  "surface.chair",
+  "surface.plant",
+  "surface.lampWarm",
+  "surface.screenOff",
+  "surface.screenSeated",
+];
 
 test("?palette=1 shows 11 materials, 5 cached shapes and every labelled swatch at reveal", async ({
   page,
@@ -491,7 +497,7 @@ test("?palette=1 shows 11 materials, 5 cached shapes and every labelled swatch a
   const hexOf = new Map(tokens.map(([name], i) => [name, live[i]!]));
   const slotLabels = [
     ...tokens
-      // The board shows the 8 material surfaces; the desk-kit tokens (chair, plant, lampWarm, screenOff) are instance colours.
+      // The board shows the 8 material surfaces; the desk-kit tokens (chair, plant, lampWarm, screenOff, screenSeated) are instance colours.
       .filter(
         ([name]) =>
           (name.startsWith("surface.") && !DESK_KIT_TOKENS.includes(name)) ||
