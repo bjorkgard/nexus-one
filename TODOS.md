@@ -2,20 +2,6 @@
 
 ## Rendering
 
-### Floor cutaway so floor centres stay visible
-
-**Issue:** [#139](https://github.com/bjorkgard/nexus-one/issues/139)
-
-**What:** Let the viewer see the middle of a floor: hide or fade the floors above a chosen floor (cutaway), so desks deep inside the tower are visible from the iso camera.
-
-**Why:** At the iso pitch (~35°) the slab above each floor blocks the view about 5.7 m into the floor (4 m floor height / tan 35°, estimated), while the tower is 30 m deep. Once 2.5 places desks, agents in the floor centre will be hidden behind slabs and glass. Found in the task 2.3 CEO review (E3, decision D4).
-
-**Context:** Floor height and tower footprint are in `src/world/zones.ts` (`FLOOR_HEIGHT = 6` since 2.3, `FOOTPRINTS.tower` 30 × 30 m). How floors are hidden depends on how 2.3 builds them (per-floor meshes or instanced parts; decided in `docs/plans/2.3-tower-shell.md`). Phase 3 owns camera input (`docs/PLAN.md` 3.1); decide there whether the cutaway is a toggle, follows the selected agent's floor, or both. Start by measuring the real sight depth in the 2.3 four-view screenshots. Readability target (2.3 design review DZ3): a seated agent is at least 16 px tall at the 3.1 working zoom with the cutaway on. Floors are 6 m tall from 2.3 (DZ2).
-
-**Effort:** M (human) / S (CC+gstack)
-**Priority:** P2
-**Depends on:** Task 2.3 (tower shell); must land before 2.5 desks are judged visually
-
 ### Grow the tower live when the desk allocator needs a floor
 
 **Issue:** [#143](https://github.com/bjorkgard/nexus-one/issues/143)
@@ -200,20 +186,6 @@
 
 ## Design
 
-### Default camera framing to match mockup A
-
-**Issue:** [#141](https://github.com/bjorkgard/nexus-one/issues/141)
-
-**What:** Change the default stage view so the tower fills the frame like the approved 2.4 mockup (variant A), instead of framing the whole 120 m campus slab with a small tower in the middle.
-
-**Why:** The approved mockup shows the tower as the clear subject with the ground cropped; today's default (2.1 framing, extended in 2.3 eng D2 to fit the tower) shows the full slab, so rooms, tints and the lobby read small. No later plan step changes the default view: Phase 3 adds user pan/zoom/rotate (3.1) and cutaway (3.5) only. 2.5 desks and the #139 readability target (seated agent ≥ 16 px at the working zoom) should be judged at the new default.
-
-**Context:** Found after the 2.4 implementation (owner request, 2026-11-02). Mockup: `~/.gstack/projects/bjorkgard-nexus-one/designs/floor-layout-interior-20261102/variant-A.png`. The angle already matches closely (pitch `ISO_PITCH` ≈ 35°, yaw 45°, `src/world/camera.ts:12-13`); the gap is framing: `framingBounds`/`framingPoints` (`src/world/camera.ts:54,94`), `FIT_MARGIN` (`:110`), `fitPointsZoom` (`:114`). Reverses the 2.1/2.3 framing decisions, so it needs its own plan review; e2e framing and draw-call expectations in `e2e/stage.spec.ts` and `e2e/tower.spec.ts` will move. Tradeoff to decide: 2.7 (garage) and 2.8 (campus exterior) add things around the tower that a tight framing hides until 3.1 adds user zoom. `?zones=1` and `?palette=1` framing stay as they are unless the review says otherwise.
-
-**Effort:** S (human) / S (CC+gstack)
-**Priority:** P1
-**Depends on:** Task 2.4 (floor layout, commit 981ba0e); must land before task 2.5
-
 ### Write DESIGN.md from the 2.1 design decisions
 
 **Issue:** [#131](https://github.com/bjorkgard/nexus-one/issues/131)
@@ -257,6 +229,38 @@
 **Depends on:** Task 2.2 (palette board labels); must land before task 3.2 (hover name tags)
 
 ## Completed
+
+### Default camera framing to match mockup A
+
+**Issue:** [#141](https://github.com/bjorkgard/nexus-one/issues/141)
+
+**What:** Change the default stage view so the tower fills the frame like the approved 2.4 mockup (variant A), instead of framing the whole 120 m campus slab with a small tower in the middle.
+
+**Why:** The approved mockup shows the tower as the clear subject with the ground cropped; today's default (2.1 framing, extended in 2.3 eng D2 to fit the tower) shows the full slab, so rooms, tints and the lobby read small. No later plan step changes the default view: Phase 3 adds user pan/zoom/rotate (3.1) and cutaway (3.5) only. 2.5 desks and the #139 readability target (seated agent ≥ 16 px at the working zoom) should be judged at the new default.
+
+**Context:** Found after the 2.4 implementation (owner request, 2026-11-02). Mockup: `~/.gstack/projects/bjorkgard-nexus-one/designs/floor-layout-interior-20261102/variant-A.png`. The angle already matches closely (pitch `ISO_PITCH` ≈ 35°, yaw 45°, `src/world/camera.ts:12-13`); the gap is framing: `framingBounds`/`framingPoints` (`src/world/camera.ts:54,94`), `FIT_MARGIN` (`:110`), `fitPointsZoom` (`:114`). Reverses the 2.1/2.3 framing decisions, so it needs its own plan review; e2e framing and draw-call expectations in `e2e/stage.spec.ts` and `e2e/tower.spec.ts` will move. Tradeoff to decide: 2.7 (garage) and 2.8 (campus exterior) add things around the tower that a tight framing hides until 3.1 adds user zoom. `?zones=1` and `?palette=1` framing stay as they are unless the review says otherwise.
+
+**Effort:** S (human) / S (CC+gstack)
+**Priority:** P1
+**Depends on:** Task 2.4 (floor layout, commit 981ba0e); must land before task 2.5
+
+**Completed:** v0.10.4 (2026-11-03)
+
+### Floor cutaway so floor centres stay visible
+
+**Issue:** [#139](https://github.com/bjorkgard/nexus-one/issues/139)
+
+**What:** Let the viewer see the middle of a floor: hide or fade the floors above a chosen floor (cutaway), so desks deep inside the tower are visible from the iso camera.
+
+**Why:** At the iso pitch (~35°) the slab above each floor blocks the view about 5.7 m into the floor (4 m floor height / tan 35°, estimated), while the tower is 30 m deep. Once 2.5 places desks, agents in the floor centre will be hidden behind slabs and glass. Found in the task 2.3 CEO review (E3, decision D4).
+
+**Context:** Floor height and tower footprint are in `src/world/zones.ts` (`FLOOR_HEIGHT = 6` since 2.3, `FOOTPRINTS.tower` 30 × 30 m). How floors are hidden depends on how 2.3 builds them (per-floor meshes or instanced parts; decided in `docs/plans/2.3-tower-shell.md`). Phase 3 owns camera input (`docs/PLAN.md` 3.1); decide there whether the cutaway is a toggle, follows the selected agent's floor, or both. Start by measuring the real sight depth in the 2.3 four-view screenshots. Readability target (2.3 design review DZ3): a seated agent is at least 16 px tall at the 3.1 working zoom with the cutaway on. Floors are 6 m tall from 2.3 (DZ2).
+
+**Effort:** M (human) / S (CC+gstack)
+**Priority:** P2
+**Depends on:** Task 2.3 (tower shell); must land before 2.5 desks are judged visually
+
+**Completed:** v0.10.4 (2026-11-03)
 
 ### Add key-light shadows with the first casters
 
