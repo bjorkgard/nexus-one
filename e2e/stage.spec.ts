@@ -104,11 +104,9 @@ test("resizing refits the stage", async ({ page }) => {
   await expect.poll(async () => (await nexus(page, "getCamera")).zoom).toBeLessThan(before);
 });
 
-test("a static stage draws no frames and re-renders on resize", async ({ page }) => {
-  await page.goto("/");
-  await ready(page, { width: 1280, height: 720 });
+// Let the reveal frames finish, then 30 display refreshes must not draw a single frame.
+async function expectIdle(page: Page) {
   const frames = () => nexus(page, "frameCount");
-  // Let the reveal frames finish, then 30 display refreshes must not draw a single frame.
   await expect
     .poll(async () => {
       const a = await frames();
@@ -123,9 +121,22 @@ test("a static stage draws no frames and re-renders on resize", async ({ page })
       return (await frames()) - a;
     }, SETUP_TIMEOUT)
     .toBe(0);
-  const idle = await frames();
+}
+
+test("a static stage draws no frames and re-renders on resize", async ({ page }) => {
+  await page.goto("/");
+  await ready(page, { width: 1280, height: 720 });
+  await expectIdle(page);
+  const idle = await nexus(page, "frameCount");
   await page.setViewportSize({ width: 800, height: 600 });
-  await expect.poll(frames, SETUP_TIMEOUT).toBeGreaterThan(idle);
+  await expect.poll(() => nexus(page, "frameCount"), SETUP_TIMEOUT).toBeGreaterThan(idle);
+});
+
+// The palette board's key light casts no shadow, so a pending shadow request must not keep it drawing.
+test("?palette=1 goes idle too", async ({ page }) => {
+  await page.goto("/?palette=1");
+  await ready(page, { width: 1280, height: 720 });
+  await expectIdle(page);
 });
 
 test("the tower stage is 25 draw calls in a steady frame", async ({ page }) => {

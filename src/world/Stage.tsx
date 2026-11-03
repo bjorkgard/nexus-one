@@ -294,7 +294,9 @@ export function Stage({
   // Frames come on demand. A frame that still holds a shadow request draws the map, so one more frame follows to
   // leave the last drawn frame without the shadow pass (rendererInfo counts the last frame); until ready, keep going.
   useFrame(({ gl }) => {
-    if (lightRef.current?.shadow.needsUpdate) invalidate();
+    // three clears needsUpdate only for a shadow-casting light, so a non-casting light (palette board) would spin.
+    const light = lightRef.current;
+    if (light?.castShadow && light.shadow.needsUpdate) invalidate();
     if (signalled.current) return;
     const ok = stageReady({
       fitted: fitted.current,
