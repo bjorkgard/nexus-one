@@ -10,7 +10,7 @@ import {
 import { TOKENS } from "../shared/tokens";
 import { GLASS_HALF } from "./dimensions";
 import { DESK_STREAM, SEAT_DEPTH, seatsOf, type Seat } from "./desks";
-import { LAYOUT_SEED, type Layout, type Rect, type Wall } from "./layout";
+import type { Layout, Rect, Wall } from "./layout";
 import type { PaletteName } from "./palette";
 import { hashSeed, mulberry32 } from "./rng";
 import { LOOK } from "./stage-look";
@@ -242,7 +242,7 @@ export function buildInterior(
   const tintRng = new Map<number, () => number>();
   const rngOf = (streams: Map<number, () => number>, floor: number, offset: number) => {
     if (!streams.has(floor)) {
-      streams.set(floor, mulberry32(hashSeed(LAYOUT_SEED ^ DESK_STREAM, floor + offset)));
+      streams.set(floor, mulberry32(hashSeed(layout.seed ^ DESK_STREAM, floor + offset)));
     }
     return streams.get(floor)!;
   };

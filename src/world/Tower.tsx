@@ -54,7 +54,7 @@ function TowerPartMesh({
     mesh.count = Math.min(visibleCount ?? part.matrices.length, part.matrices.length);
     // A new count changes what the static shadow map must show.
     onUploaded();
-  }, [part, visibleCount, onUploaded]);
+  }, [part, geometry, view, visibleCount, onUploaded]);
 
   return (
     <instancedMesh
