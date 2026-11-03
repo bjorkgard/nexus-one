@@ -27,4 +27,11 @@ describe("previewDesks", () => {
     expect(previewDesks(DEFAULT_FLOORS, 0).report.seats).toEqual([]);
     expect(deskTotal(DEFAULT_FLOORS)).toBeGreaterThan(8);
   });
+
+  // Value: protects=previewDesks rejects a negative or fractional agent count; fails_when=the integer/non-negative guard is removed or inverted; why_new=existing cases only pass valid counts; seam=none; no_claim=none beyond protects
+  it("throws RangeError for a negative or non-integer count", () => {
+    for (const bad of [-1, 1.5, Number.NaN]) {
+      expect(() => previewDesks(DEFAULT_FLOORS, bad)).toThrow(RangeError);
+    }
+  });
 });
