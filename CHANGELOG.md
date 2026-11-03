@@ -5,6 +5,19 @@ All notable changes to Nexus One are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-11-03
+
+### Added
+
+- Every office now has desks. Desks come in pods of four, each with a chair, a monitor and a warm desk lamp, and about one pod in three has a plant. Occupied desks show a teal screen, and empty desks show a dark one, so you can see at a glance where work is happening.
+- Agents get a desk that stays the same for the same history of sessions. New agents fill the top floor first, and a subagent sits next to its parent when there is room. When every desk is taken, the building is ready to grow by a floor; agents beyond 40 floors wait without a desk instead of breaking the view.
+- The roof now has an opening on the side away from the camera, so you can look down onto desks on the far side of the top floor, which the glass walls do not show. The cyan roof edge stays unbroken.
+- Developers can seat preview agents with `?agents=N`, hide every floor above a chosen floor with `?cut=k`, and read seating from `__nexus.desks()`. These options exist only in development builds.
+
+### Changed
+
+- The default view now frames the tower itself instead of the whole campus ground, so floors, rooms and desks appear larger and easier to read.
+
 ## [0.10.3] - 2026-11-02
 
 ### Added

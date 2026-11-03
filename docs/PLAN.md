@@ -146,7 +146,7 @@ Goal: a readable futuristic campus, fully procedural, inside the performance bud
 
 ### 2.5 Desk kit and desk allocation
 
-- **Action:** Instanced desk, chair, monitor (emissive screen = activity-glow target), lamp, and a beacon mount point above each desk. `allocateDesk(agentId)` returns a stable slot (hash-based, collision-resolved), places subagents near their parent, and adds a floor when full.
+- **Action:** Instanced desk, chair, monitor (emissive screen = activity-glow target), lamp, and a beacon mount point above each desk. `allocateDesk(agentId)` returns a stable slot (hash-based, collision-resolved), places subagents near their parent, and reports the floors it needs (`floorsNeeded`) when full; growing the tower live lands with 4.5/4.8 ([#143](https://github.com/bjorkgard/nexus-one/issues/143)).
 - **Test:** Unit: 200 agents get 200 unique desks; same id gets the same desk across runs; subagent desk is on the parent's floor when space allows.
 - **Done when:** tests pass; desks render with 1 draw call per desk part type.
 

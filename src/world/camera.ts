@@ -89,8 +89,9 @@ export function towerBox(floors: number): Box {
   return { min: [x[0], 0, z[0]], max: [x[1], (floors + 1) * FLOOR_HEIGHT, z[1]] };
 }
 
-// Points the zoom must fit and the centre they are fitted around (the camera target). The default
-// framing keeps the slab centre and fits slab plus tower corners; zones and palette fit their own box.
+// Points the zoom must fit, the centre they are fitted around (the camera target) and the points the
+// camera depth range must cover. The default framing fits the tower box only (the ground is cropped) and
+// keeps slab plus tower corners in the depth range; zones and palette fit and cover their own box.
 export function framingPoints({
   zonesOverlay,
   floors = DEFAULT_FLOORS,
@@ -99,11 +100,19 @@ export function framingPoints({
   zonesOverlay: boolean;
   floors?: number;
   palette?: boolean;
-}): { centre: Vec3; points: Vec3[] } {
-  const bounds = framingBounds({ zonesOverlay, floors, palette });
-  const points = boxCorners(bounds);
-  if (!zonesOverlay && !palette) points.push(...boxCorners(towerBox(floors)));
-  return { centre: boundsCentre(bounds), points };
+}): { centre: Vec3; points: Vec3[]; depthPoints: Vec3[] } {
+  if (zonesOverlay || palette) {
+    const bounds = framingBounds({ zonesOverlay, floors, palette });
+    const points = boxCorners(bounds);
+    return { centre: boundsCentre(bounds), points, depthPoints: points };
+  }
+  const tower = towerBox(floors);
+  const points = boxCorners(tower);
+  return {
+    centre: boundsCentre(tower),
+    points,
+    depthPoints: [...boxCorners(framingBounds({ zonesOverlay, floors })), ...points],
+  };
 }
 
 // Fraction of the viewport kept empty around the fitted framing.

@@ -18,15 +18,20 @@ describe("tokens", () => {
     expect(cssVarName("paint.graphite")).toBe("--nx-paint-graphite");
   });
 
-  it("has the 8 surface and 8 paint tokens", () => {
+  it("has the 13 surface and 8 paint tokens", () => {
     expect(Object.keys(TOKENS.surface).sort()).toEqual(
       [
+        "chair",
         "furniture",
         "floor",
         "glass",
+        "lampWarm",
         "panel",
+        "plant",
         "screenActive",
         "screenIdle",
+        "screenOff",
+        "screenSeated",
         "trimCyan",
         "trimWhite",
       ].sort(),
@@ -80,6 +85,21 @@ describe("tokens", () => {
       const c = contrast(hex, TOKENS.slab.interiorTop);
       expect(c, name).toBeGreaterThanOrEqual(1);
       expect(c, name).toBeLessThanOrEqual(1.15);
+    }
+  });
+
+  it("keeps every desk-kit token at WCAG contrast 1.1 or more against slab.interiorTop", () => {
+    const luminance = (hex: string) => {
+      const [r, g, b] = hexToLinear(hex);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi! + 0.05) / (lo! + 0.05);
+    };
+    const { chair, plant, lampWarm, screenOff } = TOKENS.surface;
+    for (const [name, hex] of Object.entries({ chair, plant, lampWarm, screenOff })) {
+      expect(contrast(hex, TOKENS.slab.interiorTop), name).toBeGreaterThanOrEqual(1.1);
     }
   });
 });

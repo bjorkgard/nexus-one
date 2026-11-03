@@ -4,7 +4,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import type { InstancedMesh } from "three";
 import { getGeometry } from "./geometry-cache";
 import { palette } from "./palette";
-import type { TowerPart } from "./tower";
+import type { TowerPart, TowerPartKind } from "./tower";
 
 // The grid is transparent too; it sorts before the glass so the panes blend over it, not under it.
 export const GLASS_RENDER_ORDER = 2;
@@ -16,14 +16,17 @@ export function partRenderOrder(part: TowerPart): number {
 }
 
 // One InstancedMesh per part. `onUploaded` fires after the matrices, the instance flag and the bounding sphere
-// are set, so the caller can request the shadow update that depends on them.
+// are set, so the caller can request the shadow update that depends on them. `visibleCount` (from `cutCounts`)
+// draws only the first instances; it sets `mesh.count`, so the key and the instance buffer stay as they are.
 function TowerPartMesh({
   part,
   view,
+  visibleCount,
   onUploaded,
 }: {
   part: TowerPart;
   view: number;
+  visibleCount?: number;
   onUploaded: () => void;
 }) {
   const ref = useRef<InstancedMesh>(null);
@@ -39,9 +42,19 @@ function TowerPartMesh({
     mesh.instanceMatrix.needsUpdate = true;
     part.colors?.forEach((color, i) => mesh.setColorAt(i, color));
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Over every instance, whatever `mesh.count` the cut left: the next effect restores the visible count.
+    mesh.count = part.matrices.length;
     mesh.computeBoundingSphere();
     onUploaded();
   }, [part, geometry, view, onUploaded]);
+
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    mesh.count = Math.min(visibleCount ?? part.matrices.length, part.matrices.length);
+    // A new count changes what the static shadow map must show.
+    onUploaded();
+  }, [part, geometry, view, visibleCount, onUploaded]);
 
   return (
     <instancedMesh
@@ -60,11 +73,14 @@ export function Tower({
   parts,
   view,
   glow,
+  counts,
   onUploaded,
 }: {
   parts: readonly TowerPart[];
   view: number;
   glow: boolean;
+  // Visible instances per part kind (`cutCounts`); a kind left out draws in full.
+  counts?: Partial<Record<TowerPartKind, number>>;
   onUploaded: () => void;
 }) {
   return (
@@ -76,7 +92,13 @@ export function Tower({
             (part.kind !== "glow" && part.kind !== "glowHoled" && part.kind !== "penthouseGlow"),
         )
         .map((part) => (
-          <TowerPartMesh key={part.kind} part={part} view={view} onUploaded={onUploaded} />
+          <TowerPartMesh
+            key={part.kind}
+            part={part}
+            view={view}
+            visibleCount={counts?.[part.kind]}
+            onUploaded={onUploaded}
+          />
         ))}
     </>
   );

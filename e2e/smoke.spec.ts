@@ -48,7 +48,9 @@ test("hooks are registered", async ({ page }) => {
   expect(keys).toEqual([
     "cacheStats",
     "dataState",
+    "desks",
     "emit",
+    "frameCount",
     "getCamera",
     "pauseClock",
     "project",

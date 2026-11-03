@@ -9,6 +9,7 @@ import {
   installNexus,
   materialBudgetWarner,
   projectToPage,
+  readFrameCount,
   readRendererInfo,
   registerNexus,
 } from "./nexus";
@@ -56,6 +57,7 @@ export default function Bridge() {
         }
         return { ...readRendererInfo(gl), materials };
       }),
+      registerNexus("frameCount", () => readFrameCount(gl)),
       registerNexus("cacheStats", geometryCacheStats),
     ];
     return () => {

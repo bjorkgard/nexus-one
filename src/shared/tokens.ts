@@ -17,6 +17,13 @@ export const TOKENS = {
     furniture: "#c9c4bc",
     screenIdle: "#2a6f7c",
     screenActive: "#5fe3ff",
+    // Desk kit (task 2.5): chair and plant are instance colours on furniture, screenOff is an empty desk's screen, lampWarm is the lamp colour before LOOK.interior.desk.lampGain. Each is at least 1.1 WCAG contrast from slab.interiorTop (tested).
+    chair: "#3a3f47",
+    plant: "#4f7a5a",
+    lampWarm: "#ffd9a0",
+    screenOff: "#121820",
+    // A seated agent's screen (D27): between screenIdle and screenActive, below trimCyan on the luminance ladder (tested in interior.test.ts).
+    screenSeated: "#3f9fb2",
   },
   // Floor tints per room type (task 2.4), diffuse vertex colours on the ground material. Each is within WCAG contrast 1.00-1.15 of slab.interiorTop (tested in tokens.test.ts); corridor is the slab colour itself, so it reads as untinted. Keys are the layout's RoomType names.
   room: {

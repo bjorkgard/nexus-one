@@ -75,6 +75,16 @@ export const LOOK = {
     coreFrameSize: 0.3,
     receptionDesk: { length: 3, depth: 0.8, height: 1.1 },
     chair: { size: 0.6, height: 0.8 },
+    // Desk kit (task 2.5, design D23): per seat a desk top, a chair on its outer side, a monitor on its inner edge and a lamp. lampGain scales the lamp colour so it stays at or below the tower glow (intensity x linear luminance). plantRate is the chance a 2 x 2 pod has a plant; tintRange the most a desk top's lightness varies either way (E1).
+    desk: {
+      top: { length: 1.4, depth: 0.7, height: 0.75 },
+      monitor: { width: 0.55, height: 0.35, stand: 0.1, depth: 0.04, inset: 0.01 },
+      lamp: { height: 0.45, head: 0.14 },
+      plant: { width: 0.3, height: 0.5 },
+      lampGain: 0.35,
+      plantRate: 1 / 3,
+      tintRange: 0.04,
+    },
   },
   // Dev overlay type: labels (zone overlay, palette board swatches) and headings (board title, rows, failure line).
   zonesOverlayLabelPx: 11,

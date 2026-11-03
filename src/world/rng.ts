@@ -23,3 +23,12 @@ export function hashSeed(seed: number, stream: number): number {
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return (h ^ (h >>> 16)) >>> 0;
 }
+
+// FNV-1a 32-bit over the UTF-16 code units of `str`, as an unsigned integer. Stable for a given id.
+export function fnv1a(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);
+  }
+  return h >>> 0;
+}

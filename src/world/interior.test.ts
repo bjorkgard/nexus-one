@@ -1,8 +1,10 @@
-import { Color, Matrix4, Vector3 } from "three";
+import { Color, Matrix4 } from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { TOKENS } from "../shared/tokens";
 import { GLASS_HALF } from "./dimensions";
 import { INTERIOR_GEOMETRY_KINDS, buildInterior } from "./interior";
+import { DESK_STREAM, seatsOf } from "./desks";
+import { hashSeed, mulberry32 } from "./rng";
 import { LAYOUT_SEED, ROOM_TYPES, buildLayout, type Rect, type Wall } from "./layout";
 import { palette, materialBudgetCount, MATERIAL_BUDGET } from "./palette";
 import { LOOK } from "./stage-look";
@@ -58,13 +60,19 @@ describe("buildInterior parts", () => {
     for (const k of kinds) expect(TOWER_PART_KINDS as readonly string[]).toContain(k);
     expect(kinds.sort()).toEqual(
       [
+        "chair",
         "coreFrame",
+        "deskTop",
         "floorTint",
         "furniture",
+        "lamp",
+        "monitor",
         "partition",
         "penthouseGlass",
         "penthouseGlow",
         "penthouseRoof",
+        "plant",
+        "screen",
       ].sort(),
     );
   });
@@ -347,41 +355,46 @@ describe("penthouse", () => {
   });
 });
 
+describe("floor order", () => {
+  it("interleaves core-frame posts and beams by floor, 4 beams under each floor's ceiling", () => {
+    const frame = part("coreFrame");
+    expect(frame.floorOf).toHaveLength(frame.matrices.length);
+    for (let k = 0; k < FLOORS; k++) {
+      const onFloor = frame.matrices.filter((_, i) => frame.floorOf[i] === k).map(boxOf);
+      const beams = onFloor.filter((b) => near(size(b)[1]!, I.coreFrameSize));
+      expect(beams, `floor ${k}`).toHaveLength(4);
+      for (const b of beams) expect(centre(b)[1]!).toBeLessThan(floorTopY(k + 1) - T.slabThickness);
+    }
+    expect([...frame.floorOf]).toEqual([...frame.floorOf].sort((a, b) => a - b));
+  });
+
+  it("orders floor tints by floor", () => {
+    const tint = part("floorTint");
+    expect([...tint.floorOf]).toEqual([...tint.floorOf].sort((a, b) => a - b));
+    expect(new Set(tint.floorOf)).toEqual(new Set(Array.from({ length: FLOORS + 1 }, (_, k) => k)));
+  });
+});
+
 describe("floor tints", () => {
   it("has a TOKENS.room colour for exactly every room type", () => {
     expect(Object.keys(TOKENS.room).sort()).toEqual([...ROOM_TYPES].sort());
   });
 
-  it("keys the tint geometry on every baked room colour", () => {
-    const params = part("floorTint").geometryKey.params;
-    for (const hex of Object.values(TOKENS.room)) expect(Object.values(params)).toContain(hex);
-  });
-
   const tint = part("floorTint");
-  const geometry = tint.buildGeometry();
-  const position = geometry.getAttribute("position");
-  const color = geometry.getAttribute("color");
-  // Each tint quad is two triangles: group vertices in sixes.
-  const quads = Array.from({ length: position.count / 6 }, (_, q) => {
-    const vs = Array.from({ length: 6 }, (_, k) =>
-      new Vector3().fromBufferAttribute(position, q * 6 + k),
-    );
-    return {
-      rect: {
-        min: [Math.min(...vs.map((v) => v.x)), Math.min(...vs.map((v) => v.z))],
-        max: [Math.max(...vs.map((v) => v.x)), Math.max(...vs.map((v) => v.z))],
-      } as Rect,
-      y: vs[0]!.y,
-      flat: vs.every((v) => v.y === vs[0]!.y),
-      color: new Color().fromBufferAttribute(color, q * 6).getHex(),
-    };
+  // One instance per tinted room: a unit quad scaled to the room, its y the quad height, its colour the room's token.
+  const quads = tint.matrices.map((m, i) => {
+    const b = boxOf(m);
+    return { rect: rectOf(b), y: centre(b)[1]!, flat: true, color: tint.colors![i]!.getHex() };
   });
   const tinted = layout.levels.flatMap((lv) => lv.rooms.filter((r) => r.roomType !== "corridor"));
 
-  it("is one single-instance part on ground, cached by seed, floors and room colours", () => {
+  it("is one ground part of per-room quad instances with a colour each", () => {
     expect(tint.material).toBe("ground");
-    expect(tint.matrices).toHaveLength(1);
-    expect(tint.geometryKey.params).toEqual({ seed: LAYOUT_SEED, floors: FLOORS, ...TOKENS.room });
+    expect(tint.matrices).toHaveLength(tinted.length);
+    expect(tint.colors).toHaveLength(tinted.length);
+    expect(tint.geometryKey.params).toEqual({});
+    const geometry = tint.buildGeometry();
+    expect(geometry.getAttribute("position").count).toBe(6);
     expect(geometry.getAttribute("normal").getY(0)).toBe(1);
   });
 
@@ -461,5 +474,266 @@ describe("lobby furniture", () => {
       ]);
       expect(furniture.colors![i]!.getHex()).toBe(new Color(TOKENS.surface.panel).getHex());
     }
+  });
+});
+
+describe("desk kit parts", () => {
+  const seats = seatsOf(layout);
+  const D = I.desk;
+  const seatKinds = ["deskTop", "chair", "monitor", "screen", "lamp"] as const;
+  const luminance = (c: Color) => 0.2126729 * c.r + 0.7151522 * c.g + 0.072175 * c.b;
+
+  it("has one instance per seat for every seat part, ordered by floor", () => {
+    expect(seats.length).toBeGreaterThan(0);
+    for (const k of seatKinds) {
+      expect(part(k).matrices, k).toHaveLength(seats.length);
+      expect(part(k).floorOf, k).toEqual(seats.map((s) => s.floor));
+    }
+  });
+
+  it("places instance i at seat i (S1-1)", () => {
+    // The seat is the chair.
+    part("chair").matrices.forEach((m, i) => {
+      const c = centre(boxOf(m));
+      expect(c[0]).toBeCloseTo(seats[i]!.x, 9);
+      expect(c[2]).toBeCloseTo(seats[i]!.z, 9);
+    });
+    for (const k of seatKinds) {
+      part(k).matrices.forEach((m, i) => {
+        const c = centre(boxOf(m));
+        // Every piece sits within a desk length of its seat.
+        expect(Math.hypot(c[0]! - seats[i]!.x, c[2]! - seats[i]!.z), `${k} ${i}`).toBeLessThan(1.4);
+      });
+    }
+  });
+
+  // The 3.2 m slot rect and pod centre line of every seat's pod.
+  const podOf = (s: (typeof seats)[number]) => {
+    const slot = layout.levels[s.floor]!.deskSlots[s.slot]!;
+    return { slot, mid: [(slot.min[0] + slot.max[0]) / 2, (slot.min[1] + slot.max[1]) / 2] };
+  };
+  const intersects = (a: Box3, b: Box3) =>
+    [0, 1, 2].every((k) => a.min[k]! < b.max[k]! - EPS && b.min[k]! < a.max[k]! - EPS);
+
+  it("keeps every chair clear of every desk in its pod", () => {
+    const chairs = part("chair").matrices.map(boxOf);
+    const desks = part("deskTop").matrices.map(boxOf);
+    seats.forEach((s, i) => {
+      for (const j of seats.keys()) {
+        if (seats[j]!.floor !== s.floor || seats[j]!.slot !== s.slot) continue;
+        expect(intersects(chairs[i]!, desks[j]!), `chair ${i} vs desk ${j}`).toBe(false);
+      }
+    });
+  });
+
+  it("keeps every desk-kit part inside its slot rect", () => {
+    for (const k of [...seatKinds, "plant"] as const) {
+      const p = part(k);
+      p.matrices.forEach((m, n) => {
+        const b = boxOf(m);
+        const centreXZ = [centre(b)[0]!, centre(b)[2]!];
+        const s = seats.find((q) => {
+          const { slot } = podOf(q);
+          return (
+            q.floor === p.floorOf[n] &&
+            centreXZ[0]! > slot.min[0] &&
+            centreXZ[0]! < slot.max[0] &&
+            centreXZ[1]! > slot.min[1] &&
+            centreXZ[1]! < slot.max[1]
+          );
+        });
+        expect(s, `${k} ${n} has a slot`).toBeDefined();
+        const { slot } = podOf(s!);
+        expect(b.min[0], `${k} ${n}`).toBeGreaterThanOrEqual(slot.min[0] - EPS);
+        expect(b.max[0], `${k} ${n}`).toBeLessThanOrEqual(slot.max[0] + EPS);
+        expect(b.min[2], `${k} ${n}`).toBeGreaterThanOrEqual(slot.min[1] - EPS);
+        expect(b.max[2], `${k} ${n}`).toBeLessThanOrEqual(slot.max[1] + EPS);
+      });
+    }
+  });
+
+  it("puts each desk's back edge on its pod centre line", () => {
+    part("deskTop").matrices.forEach((m, i) => {
+      const b = boxOf(m);
+      const s = seats[i]!;
+      const { mid } = podOf(s);
+      const axis = s.facing[1] === "x" ? 0 : 2;
+      const line = mid[axis / 2]!;
+      // The seat looks toward the centre line, so the desk's far edge along the facing direction is on it.
+      const sign = s.facing[0] === "+" ? 1 : -1;
+      expect(sign > 0 ? b.max[axis]! : b.min[axis]!).toBeCloseTo(line, 9);
+    });
+  });
+
+  it("keeps occupied screens at least 3:1 brighter than empty ones (D24)", () => {
+    const lit = buildInterior(layout, new Set([0])).find((p) => p.kind === "screen")!;
+    const [occupiedLum, emptyLum] = [lit.colors![0]!, lit.colors![1]!].map(luminance);
+    expect((occupiedLum! + 0.05) / (emptyLum! + 0.05)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("sizes desk top, chair and lamp from LOOK", () => {
+    part("deskTop").matrices.forEach((m, i) => {
+      const [sx, sy, sz] = size(boxOf(m));
+      const alongX = seats[i]!.facing[1] === "z";
+      expect([alongX ? sx : sz, sy, alongX ? sz : sx]).toEqual([
+        expect.closeTo(D.top.length, 9),
+        expect.closeTo(D.top.height, 9),
+        expect.closeTo(D.top.depth, 9),
+      ]);
+    });
+    for (const m of part("chair").matrices) {
+      expect(size(boxOf(m))).toEqual([
+        expect.closeTo(I.chair.size, 9),
+        expect.closeTo(I.chair.height, 9),
+        expect.closeTo(I.chair.size, 9),
+      ]);
+    }
+    for (const m of part("lamp").matrices) {
+      const [sx, sy, sz] = size(boxOf(m));
+      expect([sx, sy, sz]).toEqual([
+        expect.closeTo(D.lamp.head, 9),
+        expect.closeTo(D.lamp.height, 9),
+        expect.closeTo(D.lamp.head, 9),
+      ]);
+    }
+  });
+
+  it("stands every seat part on its floor, and monitor, screen and lamp on the desk top", () => {
+    for (const k of seatKinds) {
+      part(k).matrices.forEach((m, i) => {
+        const b = boxOf(m);
+        const top = floorTopY(seats[i]!.floor);
+        const onDesk = k === "monitor" || k === "screen" || k === "lamp";
+        expect(b.min[1], `${k} ${i}`).toBeGreaterThanOrEqual(
+          top + (onDesk ? D.top.height : 0) - EPS,
+        );
+      });
+    }
+  });
+
+  it("puts the monitor stand and screen at the desk's inner edge, screen facing its chair", () => {
+    part("screen").matrices.forEach((m, i) => {
+      const b = boxOf(m);
+      const [sx, sy, sz] = size(b);
+      const s = seats[i]!;
+      const axis = s.facing[1] === "x" ? 0 : 2;
+      const sign = s.facing[0] === "+" ? 1 : -1;
+      // The thin axis is the facing axis, so the face normal is horizontal: never downward.
+      expect(axis === 0 ? sx : sz).toBeLessThan(0.05);
+      expect(sy).toBeGreaterThan(0.2);
+      const chair = centre(boxOf(part("chair").matrices[i]!));
+      // The chair is behind the screen: a seated agent looks along the facing direction.
+      expect((centre(b)[axis]! - chair[axis]!) * sign).toBeGreaterThan(0);
+    });
+  });
+
+  it("uses the unlit screen and led materials and the furniture material elsewhere", () => {
+    expect(part("screen").material).toBe("screen");
+    expect(part("lamp").material).toBe("led");
+    for (const k of ["deskTop", "chair", "monitor", "plant"]) {
+      expect(part(k).material, k).toBe("furniture");
+    }
+    expect(materialBudgetCount()).toBeLessThan(MATERIAL_BUDGET);
+  });
+
+  it("colours chairs and plants by token and tints desk tops within 4% lightness", () => {
+    const lightness = (c: Color) => c.getHSL({ h: 0, s: 0, l: 0 }).l;
+    const base = lightness(new Color(TOKENS.surface.furniture));
+    for (const c of part("chair").colors!) {
+      expect(c.getHex()).toBe(new Color(TOKENS.surface.chair).getHex());
+    }
+    for (const c of part("plant").colors!) {
+      expect(c.getHex()).toBe(new Color(TOKENS.surface.plant).getHex());
+    }
+    const tops = part("deskTop").colors!;
+    expect(tops).toHaveLength(seats.length);
+    for (const c of tops)
+      expect(Math.abs(lightness(c) / base - 1)).toBeLessThanOrEqual(0.04 + 1e-6);
+    expect(new Set(tops.map((c) => c.getHex())).size).toBeGreaterThan(1);
+  });
+
+  it("colours screens by occupancy: seated cyan-teal when seated, off slate when empty", () => {
+    const idle = new Color(TOKENS.surface.screenSeated).getHex();
+    const off = new Color(TOKENS.surface.screenOff).getHex();
+    for (const c of part("screen").colors!) expect(c.getHex()).toBe(off);
+    const occupied = new Set([0, 5, seats.length - 1]);
+    const lit = buildInterior(layout, occupied).find((p) => p.kind === "screen")!;
+    lit.colors!.forEach((c, i) => expect(c.getHex(), `${i}`).toBe(occupied.has(i) ? idle : off));
+  });
+
+  it("lights every lamp the same warm colour, whether or not the desk is occupied", () => {
+    const lit = buildInterior(layout, new Set([0])).find((p) => p.kind === "lamp")!;
+    const dark = part("lamp").colors!;
+    expect(dark).toHaveLength(seats.length);
+    for (const c of [...dark, ...lit.colors!]) expect(c.getHex()).toBe(dark[0]!.getHex());
+    const { r, g, b } = dark[0]!;
+    expect(r).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(b);
+  });
+
+  it("keeps screen and lamp luminance below trimCyan, and the lamp at or below the tower glow", () => {
+    const cyan = palette.trimCyan.emissiveIntensity * luminance(new Color(TOKENS.surface.trimCyan));
+    const glow =
+      palette.trimWhite.emissiveIntensity * luminance(new Color(TOKENS.surface.trimWhite));
+    const lit = buildInterior(layout, new Set(seats.map((s) => s.index)));
+    const idle = luminance(lit.find((p) => p.kind === "screen")!.colors![0]!);
+    const lamp = luminance(part("lamp").colors![0]!);
+    expect(idle).toBeLessThan(0.75 * cyan);
+    expect(lamp).toBeLessThanOrEqual(glow);
+    expect(lamp).toBeLessThan(cyan);
+    expect(luminance(part("screen").colors![0]!)).toBeLessThan(idle);
+    // D27: the seated level sits between screenIdle and screenActive.
+    expect(idle).toBeGreaterThan(luminance(new Color(TOKENS.surface.screenIdle)));
+    expect(idle).toBeLessThan(luminance(new Color(TOKENS.surface.screenActive)));
+  });
+
+  it("sizes the screen face to the monitor minus a 0.01 m bezel (D27)", () => {
+    const m = LOOK.interior.desk.monitor;
+    expect(m.inset).toBeCloseTo(0.01, 9);
+    part("screen").matrices.forEach((mx, i) => {
+      expect(mx.elements[5]!, `${i}`).toBeCloseTo(m.height - 2 * m.inset, 9);
+    });
+  });
+
+  it("puts one plant in about a third of the pods, on the floor, from the desk stream", () => {
+    const pods: number[] = [];
+    const seen = new Set<string>();
+    for (const s of seats) {
+      if (!seen.has(`${s.floor}:${s.slot}`)) {
+        seen.add(`${s.floor}:${s.slot}`);
+        pods.push(s.floor);
+      }
+    }
+    // Re-draw the stream independently: one draw per pod in pod order, one stream per floor.
+    const rngs = new Map<number, () => number>();
+    const expected = pods.filter((floor) => {
+      if (!rngs.has(floor)) rngs.set(floor, mulberry32(hashSeed(LAYOUT_SEED ^ DESK_STREAM, floor)));
+      return rngs.get(floor)!() < D.plantRate;
+    });
+    const plants = part("plant");
+    expect(expected.length).toBeGreaterThan(0);
+    expect(expected.length).toBeLessThan(pods.length);
+    expect(plants.floorOf).toEqual(expected);
+    expect(plants.colors).toHaveLength(expected.length);
+    plants.matrices.forEach((m, i) => {
+      const b = boxOf(m);
+      expect(b.min[1]).toBeCloseTo(floorTopY(plants.floorOf[i]!), 9);
+      expect(size(b)).toEqual([
+        expect.closeTo(D.plant.width, 9),
+        expect.closeTo(D.plant.height, 9),
+        expect.closeTo(D.plant.width, 9),
+      ]);
+    });
+  });
+
+  it("leaves layouts unchanged: building the interior twice gives the same parts and layout", () => {
+    const first = buildLayout({ floors: FLOORS, seed: LAYOUT_SEED });
+    buildInterior(first);
+    expect(first).toEqual(layout);
+    const a = buildInterior(layout, new Set([1, 2]));
+    const b = buildInterior(layout, new Set([1, 2]));
+    expect(a.map((p) => p.matrices.map((m) => m.elements))).toEqual(
+      b.map((p) => p.matrices.map((m) => m.elements)),
+    );
   });
 });

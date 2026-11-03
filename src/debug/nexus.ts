@@ -2,8 +2,9 @@ import { Vector3 } from "three";
 import type { Camera, Material, Object3D } from "three";
 import type { DataStats } from "../data/source";
 import type { Vec3 } from "../world/zones";
+import type { DeskReport } from "./desk-preview";
 
-export type { Vec3 };
+export type { Vec3, DeskReport };
 
 export type CameraInfo = {
   type: string;
@@ -39,11 +40,15 @@ export interface NexusHooks {
   getCamera(): CameraInfo;
   project(worldPos: Vec3): ProjectedPoint;
   rendererInfo(): RendererInfo;
+  // Frames the renderer has drawn so far; stops advancing while the scene is idle (frameloop="demand").
+  frameCount(): number;
   emit(event: unknown): void;
   setClock(ts: number): void;
   pauseClock(paused: boolean): void;
   dataState(): DataState;
   cacheStats(): { size: number; hits: number; misses: number };
+  // Desk allocation of the `?agents=N` preview (dev only).
+  desks(): DeskReport;
 }
 
 export type NexusApi = Partial<NexusHooks>;
@@ -97,6 +102,10 @@ export function readRendererInfo(gl: RendererInfoSource): RendererInfo {
     textures: gl.info.memory.textures,
     programs: gl.info.programs?.length ?? 0,
   };
+}
+
+export function readFrameCount(gl: { info: { render: { frame: number } } }): number {
+  return gl.info.render.frame;
 }
 
 type Renderable = Object3D & { material?: Material | Material[] };
