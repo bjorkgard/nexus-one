@@ -50,7 +50,8 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `rng.ts` — The seeded random generator the floor layout uses (same seed, same numbers).
   - `dimensions.ts` — Tower size constants (glass line, footprint half-size) and `ZoneError`, shared by `zones.ts`, `layout.ts` and `tower.ts` so none of them import each other in a cycle.
   - `layout.ts` — `buildLayout({ floors, seed })`: the seeded floor layout. Per floor, the rooms (core, ring corridor, offices, meeting rooms, restrooms, reception, waiting, escalator, break room, rooftop server room), walls with door gaps, anchors and desk slots, plus the tower openings (entrance gaps and the floor-1 slab hole). `deskCapacity(layout, floor)` counts a floor's desk slots. `createZoneRegistry` builds it and exposes it as `registry.layout`.
-  - `interior.ts` — `buildInterior(layout)`: the rendered interior as instanced parts (low partitions, open core frame, per-room floor tint, reception desk and chairs, server penthouse).
+  - `desks.ts` — `createDeskAllocator({ floors, seed })`: deterministic desk allocation over `seatsOf(layout)` (4 seats per cluster; hash start and probe, root agents fill the top office floor first, subagents sit near their parent). `floorsNeeded` rises when every seat is taken (it never shrinks); at 40 floors `allocate` returns null and counts `unseated`. Each `Seat` has a `mount` point (the seat, floor top + 2.4 m) for the agent beacon. Growing the tower live is deferred to 4.5/4.8.
+  - `interior.ts` — `buildInterior(layout, occupied)`: the rendered interior as instanced parts (low partitions, open core frame, per-room floor tint, reception desk and chairs, server penthouse, and the desk kit: desk top, chair, monitor, screen, lamp and plant, one mesh each). Occupied seats get the idle screen colour, empty seats `screenOff`.
   - `camera.ts` — Isometric camera maths: view direction, framing bounds, camera rig and `fitZoom`, plus the grid fade.
   - `tower.ts` — `buildTower({ floors, openings })`: the glass office tower as instanced parts (slabs, columns, glass walls with entrance gaps, floor glow, roof deck, parapet, AC units) plus the AC unit list, in metres, with no three.js scene objects.
   - `Tower.tsx` — Renders the tower parts, one `instancedMesh` per part, with the shared palette materials.
@@ -60,7 +61,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `geometry-cache.ts` — `getGeometry(kind, params, build)`: one shared geometry per kind and params, with cache stats.
   - `palette-layout.ts` — Layout constants and slot positions for the `?palette=1` board, also used for its camera framing bounds.
   - `reveal-hold.ts` — `createRevealHold`: holds the stage reveal until the palette board mounts or a 3 s timeout, plus its React context and hook.
-  - `stage-look.ts` — `LOOK`: the stage's size, grid, light and overlay constants, plus the floor layout and interior sizes in `LOOK.interior` (surface colours come from `src/shared/tokens.ts`).
+  - `stage-look.ts` — `LOOK`: the stage's size, grid, light and overlay constants, plus the floor layout and interior sizes in `LOOK.interior`, including the desk kit sizes in `LOOK.interior.desk` and `lampGain` 0.35 on the lamp colour (surface colours come from `src/shared/tokens.ts`).
 - `src/sim/` — Simulation and animation state.
 - `src/ui/` — Dashboard.
   - `Wordmark.tsx` — The "Nexus One" wordmark in the top-left corner.
@@ -78,7 +79,7 @@ Use `vp run <name>` for scripts defined in `package.json`. Built-in commands suc
   - `reduce.ts` — Pure event reducer, plus `toSnapshot` / `fromSnapshot`.
   - `apply-once.ts` — `applyOnce`, the dedup entry: bounded recent-id ring plus reducer.
   - `color-metrics.ts` — Pure colour maths (hex to Lab, ΔE2000, colour-vision-deficiency simulation) for token tests.
-  - `tokens.ts` — `TOKENS`, the shared colour tokens (background, slab, grid, text, danger, zone kinds, material surfaces, room floor tints and vehicle paints), as data only; `flattenTokens` and `cssVarName` map them to `--nx-*` names.
+  - `tokens.ts` — `TOKENS`, the shared colour tokens (background, slab, grid, text, danger, zone kinds, material surfaces (including the desk kit's `chair`, `plant`, `lampWarm` and `screenOff`), room floor tints and vehicle paints), as data only; `flattenTokens` and `cssVarName` map them to `--nx-*` names.
 - `collector/` — Node-only code; imports no React, Three, Electron, or `src/` except `src/shared/`; ESM only (no `require`).
 - `electron/` — Electron main process. `main.ts` is start-up and the window; `resolve.ts` is the `app://` file policy. Imports only `electron/` and `src/shared/`; no browser libraries (React, Three, zustand, three-stdlib); no `createRequire` or CommonJS.
 - `package.json` `dependencies` is empty on purpose: it means "loaded by Electron main at run time". Everything else is bundled (Vite for the renderer, `vp pack` for main) and goes in `devDependencies`.
