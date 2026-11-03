@@ -31,6 +31,10 @@ export async function ready(page: Page, size: { width: number; height: number })
       return [width, height];
     }, SETUP_TIMEOUT)
     .toEqual([size.width, size.height]);
+  // The reveal is a 600 ms CSS fade (src/style.css); a pixel read before it ends sees the dark page through it.
+  await expect
+    .poll(() => canvas(page).evaluate((el) => getComputedStyle(el).opacity), SETUP_TIMEOUT)
+    .toBe("1");
   // Let R3F finish the resize frame so the projection matrix matches the fitted zoom.
   await page.evaluate(
     () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
