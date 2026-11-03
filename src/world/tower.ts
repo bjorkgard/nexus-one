@@ -84,14 +84,15 @@ export function cutCounts(
 }
 
 // Roof opening per camera view (`?view`), as [minX, minZ, maxX, maxZ] inside the parapet ring (inner face 14.7 m).
-// Each opens a perimeter office band (outside the ring corridor, |x| or |z| >= 9.4 m) on the side the camera looks from
-// (view 0: +x+z, 1: +x-z, 2: -x-z, 3: -x+z), so top-floor desks show, and clears the penthouse (x -2..8, z 5.5..13.5)
-// and the AC units (x -6.5..-3.5, z 3..5; x 6.3..9.9, z -4.7..-3.3) by at least 1 m.
+// Each opens the quarter away from the camera (view 0: -x-z, 1: -x+z, 2: +x+z, 3: +x-z). The iso camera sees a top-floor
+// point at height h through the roof (FLOOR_HEIGHT - h) m nearer the camera on each axis, so these holes show the
+// far-side perimeter desks, hidden in the default view. Each clears the penthouse (x -2..8, z 5.5..13.5) and the AC units
+// (x -6.5..-3.5, z 3..5; x 6.3..9.9, z -4.7..-3.3) by at least 1 m.
 export const ROOF_HOLES: readonly Rect[] = [
-  { min: [9.5, 1], max: [14.5, 14.5] },
-  { min: [11, -14.5], max: [14.5, -1] },
-  { min: [-14.5, -14.5], max: [-9.5, -1] },
-  { min: [-14.5, 9.5], max: [-3, 14.5] },
+  { min: [-9.5, -9.5], max: [-0.2, -0.2] },
+  { min: [-9.5, 6.05], max: [-3.05, 9.5] },
+  { min: [6.5, 0.2], max: [14.5, 4.4] },
+  { min: [4, -9.5], max: [14.5, -5.7] },
 ];
 
 export interface Tower {

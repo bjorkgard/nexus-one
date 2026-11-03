@@ -952,17 +952,17 @@ describe("roof opening", () => {
   });
 
   it.each([0, 1, 2, 3])(
-    "view %i: the hole sits inside the parapet ring, in the camera's quadrant",
+    "view %i: the hole sits inside the parapet ring, in the far quarter",
     (v) => {
       const hole = holeOf(v);
       const inner = 15 - T.parapetThickness;
       for (const c of [...hole.min, ...hole.max]) expect(Math.abs(c)).toBeLessThanOrEqual(inner);
-      // Camera in +x,+z at view 0, then turning 90 degrees a step: (+,+), (+,-), (-,-), (-,+).
+      // Camera in +x,+z at view 0, then turning 90 degrees a step: (+,+), (+,-), (-,-), (-,+). The hole is in the far quarter.
       const [sx, sz] = [
-        [1, 1],
-        [1, -1],
         [-1, -1],
         [-1, 1],
+        [1, 1],
+        [1, -1],
       ][v]!;
       expect(hole.min[0]! * sx!).toBeGreaterThan(0);
       expect(hole.max[0]! * sx!).toBeGreaterThan(0);
@@ -971,26 +971,44 @@ describe("roof opening", () => {
     },
   );
 
-  it.each([0, 1, 2, 3])("view %i: the hole overlaps a top-floor office desk slot (D28)", (v) => {
-    const hole = holeOf(v);
-    const slots = layout.levels[floors - 1]!.deskSlots;
-    const overlaps = slots.filter(
-      (s) =>
-        s.min[0] < hole.max[0]! &&
-        s.max[0] > hole.min[0]! &&
-        s.min[1] < hole.max[1]! &&
-        s.max[1] > hole.min[1]!,
-    );
-    expect(overlaps.length).toBeGreaterThan(0);
-    // The hole opens the perimeter office band only: it stays out of the core and ring corridor (|x|, |z| < 9.4 m).
-    const R = 9.4;
-    const inCore =
-      hole.min[0]! < R - EPS &&
-      hole.max[0]! > -R + EPS &&
-      hole.min[1]! < R - EPS &&
-      hole.max[1]! > -R + EPS;
-    expect(inCore).toBe(false);
-  });
+  // Desk tops on the top floor, centre (x, z). Through the roof the iso camera sees a point at height h
+  // (FLOOR_HEIGHT - h) m nearer the camera on each axis (camera side per view as in the quadrant test).
+  const CAMERA_SIDE = [
+    [1, 1],
+    [1, -1],
+    [-1, -1],
+    [-1, 1],
+  ] as const;
+  const topDeskTops = () =>
+    buildInterior(layout, new Set())
+      .find((p) => p.kind === "deskTop")!
+      .matrices.filter(
+        (m) => m.elements[13]! > floorTopY(floors - 1) && m.elements[13]! < floorTopY(floors),
+      );
+  const visibleDesks = (v: number, hole: Box) => {
+    const [sx, sz] = CAMERA_SIDE[v]!;
+    const shift = FLOOR_HEIGHT - 0.75;
+    return topDeskTops().filter((m) => {
+      const x = m.elements[12]! + shift * sx;
+      const z = m.elements[14]! + shift * sz;
+      return x > hole.min[0]! && x < hole.max[0]! && z > hole.min[1]! && z < hole.max[1]!;
+    }).length;
+  };
+  // The e61b464 holes (D28), over the camera-side bands: the regression the far-side holes replace.
+  const NEAR_SIDE_HOLES: readonly Box[] = [
+    { min: [9.5, 1], max: [14.5, 14.5] },
+    { min: [11, -14.5], max: [14.5, -1] },
+    { min: [-14.5, -14.5], max: [-9.5, -1] },
+    { min: [-14.5, 9.5], max: [-3, 14.5] },
+  ];
+
+  it.each([0, 1, 2, 3])(
+    "view %i: the line of sight through the hole lands on >= 4 desks (D29)",
+    (v) => {
+      expect(visibleDesks(v, holeOf(v))).toBeGreaterThanOrEqual(4);
+      expect(visibleDesks(v, NEAR_SIDE_HOLES[v]!)).toBe(0);
+    },
+  );
 
   it.each([0, 1, 2, 3])("view %i: the roof geometry has no top face over the hole", (v) => {
     const deck = partOf(towerAt(v), "roofDeck");
