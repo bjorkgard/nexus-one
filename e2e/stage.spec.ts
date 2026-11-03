@@ -68,6 +68,9 @@ for (const size of [
   { width: 2560, height: 1440 },
 ]) {
   test(`tower box fits and centres at ${size.width}x${size.height}`, async ({ page }) => {
+    // Setup budget, not the check: `ready` alone may wait 3 × SETUP_TIMEOUT, and on CI's software GL the
+    // tower-first scene at 2560x1440 took 30.8 s (main: 18.4 s) before any assertion ran.
+    test.setTimeout(60_000);
     await page.goto("/");
     await ready(page, size);
     const box = await canvasBox(page);
