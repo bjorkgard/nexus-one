@@ -135,6 +135,7 @@ export function Stage({
 }) {
   const size = useThree((s) => s.size);
   const canvas = useThree((s) => s.gl.domElement);
+  const invalidate = useThree((s) => s.invalidate);
   const activeCamera = useThree((s) => s.camera);
   const cameraRef = useRef<OrthographicCameraImpl>(null);
   const [zoom, setZoom] = useState<number | null>(null);
@@ -244,7 +245,9 @@ export function Stage({
     if (!light) return;
     light.shadow.needsUpdate = true;
     shadowRequested.current = true;
-  }, []);
+    // frameloop="demand": the shadow map is drawn by the next frame, so ask for one.
+    invalidate();
+  }, [invalidate]);
   useLayoutEffect(() => {
     const light = lightRef.current;
     if (!light) return;
@@ -283,11 +286,15 @@ export function Stage({
     }
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
-  }, [fit, rigBounds, yaw, zoom]);
+    invalidate();
+  }, [fit, rigBounds, yaw, zoom, invalidate]);
 
   // Ready once the ortho camera is the active one, the fitted zoom is applied, the first shadow map has been
   // drawn and a frame has been drawn.
+  // Frames come on demand. A frame that still holds a shadow request draws the map, so one more frame follows to
+  // leave the last drawn frame without the shadow pass (rendererInfo counts the last frame); until ready, keep going.
   useFrame(({ gl }) => {
+    if (lightRef.current?.shadow.needsUpdate) invalidate();
     if (signalled.current) return;
     const ok = stageReady({
       fitted: fitted.current,
@@ -300,7 +307,10 @@ export function Stage({
         needsUpdate: lightRef.current?.shadow.needsUpdate ?? true,
       }),
     });
-    if (!ok) return;
+    if (!ok) {
+      invalidate();
+      return;
+    }
     signalled.current = true;
     requestAnimationFrame(() => onReady?.());
   });

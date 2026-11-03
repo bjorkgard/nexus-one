@@ -39,7 +39,17 @@ export default function PerfStats() {
   }, [gl]);
 
   const sample = useMemo(() => guardFrame(createInfoSampler(gl), "PerfStats frame"), [gl]);
-  useFrame(sample);
+  // frameloop="demand": the scene idles, so the stats would read nothing. While the overlay is open it keeps
+  // the loop running (a frame per display refresh, like the old always-on loop); closed, the scene idles again.
+  const visible = usePerfStore((s) => s.visible);
+  const invalidate = useThree((s) => s.invalidate);
+  useFrame(() => {
+    sample();
+    if (visible) invalidate();
+  });
+  useEffect(() => {
+    if (visible) invalidate();
+  }, [visible, invalidate]);
 
   return isProbeEnabled(location.search) ? <ProbeBox /> : null;
 }

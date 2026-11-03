@@ -104,6 +104,30 @@ test("resizing refits the stage", async ({ page }) => {
   await expect.poll(async () => (await nexus(page, "getCamera")).zoom).toBeLessThan(before);
 });
 
+test("a static stage draws no frames and re-renders on resize", async ({ page }) => {
+  await page.goto("/");
+  await ready(page, { width: 1280, height: 720 });
+  const frames = () => nexus(page, "frameCount");
+  // Let the reveal frames finish, then 30 display refreshes must not draw a single frame.
+  await expect
+    .poll(async () => {
+      const a = await frames();
+      await page.evaluate(
+        () =>
+          new Promise((r) => {
+            let n = 0;
+            const tick = () => (++n < 30 ? requestAnimationFrame(tick) : r(null));
+            requestAnimationFrame(tick);
+          }),
+      );
+      return (await frames()) - a;
+    }, SETUP_TIMEOUT)
+    .toBe(0);
+  const idle = await frames();
+  await page.setViewportSize({ width: 800, height: 600 });
+  await expect.poll(frames, SETUP_TIMEOUT).toBeGreaterThan(idle);
+});
+
 test("the tower stage is 25 draw calls in a steady frame", async ({ page }) => {
   await page.goto("/");
   await ready(page, { width: 1280, height: 720 });

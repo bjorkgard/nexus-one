@@ -67,6 +67,8 @@ export function App() {
           aria-label={canvasLabel(report)}
           data-revealed={revealed}
           dpr={LOOK.dpr}
+          // On demand: the scene is static, so frames are drawn only when something asks (invalidate).
+          frameloop="demand"
           shadows="percentage"
           gl={{
             antialias: true,

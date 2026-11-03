@@ -50,6 +50,7 @@ test("hooks are registered", async ({ page }) => {
     "dataState",
     "desks",
     "emit",
+    "frameCount",
     "getCamera",
     "pauseClock",
     "project",

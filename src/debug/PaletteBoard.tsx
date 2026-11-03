@@ -65,6 +65,7 @@ function Instances({
   items: Instance[];
 }) {
   const ref = useRef<InstancedMesh>(null);
+  const invalidate = useThree((s) => s.invalidate);
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
@@ -84,7 +85,9 @@ function Instances({
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
-  }, [items]);
+    // frameloop="demand": the uploaded instances need a frame.
+    invalidate();
+  }, [items, invalidate]);
   return (
     <instancedMesh ref={ref} args={[geometry, material, items.length]} frustumCulled={false} />
   );

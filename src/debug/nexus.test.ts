@@ -22,6 +22,7 @@ import {
   installNexus,
   materialBudgetWarner,
   projectToPage,
+  readFrameCount,
   readRendererInfo,
   registerNexusModule,
   type CameraInfo,
@@ -299,5 +300,11 @@ describe("materialBudgetWarner", () => {
     expect(shouldWarn(30)).toBe(true);
     expect(shouldWarn(31)).toBe(false);
     expect(shouldWarn(30)).toBe(false);
+  });
+});
+
+describe("readFrameCount", () => {
+  it("reads the renderer's drawn-frame counter", () => {
+    expect(readFrameCount({ info: { render: { frame: 7 } } })).toBe(7);
   });
 });
