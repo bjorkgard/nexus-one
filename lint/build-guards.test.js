@@ -15,9 +15,10 @@ function run(bundle) {
 }
 
 describe("DEV_MARKERS", () => {
-  it("lists the six dev-only markers", () => {
+  it("lists the seven dev-only markers", () => {
     expect(DEV_MARKERS.map((row) => row.marker).sort()).toEqual([
       "__nexus",
+      "desk-preview:",
       "nexus-palette-board",
       "nexus-perf-overlay",
       "nexus-probe",

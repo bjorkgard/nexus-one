@@ -160,9 +160,13 @@ export function Stage({
     () => (towerVisible ? buildTower({ floors, openings: zones.layout.openings, view }) : null),
     [towerVisible, floors, zones, view],
   );
-  const preview = useMemo(() => previewDesks(floors, agents), [floors, agents]);
+  // Dev only: `import.meta.env.DEV` is false in production, so the preview module is dropped from the bundle.
+  const preview = useMemo(
+    () => (import.meta.env.DEV ? previewDesks(floors, agents) : null),
+    [floors, agents],
+  );
   const interior = useMemo(
-    () => (towerVisible ? buildInterior(zones.layout, preview.occupied) : null),
+    () => (towerVisible ? buildInterior(zones.layout, preview?.occupied) : null),
     [towerVisible, zones, preview],
   );
   const towerParts = useMemo(
@@ -174,7 +178,7 @@ export function Stage({
     () => (towerParts && cut > 0 ? cutCounts(towerParts, cut, floors) : undefined),
     [towerParts, cut, floors],
   );
-  useEffect(() => registerNexus("desks", () => preview.report), [preview]);
+  useEffect(() => registerNexus("desks", () => preview!.report), [preview]);
   const zonesValue = useMemo(
     () => ({
       registry: zones,

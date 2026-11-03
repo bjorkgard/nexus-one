@@ -12,11 +12,15 @@ describe("previewDesks", () => {
     expect(p.report.seats.every((s) => s.floor === p.report.floorsNeeded - 1)).toBe(true);
   });
 
-  it("makes every third agent a subagent beside the one before", () => {
-    const p = previewDesks(DEFAULT_FLOORS, 3);
-    expect(p.report.seated).toBe(3);
-    const [a, , c] = p.report.seats;
-    expect(a!.floor).toBe(c!.floor);
+  it("seats each subagent next to its parent, also when the parent sits below the top floor", () => {
+    // 3 floors, 80 of 84 seats: the top office floor (2) is full, so many parents sit on floor 1.
+    const { seats } = previewDesks(3, 80).report;
+    expect(seats.filter((s, i) => i % 3 === 1 && s.floor < 2).length).toBeGreaterThan(0);
+    // Within two pods (8 seats) of the parent; a hashed root seat lands up to 47 seats away (measured).
+    for (let i = 2; i < seats.length; i += 3) {
+      expect(seats[i]!.floor).toBe(seats[i - 1]!.floor);
+      expect(Math.abs(seats[i]!.index - seats[i - 1]!.index)).toBeLessThanOrEqual(8);
+    }
   });
 
   it("zero agents is empty; the total covers every office seat", () => {

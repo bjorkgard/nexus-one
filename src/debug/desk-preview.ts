@@ -20,6 +20,11 @@ export function previewDesks(
   floors: number,
   count: number,
 ): { occupied: ReadonlySet<number>; report: DeskReport } {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new RangeError(
+      `desk-preview: count must be a non-negative integer, got ${String(count)}`,
+    );
+  }
   const allocator = createDeskAllocator({ floors, seed: LAYOUT_SEED });
   const seats = [];
   for (let i = 0; i < count; i++) {
