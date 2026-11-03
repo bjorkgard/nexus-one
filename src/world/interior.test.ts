@@ -652,8 +652,8 @@ describe("desk kit parts", () => {
     expect(new Set(tops.map((c) => c.getHex())).size).toBeGreaterThan(1);
   });
 
-  it("colours screens by occupancy: idle teal when seated, off slate when empty", () => {
-    const idle = new Color(TOKENS.surface.screenIdle).getHex();
+  it("colours screens by occupancy: seated cyan-teal when seated, off slate when empty", () => {
+    const idle = new Color(TOKENS.surface.screenSeated).getHex();
     const off = new Color(TOKENS.surface.screenOff).getHex();
     for (const c of part("screen").colors!) expect(c.getHex()).toBe(off);
     const occupied = new Set([0, 5, seats.length - 1]);
@@ -682,6 +682,17 @@ describe("desk kit parts", () => {
     expect(lamp).toBeLessThanOrEqual(glow);
     expect(lamp).toBeLessThan(cyan);
     expect(luminance(part("screen").colors![0]!)).toBeLessThan(idle);
+    // D27: the seated level sits between screenIdle and screenActive.
+    expect(idle).toBeGreaterThan(luminance(new Color(TOKENS.surface.screenIdle)));
+    expect(idle).toBeLessThan(luminance(new Color(TOKENS.surface.screenActive)));
+  });
+
+  it("sizes the screen face to the monitor minus a 0.01 m bezel (D27)", () => {
+    const m = LOOK.interior.desk.monitor;
+    expect(m.inset).toBeCloseTo(0.01, 9);
+    part("screen").matrices.forEach((mx, i) => {
+      expect(mx.elements[5]!, `${i}`).toBeCloseTo(m.height - 2 * m.inset, 9);
+    });
   });
 
   it("puts one plant in about a third of the pods, on the floor, from the desk stream", () => {

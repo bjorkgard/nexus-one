@@ -971,6 +971,27 @@ describe("roof opening", () => {
     },
   );
 
+  it.each([0, 1, 2, 3])("view %i: the hole overlaps a top-floor office desk slot (D28)", (v) => {
+    const hole = holeOf(v);
+    const slots = layout.levels[floors - 1]!.deskSlots;
+    const overlaps = slots.filter(
+      (s) =>
+        s.min[0] < hole.max[0]! &&
+        s.max[0] > hole.min[0]! &&
+        s.min[1] < hole.max[1]! &&
+        s.max[1] > hole.min[1]!,
+    );
+    expect(overlaps.length).toBeGreaterThan(0);
+    // The hole opens the perimeter office band only: it stays out of the core and ring corridor (|x|, |z| < 9.4 m).
+    const R = 9.4;
+    const inCore =
+      hole.min[0]! < R - EPS &&
+      hole.max[0]! > -R + EPS &&
+      hole.min[1]! < R - EPS &&
+      hole.max[1]! > -R + EPS;
+    expect(inCore).toBe(false);
+  });
+
   it.each([0, 1, 2, 3])("view %i: the roof geometry has no top face over the hole", (v) => {
     const deck = partOf(towerAt(v), "roofDeck");
     const hole = holeOf(v);

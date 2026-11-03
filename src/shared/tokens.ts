@@ -22,6 +22,8 @@ export const TOKENS = {
     plant: "#4f7a5a",
     lampWarm: "#ffd9a0",
     screenOff: "#121820",
+    // A seated agent's screen (D27): between screenIdle and screenActive, below trimCyan on the luminance ladder (tested in interior.test.ts).
+    screenSeated: "#3f9fb2",
   },
   // Floor tints per room type (task 2.4), diffuse vertex colours on the ground material. Each is within WCAG contrast 1.00-1.15 of slab.interiorTop (tested in tokens.test.ts); corridor is the slab colour itself, so it reads as untinted. Keys are the layout's RoomType names.
   room: {

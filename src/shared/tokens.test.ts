@@ -18,7 +18,7 @@ describe("tokens", () => {
     expect(cssVarName("paint.graphite")).toBe("--nx-paint-graphite");
   });
 
-  it("has the 12 surface and 8 paint tokens", () => {
+  it("has the 13 surface and 8 paint tokens", () => {
     expect(Object.keys(TOKENS.surface).sort()).toEqual(
       [
         "chair",
@@ -31,6 +31,7 @@ describe("tokens", () => {
         "screenActive",
         "screenIdle",
         "screenOff",
+        "screenSeated",
         "trimCyan",
         "trimWhite",
       ].sort(),

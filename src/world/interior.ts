@@ -247,7 +247,7 @@ export function buildInterior(
     return streams.get(floor)!;
   };
   const furnitureHsl = new Color(TOKENS.surface.furniture).getHSL({ h: 0, s: 0, l: 0 });
-  const idleScreen = new Color(TOKENS.surface.screenIdle);
+  const seatedScreen = new Color(TOKENS.surface.screenSeated);
   const offScreen = new Color(TOKENS.surface.screenOff);
   const lampColor = new Color(TOKENS.surface.lampWarm).multiplyScalar(D.lampGain);
   const mon = D.monitor;
@@ -302,7 +302,7 @@ export function buildInterior(
         },
       ),
     );
-    screenColors.push(occupied.has(seat.index) ? idleScreen : offScreen);
+    screenColors.push(occupied.has(seat.index) ? seatedScreen : offScreen);
     lamps.push(
       seatBox(seat, standTop, deskAlong, shift + (seat.seat % 2 === 0 ? -1 : 1) * lampRun, {
         run: D.lamp.head,

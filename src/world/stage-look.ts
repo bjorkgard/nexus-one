@@ -78,7 +78,7 @@ export const LOOK = {
     // Desk kit (task 2.5, design D23): per seat a desk top, a chair on its outer side, a monitor on its inner edge and a lamp. lampGain scales the lamp colour so it stays at or below the tower glow (intensity x linear luminance). plantRate is the chance a 2 x 2 pod has a plant; tintRange the most a desk top's lightness varies either way (E1).
     desk: {
       top: { length: 1.4, depth: 0.7, height: 0.75 },
-      monitor: { width: 0.55, height: 0.35, stand: 0.1, depth: 0.04, inset: 0.02 },
+      monitor: { width: 0.55, height: 0.35, stand: 0.1, depth: 0.04, inset: 0.01 },
       lamp: { height: 0.45, head: 0.14 },
       plant: { width: 0.3, height: 0.5 },
       lampGain: 0.35,
